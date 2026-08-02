@@ -34,7 +34,7 @@ func handle_player_turn(delta: float, player: TacticsPlayer, participant: Tactic
 		res.turn_just_started = false
 	
 	controls.move_camera(delta)
-	controls.set_actions_menu_visibility(res.stage in [res.STAGE_SHOW_ACTIONS, res.STAGE_SHOW_MOVEMENTS, res.STAGE_SELECT_LOCATION, res.STAGE_DISPLAY_TARGETS, res.STAGE_SELECT_ATTACK_TARGET], res.curr_pawn)
+	controls.set_actions_menu_visibility(res.stage in [res.STAGE_SHOW_ACTIONS, res.STAGE_SHOW_MOVEMENTS, res.STAGE_SELECT_LOCATION, res.STAGE_DISPLAY_TARGETS, res.STAGE_SELECT_ATTACK_TARGET], res.curr_pawn if is_instance_valid(res.curr_pawn) else null)
 	
 	match res.stage:
 		res.STAGE_SELECT_PAWN: controls.select_pawn(player)
@@ -55,6 +55,12 @@ func handle_player_turn(delta: float, player: TacticsPlayer, participant: Tactic
 func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: TacticsParticipant) -> void:
 	res.targets = participant.get_node("%TacticsPlayer")
 	controls.set_actions_menu_visibility(false, null)
+	
+	# CielAI override — si activé, Ciel contrôle l'adversaire via fichiers
+	if CielAI and CielAI.enabled:
+		CielAI.handle_opponent_turn(delta, opponent, participant)
+		return
+	
 	if res.stage > 4:
 		res.stage = 0
 		DebugLog.debug_nospam("turn_stage", res.stage)

@@ -4,6 +4,7 @@ extends RefCounted
 
 ## The service we inject into every tile
 const TILE_SERVICE = preload("res://data/models/world/combat/arena/tile_service/service.gd")
+const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
 
 var res: TacticsArenaResource
 
@@ -56,6 +57,9 @@ func process_surrounding_tiles(root_tile: TacticsTile, height: float, allies_on_
 			_tiles_process_q.push_back(_neighbor)
 		
 		for _neighbor: TacticsTile in _curr_tile.get_neighbors(height):
+			# Skip impassable terrain (water, mountains, walls, pits)
+			if not MAP_DATA.is_walkable(_neighbor.terrain_type):
+				continue
 			if not _neighbor.pf_root and _neighbor != root_tile:
 				if not _neighbor.is_taken():
 					_add_to_tiles_list.call(_neighbor)
@@ -87,7 +91,7 @@ func get_nearest_target_adjacent_tile(pawn: TacticsPawn, target_pawns: Array) ->
 	var _nearest_target: Node3D = null
 	
 	for _p: TacticsPawn in target_pawns:
-		if _p.stats.curr_health <= 0: continue
+		if not _p.stats or _p.stats.curr_health <= 0: continue
 		for _n: TacticsTile in _p.get_tile().get_neighbors(pawn.stats.jump):
 			if not _nearest_target or _n.pf_distance < _nearest_target.pf_distance:
 				if _n.pf_distance > 0 and not _n.is_taken():
@@ -110,6 +114,8 @@ func get_weakest_attackable_pawn(pawn_arr: Array) -> TacticsPawn:
 	var _weakest: TacticsPawn = null
 	
 	for _p: TacticsPawn in pawn_arr:
+		if not _p.stats:
+			continue
 		if not _weakest or _p.stats.curr_health < _weakest.stats.curr_health:
 			if _p.stats.curr_health > 0 and _p.get_tile().attackable:
 				_weakest = _p

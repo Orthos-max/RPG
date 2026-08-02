@@ -56,6 +56,8 @@ func is_pawn_configured(player: TacticsPlayer) -> bool:
 
 ## Displays available actions for the current pawn
 func show_available_pawn_actions() -> void:
+	if not res.curr_pawn:
+		return
 	controls.set_actions_menu_visibility(true, res.curr_pawn)
 	arena.reset_all_tile_markers()
 	arena.mark_hover_tile(res.curr_pawn.get_tile())
@@ -85,6 +87,7 @@ func display_attackable_targets() -> void:
 	res.display_opponent_stats = true
 	
 	camera.target = p
+	# Don't filter by allies — enemy tiles must be reachable for attack targeting
 	arena.process_surrounding_tiles(p.get_tile(), float(p.stats.attack_range))
 	arena.mark_attackable_tiles(p.get_tile(), float(p.stats.attack_range))
 	res.stage = res.STAGE_SELECT_ATTACK_TARGET

@@ -1,16 +1,37 @@
 [gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://geeqhoo6kxoi"]
 
-[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_rulxp"]
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1"]
 
 [resource]
-script = ExtResource("1_rulxp")
+script = ExtResource("1")
 override_name = ""
-expertise = ""
-strategy = 3
+expertise = "Dark Mage"
+strategy = 2
+character_class = 12
 level = 1
-sprite = "res://assets/textures/actor/mob/chr_pawn_skeleton_mage.png"
-movement = 4
-jump = 1.0
-max_health = 10
-attack_range = 3
-attack_power = 12
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/actor/mob/chr_pawn_skeleton.png"
+hp = 16
+str = 0
+mag = 6
+skl = 4
+spd = 4
+lck = 2
+def = 2
+res = 4
+movement = 5
+jump = 2.0
+attack_range = 1
+weapon_type = 4
+weapon_might = 4
+hp_growth = 55
+str_growth = 0
+mag_growth = 55
+skl_growth = 35
+spd_growth = 30
+lck_growth = 20
+def_growth = 20
+res_growth = 40
+max_health = 16
+attack_power = 10

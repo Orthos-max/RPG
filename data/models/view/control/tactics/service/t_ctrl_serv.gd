@@ -64,7 +64,7 @@ func handle_input(event: InputEvent) -> void:
 
 
 ## Delegates setting actions menu visibility to the UI service.
-func set_actions_menu_visibility(v: bool, p: TacticsPawn, ctrl: TacticsControls) -> void:
+func set_actions_menu_visibility(v: bool, p: Variant, ctrl: TacticsControls) -> void:
 	ui_service.set_actions_menu_visibility(v, p, ctrl)
 
 

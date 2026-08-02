@@ -33,6 +33,26 @@ static var pawn: Dictionary = {
 	"min_time_for_attack": 1, ## Minimum time required for an attack action
 }
 
+## Terrain type enum values (synced with MapData.TerrainType)
+const TERRAIN_GRASS: int = 0
+const TERRAIN_FOREST: int = 1
+const TERRAIN_MOUNTAIN: int = 2
+const TERRAIN_WATER: int = 3
+const TERRAIN_PATH: int = 4
+const TERRAIN_WALL: int = 5
+const TERRAIN_PIT: int = 6
+
+## Dictionary of terrain type materials.
+static var terrain_material: Dictionary = {
+	0: create_terrain_material("4a8c3f"),    # Green grass
+	1: create_terrain_material("2d5a1e"),   # Dark green forest
+	2: create_terrain_material("8b7355"),   # Rocky brown mountain
+	3: create_terrain_material("2a6e8f"),   # Deep blue water
+	4: create_terrain_material("c4a97d"),   # Sandy beige path
+	5: create_terrain_material("5a5a5a"),   # Dark grey wall
+	6: create_terrain_material("1a1a1a"),   # Near-black pit
+}
+
 ## Dictionary of view-related configuration values.
 static var view: Dictionary = {
 	"default_t_cam_zoom": 30, ## The default FOV for tactics camera node
@@ -43,6 +63,16 @@ static var ui_elem: Array[String] = [
 	"%Actions", "%Hints",
 ]
 #endregion
+
+
+## Creates a terrain material (opaque, unshaded for flat look).
+static func create_terrain_material(color_hex: String) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mat.albedo_color = Color(color_hex)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.roughness = 0.9
+	return mat
 
 
 ## Creates a StandardMaterial3D with specified color, texture, and shading mode.

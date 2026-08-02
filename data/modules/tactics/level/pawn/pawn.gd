@@ -59,6 +59,8 @@ func get_tile() -> TacticsTile:
 ##
 ## @return: Whether the pawn's current health is above 0
 func is_alive() -> bool:
+	if not stats:
+		return false
 	return stats.curr_health > 0
 
 
@@ -91,6 +93,28 @@ func reset_turn() -> void:
 ## Ends the pawn's turn
 func end_pawn_turn() -> void:
 	res.end_pawn_turn()
+	# Award support points for adjacent allies at end of turn
+	_check_support_adjacency()
+
+
+## Check for adjacent allies and award support points
+func _check_support_adjacency() -> void:
+	var tracker := SupportTracker.instance
+	if not tracker:
+		return
+	
+	var my_name: String = stats.override_name if stats.override_name else expertise
+	var parent_node = get_parent()
+	if not parent_node:
+		return
+	
+	for ally in parent_node.get_children():
+		if ally == self or not ally.is_alive():
+			continue
+		var dist: float = global_position.distance_to(ally.global_position)
+		if dist <= 1.5:  # Adjacent (with slight tolerance for non-centered pawns)
+			var ally_name: String = ally.stats.override_name if ally.stats.override_name else ally.expertise
+			tracker.award_adjacent(my_name, ally_name)
 
 
 ## Initiates an attack on a target pawn

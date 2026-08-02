@@ -18,7 +18,9 @@ static func tiles_into_staticbodies(tiles_obj: Node3D) -> void:
 	#											  > CollisionShape3D
 	#												...
 	# Useful for configuring walkable tiles as efficiently as possible
-	for _t: MeshInstance3D in tiles_obj.get_children():
+	for _t in tiles_obj.get_children():
+		if not _t is MeshInstance3D:
+			continue  # Already converted, skip
 		_t.create_trimesh_collision() # Create StaticBody3D child with collision
 		var _static_body: StaticBody3D = _t.get_child(0) # Get the created StaticBody3D
 		_static_body.set_position(_t.get_position()) # Set StaticBody3D position

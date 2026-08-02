@@ -5,6 +5,8 @@ extends Node3D
 ## Resource Interface: [TacticsArenaResource] -- Service: [TacticsArenaService]
 ## Dependency: [TacticsTile] -- Service: [TacticsTileService]
 
+const MapDataClass = preload("res://data/models/world/map/map_data.gd")
+
 ## Resource containing arena-related data and configurations
 @export var res: TacticsArenaResource = load("res://data/models/world/combat/arena/arena.tres")
 ## Service handling arena-related operations
@@ -13,8 +15,79 @@ var serv: TacticsArenaService
 
 func _ready() -> void:
 	serv = TacticsArenaService.new(res) # Initialize the arena service
+	
+	# If MapData is set, generate tiles procedurally
+	if res.map_data:
+		_generate_from_map_data()
+	
 	serv.setup(self) # Set up the arena
+	# Create support tracker if not already present
+	if not has_node("SupportTracker"):
+		var tracker := SupportTracker.new()
+		tracker.name = "SupportTracker"
+		add_child(tracker)
 
+
+## Procedurally generates the arena tiles from MapData.
+## Creates a Tiles node with MeshInstance3D children, then converts them via the tile service.
+func _generate_from_map_data() -> void:
+	var md = res.map_data  # MapData, dynamically typed to avoid class_name load order issues
+	if not md:
+		return
+	
+	# Remove existing Tiles node if present
+	var existing: Node = get_node_or_null("Tiles")
+	if existing:
+		existing.queue_free()
+		await get_tree().process_frame
+	
+	var tiles_node := Node3D.new()
+	tiles_node.name = "Tiles"
+	add_child(tiles_node)
+	
+	var half_w: float = float(md.grid_size.x) / 2.0
+	var half_h: float = float(md.grid_size.y) / 2.0
+	var ts: float = md.tile_size
+	
+	for row in md.grid_size.y:
+		for col in md.grid_size.x:
+			var terrain: int = md.get_terrain(col, row)
+			var height: float = md.get_height(col, row)
+			
+			# Each tile gets its own BoxMesh with thickness matching its elevation
+			var tile_mesh := BoxMesh.new()
+			var thickness: float = max(abs(height), 0.08)
+			tile_mesh.size = Vector3(ts * 0.98, thickness, ts * 0.98)
+			
+			var mesh_instance := MeshInstance3D.new()
+			mesh_instance.name = "Tile_%d_%d" % [col, row]
+			mesh_instance.mesh = tile_mesh
+			
+			# Position: center the grid around origin
+			# Y position = height/2 so the cube extends from 0 to height
+			mesh_instance.position = Vector3(
+				(float(col) - half_w + 0.5) * ts,
+				height / 2.0,
+				(float(row) - half_h + 0.5) * ts
+			)
+			
+			tiles_node.add_child(mesh_instance)
+	
+	# Convert tiles to StaticBody3D with TacticsTile script
+	TacticsTileService.tiles_into_staticbodies(tiles_node)
+	
+	# Assign terrain types to each tile after conversion
+	var idx: int = 0
+	for row in md.grid_size.y:
+		for col in md.grid_size.x:
+			if idx < tiles_node.get_child_count():
+				var tile: TacticsTile = tiles_node.get_child(idx) as TacticsTile
+				if tile:
+					tile.terrain_type = md.get_terrain(col, row)
+					# Re-apply terrain material
+					if TacticsConfig.terrain_material.has(tile.terrain_type):
+						tile.terrain_mat = TacticsConfig.terrain_material[tile.terrain_type]
+			idx += 1
 
 ## Resets all tile markers in the arena
 func reset_all_tile_markers() -> void:

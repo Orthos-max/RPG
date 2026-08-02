@@ -2,6 +2,8 @@ class_name TacticsArenaResource
 extends Resource
 ## Attributes, controller & signals of the tactics arena.
 
+const MapDataClass = preload("res://data/models/world/map/map_data.gd")
+
 ## Emitted when all tile markers need to be reset
 signal called_reset_all_tile_markers
 ## Emitted when pathfinding tilestack is requested
@@ -10,6 +12,10 @@ signal called_get_pathfinding_tilestack(tile: TacticsTile)
 ## Emitted when a tile needs to be marked as hovered
 ## [param tile] The tile to be marked as hovered
 signal called_mark_hover_tile(tile: TacticsTile)
+
+## MapData resource for procedural arena generation.
+## If set, the arena will be generated from this grid instead of using a baked scene.
+@export var map_data: Resource = null
 
 ## Stores the current pathfinding tiles stack
 var path_tiles_stack: Array = []

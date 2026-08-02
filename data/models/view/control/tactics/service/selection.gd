@@ -2,6 +2,8 @@ class_name TacticsControlsSelectionService
 extends RefCounted
 ## Service class for managing pawn and tile selection in the Tactics game.
 
+const WT = preload("res://data/models/world/stats/weapon_type.gd")
+
 ## Reference to the TacticsParticipantResource.
 var participant: TacticsParticipantResource
 ## Reference to the TacticsArenaResource.
@@ -71,17 +73,35 @@ func select_new_location(ctrl: TacticsControls) -> void:
 
 
 ## Handles the selection of a pawn to attack.
+## Prevents friendly fire by filtering out pawns on the same team.
 func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 	controls.set_actions_menu_visibility(true, participant.curr_pawn)
 	if participant.attackable_pawn:
 		controls.set_actions_menu_visibility(false, participant.attackable_pawn)
 		participant.attackable_pawn.show_pawn_stats(false)
 	var tile: TacticsTile = _select_hovered_tile(ctrl)
-	participant.attackable_pawn = tile.get_tile_occupier() if tile else null
+	var target: TacticsPawn = tile.get_tile_occupier() if tile else null
+	
+	# Heal targeting (staff users) — target allies only
+	# Attack targeting (others) — target enemies only
+	if target and participant.curr_pawn:
+		var is_staff_user: bool = WT.is_magical(participant.curr_pawn.stats.weapon_type)
+		var same_team: bool = target.get_parent() == participant.curr_pawn.get_parent()
+		
+		if is_staff_user:
+			# Staff users can ONLY target allies for healing
+			if not same_team:
+				target = null
+		else:
+			# Non-staff users can ONLY target enemies for attacking
+			if same_team:
+				target = null
+	
+	participant.attackable_pawn = target
 	if participant.attackable_pawn:
 		controls.set_actions_menu_visibility(true, participant.attackable_pawn)
 		participant.attackable_pawn.show_pawn_stats(true)
-	if Input.is_action_just_pressed("ui_accept") and tile and tile.attackable:
+	if Input.is_action_just_pressed("ui_accept") and tile and tile.attackable and participant.attackable_pawn:
 		t_cam.target = participant.attackable_pawn
 		participant.stage = 7
 

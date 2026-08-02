@@ -1,16 +1,37 @@
 [gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://c065vh6vqrtcc"]
 
-[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_nbj3d"]
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1"]
 
 [resource]
-script = ExtResource("1_nbj3d")
+script = ExtResource("1")
 override_name = ""
-expertise = ""
+expertise = "Brigand"
 strategy = 1
+character_class = 10
 level = 1
+exp = 0
+is_promoted = false
 sprite = "res://assets/textures/actor/mob/chr_pawn_skeleton.png"
+hp = 18
+str = 5
+mag = 0
+skl = 3
+spd = 3
+lck = 1
+def = 3
+res = 0
 movement = 5
-jump = 1.0
-max_health = 12
-attack_range = 6
-attack_power = 10
+jump = 2.0
+attack_range = 1
+weapon_type = 2
+weapon_might = 6
+hp_growth = 60
+str_growth = 45
+mag_growth = 0
+skl_growth = 30
+spd_growth = 25
+lck_growth = 15
+def_growth = 30
+res_growth = 5
+max_health = 18
+attack_power = 11

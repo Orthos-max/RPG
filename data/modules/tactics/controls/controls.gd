@@ -76,7 +76,7 @@ func is_mouse_hovering_ui_elem() -> bool:
 
 
 ## Sets the visibility of the actions menu
-func set_actions_menu_visibility(v: bool, p: TacticsPawn) -> void:
+func set_actions_menu_visibility(v: bool, p: Variant) -> void:
 	serv.set_actions_menu_visibility(v, p, self)
 
 

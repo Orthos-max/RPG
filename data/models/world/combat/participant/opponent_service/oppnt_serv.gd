@@ -53,6 +53,8 @@ func choose_pawn(opponent: TacticsOpponent) -> void:
 ## @param opponent: The TacticsOpponent node
 ## @param player_node: The player's node
 func chase_nearest_enemy(opponent: TacticsOpponent, player_node: Node) -> void:
+	if not res.curr_pawn:
+		return
 	if res.curr_pawn.res.can_move:
 		arena.reset_all_tile_markers()
 		arena.process_surrounding_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.movement, opponent.get_children())
@@ -81,7 +83,10 @@ func is_pawn_done_moving() -> void:
 
 ## Selects a pawn for the opponent to attack
 func choose_pawn_to_attack() -> void:
+	if not res.curr_pawn:
+		return
 	arena.reset_all_tile_markers()
+	# Don't filter by allies — enemy tiles must be reachable for attack targeting
 	arena.process_surrounding_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
 	arena.mark_attackable_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
 	

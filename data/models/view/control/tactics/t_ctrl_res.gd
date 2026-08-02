@@ -33,7 +33,7 @@ var actions: Dictionary = {
 
 
 ## Sets the visibility of the actions menu.
-func set_actions_menu_visibility(v: bool, p: TacticsPawn) -> void:
+func set_actions_menu_visibility(v: bool, p: Variant) -> void:
 	called_set_actions_menu_visibility.emit(v, p)
 
 

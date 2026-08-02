@@ -1,0 +1,55 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://fe_2d/camera.gd" id="1_cam"]
+[ext_resource type="Script" path="res://fe_2d/level.gd" id="2_lvl"]
+
+[node name="FE2DLevel" type="Node2D"]
+script = ExtResource("2_lvl")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("1_cam")
+position = Vector2(420, 240)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="TurnLabel" type="Label" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 400.0
+offset_bottom = 42.0
+text = "PHASE JOUEUR"
+
+[node name="InfoLabel" type="Label" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 48.0
+offset_right = 400.0
+offset_bottom = 100.0
+text = ""
+horizontal_alignment = 0
+
+[node name="ActionsLabel" type="Label" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 96.0
+offset_right = 250.0
+offset_bottom = 120.0
+text = "Unités disponibles: 6"
+add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+
+[node name="EndTurnBtn" type="Button" parent="CanvasLayer"]
+offset_left = 1100.0
+offset_top = 12.0
+offset_right = 1260.0
+offset_bottom = 48.0
+text = "⏎ Fin de tour"
+
+[node name="ActionPanel" type="Control" parent="CanvasLayer"]
+visible = false
+layout_mode = 0
+mouse_filter = 1
+
+[node name="HelpLabel" type="Label" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 690.0
+offset_right = 1264.0
+offset_bottom = 716.0
+text = "🖱️ Clic G: sélectionner/déplacer/attaquer | 🔽: zoom | 🖱️ Clic D: caméra | ⏎: fin de tour"

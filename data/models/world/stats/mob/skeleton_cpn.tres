@@ -1,16 +1,37 @@
 [gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://exlkcu7d77lb"]
 
-[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_lwyqq"]
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1"]
 
 [resource]
-script = ExtResource("1_lwyqq")
-override_name = ""
-expertise = ""
+script = ExtResource("1")
+override_name = "Garrick"
+expertise = "Brigand Chief"
 strategy = 0
-level = 1
-sprite = "res://assets/textures/actor/mob/chr_pawn_skeleton_cpt.png"
-movement = 3
-jump = 1.0
-max_health = 20
+character_class = 10
+level = 3
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/actor/mob/chr_pawn_skeleton.png"
+hp = 24
+str = 8
+mag = 0
+skl = 5
+spd = 5
+lck = 2
+def = 5
+res = 1
+movement = 5
+jump = 2.0
 attack_range = 1
-attack_power = 20
+weapon_type = 2
+weapon_might = 7
+hp_growth = 65
+str_growth = 50
+mag_growth = 0
+skl_growth = 35
+spd_growth = 30
+lck_growth = 20
+def_growth = 35
+res_growth = 10
+max_health = 24
+attack_power = 15

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://data/modules/stats/expertise/expertise.gd" id="1_6aq7s"]
 [ext_resource type="Script" path="res://data/modules/stats/stats.gd" id="2_18or5"]
-[ext_resource type="Resource" uid="uid://14x26y1535he" path="res://data/models/world/stats/hero/knight.tres" id="2_seymp"]
+[ext_resource type="Resource" uid="uid://14x26y1535he" path="res://data/models/world/stats/hero/lord.tres" id="2_seymp"]
 
 [node name="Expertise" type="Node"]
 script = ExtResource("1_6aq7s")

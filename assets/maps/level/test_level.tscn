@@ -7,7 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://8x2rssxosm7i" path="res://data/modules/stats/expertise/expertise.tscn" id="7_2t7xk"]
 [ext_resource type="Script" path="res://data/modules/tactics/level/participants/player/tactics_player.gd" id="7_3m485"]
 [ext_resource type="PackedScene" uid="uid://6eofg7n4asn5" path="res://data/modules/tactics/level/pawn/pawn.tscn" id="8_08tl5"]
-[ext_resource type="Resource" uid="uid://decaxywkgyj1r" path="res://data/models/world/stats/hero/chemist.tres" id="8_l4u65"]
+[ext_resource type="Resource" uid="uid://decaxywkgyj1r" path="res://data/models/world/stats/hero/great_knight.tres" id="8_l4u65"]
 [ext_resource type="Resource" uid="uid://dbrv0l6ndqgv3" path="res://data/models/world/stats/hero/cleric.tres" id="9_nuein"]
 [ext_resource type="Resource" uid="uid://1fetqfwxu88y" path="res://data/models/world/stats/hero/archer.tres" id="10_8w028"]
 [ext_resource type="Resource" uid="uid://c065vh6vqrtcc" path="res://data/models/world/stats/mob/skeleton.tres" id="12_gx1gx"]

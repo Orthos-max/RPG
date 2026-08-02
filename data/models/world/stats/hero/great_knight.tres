@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://decaxywkgyj1r"]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+override_name = "Frederick"
+expertise = "Great Knight"
+strategy = 0
+character_class = 15
+level = 1
+exp = 0
+is_promoted = true
+sprite = "res://assets/textures/actor/character/chr_pawn_chemist.png"
+hp = 28
+str = 13
+mag = 2
+skl = 12
+spd = 10
+lck = 6
+def = 14
+res = 3
+movement = 7
+jump = 3.0
+attack_range = 1
+weapon_type = 1
+weapon_might = 8
+hp_growth = 90
+str_growth = 65
+mag_growth = 0
+skl_growth = 50
+spd_growth = 30
+lck_growth = 40
+def_growth = 65
+res_growth = 15
+max_health = 28
+attack_power = 21

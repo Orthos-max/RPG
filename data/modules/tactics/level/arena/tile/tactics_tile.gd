@@ -17,6 +17,11 @@ var attackable: bool = false
 ## Whether the tile is being hovered over
 var hover: bool = false
 
+## Terrain type for this tile (from MapData.TerrainType)
+@export var terrain_type: int = 0
+## Base material for terrain (applied when no special state is active)
+var terrain_mat: StandardMaterial3D = null
+
 ## Pathfinding starting point.[br]Used by [TacticsArena]
 var pf_root: TacticsTile
 ## The distance to cover.[br]Used by [TacticsArena]
@@ -42,9 +47,14 @@ func _process(_delta: float) -> void:
 	if not tile:
 		return # If the "Tile" node wasn't found, the function exits early to avoid errors.
 	
-	# Set visibility of the tile to visible if attackable, reachable, or hover are true.
-	tile.visible = attackable or reachable or hover # Set visibility based on tile state
+	# Apply terrain base material when no special state is active
+	if not attackable and not reachable and not hover:
+		tile.visible = true
+		if terrain_mat:
+			tile.material_override = terrain_mat
+		return
 	
+	tile.visible = true
 	match hover:
 		true: # If hover is true, decide which material to use based on the tile's state
 			if reachable:
@@ -89,6 +99,9 @@ func reset_markers() -> void:
 ## Initializes tile (disable hover, instantiate raycast & reset state)
 func configure_tile() -> void:
 	hover = false
+	# Set terrain material
+	if TacticsConfig.terrain_material.has(terrain_type):
+		terrain_mat = TacticsConfig.terrain_material[terrain_type]
 	var instance: Node = tile_raycast.instantiate() # Instantiate raycast
 	add_child(instance) # Add raycast as child
 	reset_markers() # Reset tile markers

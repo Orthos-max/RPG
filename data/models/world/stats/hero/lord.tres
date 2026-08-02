@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://14x26y1535he"]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_k2p1h"]
+
+[resource]
+script = ExtResource("1_k2p1h")
+override_name = "Chrom"
+expertise = "Lord"
+strategy = 0
+character_class = 0
+level = 1
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/actor/character/chr_pawn_knight.png"
+hp = 20
+str = 7
+mag = 1
+skl = 8
+spd = 8
+lck = 5
+def = 7
+res = 1
+movement = 5
+jump = 2.0
+attack_range = 1
+weapon_type = 0
+weapon_might = 5
+hp_growth = 80
+str_growth = 60
+mag_growth = 10
+skl_growth = 60
+spd_growth = 60
+lck_growth = 70
+def_growth = 50
+res_growth = 20
+max_health = 20
+attack_power = 12

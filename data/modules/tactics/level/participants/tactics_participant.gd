@@ -74,3 +74,11 @@ func reset_turn(parent: Node3D) -> void:
 ## Skips the participant's turn
 func skip_turn() -> void:
 	serv.skip_turn(player)
+
+
+## Resets the participant's pawn references when unloading a level
+func reset_participant() -> void:
+	res.curr_pawn = null
+	res.attackable_pawn = null
+	res.stage = res.STAGE_SELECT_PAWN
+	res.turn_just_started = true
