@@ -43,6 +43,7 @@ func _init() -> void:
 	_test_session()
 	_test_skills()
 	_test_economy()
+	_test_network_codes()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -701,4 +702,43 @@ func _test_economy() -> void:
 	if campaign.available_recruits().size() > 0:
 		_check(not bool(campaign.hire(str(campaign.available_recruits()[0]["path"]))["ok"]),
 			"recrutement refusé sans or")
+#endregion
+
+
+#region 13. Codes d'accès réseau
+func _test_network_codes() -> void:
+	print("\n🌐 Test 13: codes d'accès (M3/M4)")
+
+	var net: Node = root.get_node_or_null("Network")
+	if not net:
+		_ko("Autoload Network", "introuvable")
+		return
+	_ok("Autoload Network disponible")
+
+	# Aller-retour sur des adresses typiques d'un réseau domestique
+	for ip: String in ["192.168.1.42", "10.0.0.1", "127.0.0.1", "172.20.10.3", "255.255.255.255"]:
+		var code: String = net.encode_code(ip)
+		_check(code.length() == net.CODE_LENGTH and net.decode_code(code) == ip,
+			"%s ↔ %s" % [ip, code], "décodé : %s" % net.decode_code(code))
+
+	# Le code est lisible à l'oral : ni I, ni O, ni 0, ni 1
+	var sample: String = net.encode_code("192.168.1.42")
+	var ambiguous: bool = sample.contains("I") or sample.contains("O") \
+		or sample.contains("0") or sample.contains("1")
+	_check(not ambiguous, "alphabet sans caractères ambigus (%s)" % sample)
+
+	# Saisie tolérante
+	_check(net.decode_code(sample.to_lower()) == "192.168.1.42", "minuscules acceptées")
+	_check(net.decode_code(" " + sample + " ") == "192.168.1.42", "espaces ignorés")
+
+	# Codes invalides
+	_check(net.decode_code("TROPCOURT") == "", "code de mauvaise longueur refusé")
+	_check(net.decode_code("AAAAAA!") == "", "caractère hors alphabet refusé")
+	_check(net.encode_code("pas.une.ip") == "", "adresse invalide refusée")
+	_check(net.encode_code("192.168.1.999") == "", "octet hors bornes refusé")
+
+	# État initial
+	_check(not net.is_online() and net.is_authority(),
+		"hors ligne : cette instance fait autorité par défaut")
+	_check(net.local_side() == TeamData.Side.PLAYER, "camp local par défaut : joueur 1")
 #endregion

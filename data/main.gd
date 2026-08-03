@@ -9,6 +9,9 @@ extends Node
 const TitleScreen = preload("res://data/modules/menu/title_screen.gd")
 const PrepScreen = preload("res://data/modules/menu/prep_screen.gd")
 const ChapterRunnerClass = preload("res://data/modules/campaign/chapter_runner.gd")
+const TurnBanner = preload("res://data/modules/ui/turn_banner.gd")
+const LobbyScreen = preload("res://data/modules/menu/lobby_screen.gd")
+const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 const SKIRMISH_SCENE: String = "res://assets/maps/level/map_level.tscn"
@@ -40,6 +43,9 @@ func show_title() -> void:
 	screen.new_game_requested.connect(_on_new_game)
 	screen.continue_requested.connect(_on_continue)
 	screen.ciel_mode_requested.connect(_on_ciel_skirmish)
+	screen.hotseat_requested.connect(_on_hotseat)
+	screen.host_requested.connect(func() -> void: show_lobby(true))
+	screen.join_requested.connect(func() -> void: show_lobby(false))
 	screen.editor_requested.connect(func() -> void: _load_2d_scene(FE2D_EDITOR_SCENE))
 	screen.fe2d_requested.connect(func() -> void: _load_2d_scene(FE2D_SCENE))
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
@@ -72,6 +78,24 @@ func show_prep() -> void:
 	screen.battle_requested.connect(_on_battle_requested)
 	screen.back_requested.connect(show_title)
 	_mount_ui(screen)
+
+
+## Salon de partie en ligne : hôte (génère un code) ou invité (saisit un code).
+func show_lobby(as_host: bool) -> void:
+	unload_level()
+	_clear_ui()
+
+	var screen := LobbyScreen.new()
+	screen.hosting = as_host
+	screen.battle_requested.connect(_on_network_battle)
+	screen.back_requested.connect(show_title)
+	_mount_ui(screen)
+
+
+## L'hôte a lancé la bataille : les deux machines chargent la même carte.
+func _on_network_battle(map_path: String) -> void:
+	_chapter = null
+	_load_level(map_path)
 
 
 ## Écran de fin de bataille (victoire, défaite, fin de campagne).
@@ -168,6 +192,15 @@ func _on_ciel_skirmish() -> void:
 	_load_level(SKIRMISH_SCENE)
 
 
+## Duel local : les deux camps sont joués à la main, sur la même machine (M2).
+func _on_hotseat() -> void:
+	var session: Node = _session()
+	if session:
+		session.set_mode(session.Mode.HOTSEAT)
+	_chapter = null
+	_load_level(SKIRMISH_SCENE)
+
+
 func _on_battle_requested() -> void:
 	if not _chapter:
 		show_title()
@@ -240,6 +273,21 @@ func _load_level(scene_path: String) -> void:
 			"scene": scene_path,
 			"chapter": _chapter.id if _chapter else "skirmish",
 		})
+
+	# Bandeau « à qui de jouer » — vital en hotseat, informatif ailleurs.
+	if _level is TacticsLevel:
+		var banner: CanvasLayer = TurnBanner.new()
+		banner.name = "TurnBanner"
+		banner.level = _level
+		_level.add_child(banner)
+
+	# Côté invité, la partie n'est qu'un reflet : l'hôte fait autorité.
+	var network: Node = get_node_or_null("/root/Network")
+	if network and network.role == 2 and _level is TacticsLevel:  # Role.CLIENT
+		var mirror := NetMirrorClass.new()
+		mirror.name = "NetMirror"
+		mirror.level = _level
+		_level.add_child(mirror)
 
 	# En campagne, le runner applique le roster et surveille l'objectif.
 	if _chapter and _level is TacticsLevel:

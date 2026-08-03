@@ -19,6 +19,9 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const LOG = preload("res://data/services/combat/battle_log.gd")
 
+## Émis à chaque nouvel état exporté (le réseau s'en sert pour diffuser).
+signal state_exported(state: Dictionary)
+
 ## Compatibilité : reflète l'état du contrôleur adverse dans [GameSession].
 static var enabled: bool = true
 
@@ -48,6 +51,8 @@ var _last_error_code: int = CMD.Err.NONE
 var _opponent: TacticsOpponent = null
 var _participant: TacticsParticipant = null
 var _cmd: Dictionary = {}
+## Ordres reçus hors fichier (joueur distant) — déjà validés
+var _external_queue: Array = []
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +95,39 @@ func _physics_process(_delta: float) -> void:
 		_drain_out_of_turn_command(level)
 
 
-## Le camp adverse est-il piloté par Ciel ? (source de vérité : [GameSession])
+## Le pont pilote-t-il le camp adverse ?
+##
+## Deux contrôleurs passent par ce même chemin validé : Ciel (ordres lus dans
+## `ai_command.json`) et le joueur distant (ordres reçus par le réseau, poussés
+## dans la file interne). La source de vérité reste [GameSession].
 func is_active() -> bool:
 	var session: Node = _session()
 	if session:
-		enabled = session.is_ciel_controlled()
+		var controller: int = session.controller_for(TeamData.Side.OPPONENT)
+		enabled = controller == TeamData.Controller.CIEL_AI \
+			or controller == TeamData.Controller.REMOTE_PLAYER
 	return enabled
+
+
+## Ordre poussé par une source externe autre que le fichier (réseau).
+## Il suivra exactement la même validation que les ordres de Ciel.
+## [returns] Résultat de validation ({ok, action, args, code, error}).
+func push_command(cmd: Dictionary) -> Dictionary:
+	var level: TacticsLevel = _resolve_level()
+	var pr: TacticsParticipantResource = _participant.res if _participant else null
+	var ctx: Dictionary = {
+		"stage": pr.stage if pr else CMD.STAGE_SELECT_PAWN,
+		"turn": _whose_turn(level),
+		"grid_size": TacticsGrid.grid_size(level.arena if level else null),
+	}
+
+	var parsed: Dictionary = CMD.validate(cmd, ctx)
+	if not bool(parsed["ok"]):
+		_reject(parsed)
+		return parsed
+
+	_external_queue.append(parsed)
+	return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +539,17 @@ func _play_local_fallback(opponent: TacticsOpponent, participant: TacticsPartici
 # ---------------------------------------------------------------------------
 ## Lit le prochain ordre valide. Renvoie {} si aucun ordre, ou si l'ordre a été rejeté.
 func _next_command(pr: TacticsParticipantResource) -> Dictionary:
+	# Les ordres réseau sont déjà validés à la réception : ils passent devant.
+	if not _external_queue.is_empty():
+		var queued: Dictionary = _external_queue.pop_front()
+		if not str(queued["action"]) in _actions_for_stage(pr.stage):
+			_reject_runtime(str(queued["action"]),
+				"reçu à l'étape %s, ignoré" % _stage_name(pr.stage))
+			return {}
+		_idle_frames = 0
+		_cmd = queued
+		return queued
+
 	var raw: String = _consume_command_file()
 	if raw.is_empty():
 		return {}
@@ -731,6 +774,12 @@ func _export_state(level: TacticsLevel) -> void:
 	state["seq"] = _seq
 	state["timestamp"] = Time.get_unix_time_from_system()
 	_write_json(STATE_FILE, state)
+	state_exported.emit(state)
+
+	# En réseau, l'hôte diffuse le même état à l'invité : une seule source de vérité.
+	var network: Node = _network()
+	if network and network.role == 1:  # Role.HOST
+		network.broadcast_state(state)
 
 
 func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: TacticsPawn) -> Dictionary:
@@ -873,6 +922,11 @@ func _session() -> Node:
 func _campaign() -> Node:
 	var tree := get_tree()
 	return tree.root.get_node_or_null("Campaign") if tree else null
+
+
+func _network() -> Node:
+	var tree := get_tree()
+	return tree.root.get_node_or_null("Network") if tree else null
 
 
 func _difficulty() -> int:

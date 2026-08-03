@@ -7,6 +7,9 @@ extends Control
 signal new_game_requested(difficulty: int, permadeath: bool)
 signal continue_requested()
 signal ciel_mode_requested()
+signal hotseat_requested()
+signal host_requested()
+signal join_requested()
 signal editor_requested()
 signal fe2d_requested()
 signal quit_requested()
@@ -80,6 +83,18 @@ func _build() -> void:
 	var ciel_btn := _make_button("🤖  Escarmouche CielAI")
 	ciel_btn.pressed.connect(func() -> void: ciel_mode_requested.emit())
 	menu.add_child(ciel_btn)
+
+	var hotseat_btn := _make_button("🪑  Duel local (2 joueurs)")
+	hotseat_btn.pressed.connect(func() -> void: hotseat_requested.emit())
+	menu.add_child(hotseat_btn)
+
+	var host_btn := _make_button("🌐  Créer une partie en ligne")
+	host_btn.pressed.connect(func() -> void: host_requested.emit())
+	menu.add_child(host_btn)
+
+	var join_btn := _make_button("🔑  Rejoindre avec un code")
+	join_btn.pressed.connect(func() -> void: join_requested.emit())
+	menu.add_child(join_btn)
 
 	menu.add_child(_spacer(12))
 
