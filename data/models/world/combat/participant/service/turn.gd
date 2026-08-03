@@ -1,8 +1,13 @@
 class_name TacticsParticipantTurnService
 extends RefCounted
 ## Service class for handling turn-related actions
-## 
+##
 ## Parent: [TacticsParticipantService]
+
+# Les autoloads sont résolus à l'exécution (via l'arbre) et non par leur nom
+# global : ce service est compilé pendant l'initialisation des autoloads, où
+# ces noms ne sont pas encore utilisables.
+const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 ## Resource containing participant data and configurations
 var res: TacticsParticipantResource
@@ -55,12 +60,21 @@ func handle_player_turn(delta: float, player: TacticsPlayer, participant: Tactic
 func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: TacticsParticipant) -> void:
 	res.targets = participant.get_node("%TacticsPlayer")
 	controls.set_actions_menu_visibility(false, null)
-	
-	# CielAI override — si activé, Ciel contrôle l'adversaire via fichiers
-	if CielAI and CielAI.enabled:
-		CielAI.handle_opponent_turn(delta, opponent, participant)
-		return
-	
+
+	# Qui pilote ce camp ? La réponse vient de GameSession (M1), pas d'un test en dur.
+	# REMOTE_PLAYER retombe volontairement sur l'IA locale tant que le réseau (M3)
+	# n'est pas branché : mieux vaut un tour joué qu'une partie figée.
+	match _opponent_controller():
+		TeamDataClass.Controller.CIEL_AI:
+			var ciel: Node = _autoload("CielAI")
+			if ciel:
+				ciel.handle_opponent_turn(delta, opponent, participant)
+				return
+		TeamDataClass.Controller.LOCAL_PLAYER:
+			# Hotseat (M2) : les contrôles partagés ne sont pas encore branchés.
+			# L'IA locale assure l'intérim plutôt que de figer la partie.
+			DebugLog.debug_nospam("hotseat_pending", "Hotseat (M2) non implémenté — IA locale")
+
 	if res.stage > 4:
 		res.stage = 0
 		DebugLog.debug_nospam("turn_stage", res.stage)
@@ -70,6 +84,22 @@ func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: 
 		res.STAGE_SHOW_MOVEMENTS: opponent.is_pawn_done_moving()
 		res.STAGE_SELECT_LOCATION: opponent.choose_pawn_to_attack()
 		res.STAGE_MOVE_PAWN: participant.serv.combat_service.attack_pawn(delta, false)
+
+
+## Contrôleur du camp adverse, d'après GameSession (IA locale par défaut).
+func _opponent_controller() -> int:
+	var session: Node = _autoload("GameSession")
+	if not session:
+		return TeamDataClass.Controller.LOCAL_AI
+	return int(session.controller_for(TeamDataClass.Side.OPPONENT))
+
+
+## Récupère un autoload par son nom, sans dépendre de l'identifiant global.
+func _autoload(autoload_name: String) -> Node:
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		return (loop as SceneTree).root.get_node_or_null(autoload_name)
+	return null
 
 
 ## Checks if the participant can perform an action

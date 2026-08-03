@@ -1,6 +1,12 @@
 class_name TacticsOpponentService
 extends RefCounted
 ## Service class for TacticsOpponent
+##
+## Les décisions viennent de [LocalAIBrain] via [TacticsAIExecutor] : ciblage
+## pondéré (achèvement, menace, riposte), terrain défensif et prise en compte du
+## risque d'encerclement, le tout modulé par la difficulté choisie.
+
+const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
 
 ## Resource containing participant data and configurations
 var res: TacticsParticipantResource
@@ -10,6 +16,8 @@ var camera: TacticsCameraResource
 var controls: TacticsControlsResource
 ## Reference to the TacticsArena node
 var arena: TacticsArena
+## Nom de la cible retenue par l'heuristique pendant la phase de déplacement
+var _planned_target: String = ""
 
 
 ## Initializes the TacticsOpponentService
@@ -48,29 +56,33 @@ func choose_pawn(opponent: TacticsOpponent) -> void:
 			return
 
 
-## Initiates the opponent's pawn to chase the nearest enemy
+## Décide du déplacement du pion actif (et mémorise la cible visée).
 ##
 ## @param opponent: The TacticsOpponent node
 ## @param player_node: The player's node
 func chase_nearest_enemy(opponent: TacticsOpponent, player_node: Node) -> void:
 	if not res.curr_pawn:
 		return
-	if res.curr_pawn.res.can_move:
-		arena.reset_all_tile_markers()
-		arena.process_surrounding_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.movement, opponent.get_children())
-		arena.mark_reachable_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.movement)
-		
-		var to: TacticsTile = arena.get_nearest_target_adjacent_tile(res.curr_pawn, player_node.get_children())
-		res.curr_pawn.res.pathfinding_tilestack = arena.get_pathfinding_tilestack(to)
-		camera.target = to
-		if DebugLog.debug_enabled:
-			print_rich("[color=orange]", res.curr_pawn, " moving to [i]", to, "[/i][/color]")
-			print_rich("[color=orange]Through: [i]", res.curr_pawn.res.pathfinding_tilestack, "[/i][/color]")
-			print_rich("[color=cyan]Camera target updated to destination tile.[/color]")
-		res.stage = res.STAGE_SHOW_MOVEMENTS
-	else:
+	if not res.curr_pawn.res.can_move:
 		res.stage = res.STAGE_SELECT_PAWN
 		push_error("Tried to make a pawn that cannot move chase nearest enemy: ", res.curr_pawn)
+		return
+
+	var plan: Dictionary = EXECUTOR.plan(arena, res.curr_pawn, opponent, player_node, _difficulty())
+	_planned_target = str(plan.get("decision", {}).get("target", ""))
+
+	var to: TacticsTile = plan.get("tile") as TacticsTile
+	if not to:
+		# Aucune case retenue (déjà en position, ou plan vide) : on reste sur place
+		# et on laisse l'étape de ciblage décider.
+		to = res.curr_pawn.get_tile()
+
+	res.curr_pawn.res.pathfinding_tilestack = arena.get_pathfinding_tilestack(to)
+	camera.target = to
+	if DebugLog.debug_enabled:
+		print_rich("[color=orange]", res.curr_pawn, " → [i]", to, "[/i] (",
+			str(plan.get("decision", {}).get("reason", "?")), ")[/color]")
+	res.stage = res.STAGE_SHOW_MOVEMENTS
 
 
 ## Checks if the opponent's pawn has finished moving
@@ -89,8 +101,11 @@ func choose_pawn_to_attack() -> void:
 	# Don't filter by allies — enemy tiles must be reachable for attack targeting
 	arena.process_surrounding_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
 	arena.mark_attackable_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
-	
-	res.attackable_pawn = arena.get_weakest_attackable_pawn(res.targets.get_children())
+
+	# On honore d'abord la cible choisie par l'heuristique, si elle est à portée.
+	res.attackable_pawn = _resolve_planned_target()
+	if not res.attackable_pawn:
+		res.attackable_pawn = arena.get_weakest_attackable_pawn(res.targets.get_children())
 	if res.attackable_pawn:
 		if DebugLog.debug_enabled:
 			print_rich("[color=orange]Weakest target detected:", res.attackable_pawn, "[/color]")
@@ -99,5 +114,29 @@ func choose_pawn_to_attack() -> void:
 	else:
 		if DebugLog.debug_enabled:
 			print_rich("[color=orange]No target detected.[/color]")
-		
+
+	_planned_target = ""
 	res.stage = res.STAGE_MOVE_PAWN
+
+
+## Retrouve la cible planifiée si elle est encore vivante et à portée d'attaque.
+func _resolve_planned_target() -> TacticsPawn:
+	if _planned_target.is_empty() or not res.targets:
+		return null
+	var pawn: Node = EXECUTOR.find_pawn_by_name(res.targets, _planned_target)
+	if not pawn:
+		return null
+	var tile: TacticsTile = pawn.get_tile()
+	if not tile or not tile.attackable:
+		return null
+	return pawn
+
+
+## Difficulté courante, lue depuis GameSession (Normal par défaut).
+func _difficulty() -> int:
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		var session: Node = (loop as SceneTree).root.get_node_or_null("GameSession")
+		if session:
+			return int(session.difficulty)
+	return DifficultyDB.Level.NORMAL

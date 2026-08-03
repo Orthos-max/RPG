@@ -12,6 +12,28 @@ var opponent_serv: TacticsOpponentService
 func _ready() -> void:
 	super._ready() # Call the parent's _ready function
 	opponent_serv = TacticsOpponentService.new(res, camera, controls, arena) # Initialize the opponent service
+	_apply_difficulty_handicap()
+
+
+## Applique le handicap de difficulté au camp adverse (P2 — équilibrage).
+## Les pions sont déjà initialisés à ce stade : _ready() remonte des enfants vers le parent.
+func _apply_difficulty_handicap() -> void:
+	var session: Node = get_node_or_null("/root/GameSession")
+	if not session:
+		return
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var chapter_index: int = int(campaign.chapter_index) if campaign else 0
+
+	var applied: Dictionary = {}
+	for p in get_children():
+		if p is TacticsPawn and p.stats:
+			applied = DifficultyDB.apply_to_stats(p.stats, session.difficulty, chapter_index)
+
+	if not applied.is_empty() and (int(applied["stat_bonus"]) != 0 or int(applied["hp_bonus"]) != 0):
+		print_rich("[color=orange]⚖ Difficulté %s — adversaire %+d stats / %+d PV[/color]" % [
+			DifficultyDB.get_level_name(session.difficulty),
+			int(applied["stat_bonus"]), int(applied["hp_bonus"])
+		])
 
 
 ## Checks if the opponent's pawn is properly configured
