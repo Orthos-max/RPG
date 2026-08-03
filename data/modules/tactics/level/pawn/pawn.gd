@@ -55,6 +55,45 @@ func get_tile() -> TacticsTile:
 	return $Tile.get_collider()
 
 
+## Nom affiché du pion — unique au sein de son camp.
+##
+## Plusieurs mobs partagent le même intitulé de classe (« Brigand » ×3) : sans
+## suffixe, Ciel ne pourrait pas désigner un pion précis avec `select_pawn`.
+## Le suffixe vient du nom de nœud (stable, y compris après la mort d'un voisin).
+func display_name() -> String:
+	var base: String = base_name()
+	var parent: Node = get_parent()
+	if not parent:
+		return base
+
+	var homonyms: int = 0
+	for sibling in parent.get_children():
+		if sibling is TacticsPawn and sibling.base_name() == base:
+			homonyms += 1
+	if homonyms <= 1:
+		return base
+
+	return "%s#%d" % [base, _node_index()]
+
+
+## Intitulé de base : nom propre s'il existe, sinon la classe.
+func base_name() -> String:
+	if stats and stats.override_name != "":
+		return stats.override_name
+	return expertise
+
+
+## Indice tiré du nom de nœud ("Pawn" → 1, "Pawn3" → 3).
+func _node_index() -> int:
+	var node_name: String = String(name)
+	var digits: String = ""
+	for i in range(node_name.length() - 1, -1, -1):
+		if not node_name[i].is_valid_int():
+			break
+		digits = node_name[i] + digits
+	return int(digits) if not digits.is_empty() else 1
+
+
 ## Checks if the pawn is alive
 ##
 ## @return: Whether the pawn's current health is above 0
@@ -88,6 +127,9 @@ func can_act() -> bool:
 ## Resets the pawn's turn state
 func reset_turn() -> void:
 	res.reset_turn()
+	# Les bonus temporaires (garde, toniques) vieillissent d'un tour.
+	if stats:
+		stats.tick_buffs()
 
 
 ## Ends the pawn's turn

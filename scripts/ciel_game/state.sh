@@ -1,81 +1,159 @@
 #!/bin/bash
-# Lit l'état du jeu exporté par CielAI
-# Usage: bash scripts/ciel_game/state.sh [--watch]
+# Lit l'état du jeu exporté par CielAI (ai_state.json).
+# Usage: bash scripts/ciel_game/state.sh [--watch|--raw|--events|--tiles <nom>]
 
-STATE_FILE="$HOME/Library/Application Support/Godot/app_userdata/Godot Tactical RPG/ai_state.json"
+set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_paths.sh"
 
-if [ "$1" = "--watch" ]; then
-    # Mode watch : affiche l'état toutes les 0.5s
-    while true; do
-        clear
-        echo "=== CielAI Game State ==="
-        echo ""
-        if [ -f "$STATE_FILE" ]; then
-            python3 -m json.tool "$STATE_FILE" 2>/dev/null || cat "$STATE_FILE"
-        else
-            echo "(en attente du fichier d'état...)"
-        fi
-        sleep 0.5
-    done
-elif [ "$1" = "--raw" ]; then
-    cat "$STATE_FILE" 2>/dev/null || echo "{}"
-else
-    if [ -f "$STATE_FILE" ]; then
-        python3 -c "
-import json, sys
-data = json.load(open('$STATE_FILE'))
+MODE="${1:-summary}"
+ARG="${2:-}"
 
-# Turn info
-turn = data.get('turn', '?')
-stage = data.get('stage_name', '?')
-cp = data.get('current_pawn', '')
-grid = data.get('grid_size', {})
-message = data.get('message', '')
-
-print(f'Turn: {turn} | Stage: {stage} ({data.get(\"stage\", \"?\")})')
-if cp:
-    print(f'Active: {cp}')
-if message:
-    print(f'Message: {message}')
-print(f'Grid: {grid.get(\"x\", \"?\")}×{grid.get(\"y\", \"?\")}')
-
-# Pawns
-pawns = data.get('pawns', [])
-if pawns:
-    player_pawns = [p for p in pawns if p['team'] == 'player' and p['alive']]
-    opponent_pawns = [p for p in pawns if p['team'] == 'opponent' and p['alive']]
-    dead_pawns = [p for p in pawns if not p['alive']]
-    
-    print(f'\n╔══ PLAYER ({len(player_pawns)} alive) ═══════════════════════')
-    for p in player_pawns:
-        marker = '◈ ' if p['name'] == cp else '  '
-        print(f'║ {marker}{p[\"name\"]:<18} HP:{p[\"hp\"]:>2}/{p[\"max_hp\"]:<2}  [{p[\"grid_col\"]},{p[\"grid_row\"]}]  M:{p[\"movement\"]} R:{p[\"attack_range\"]}')
-        print(f'║   Str:{p[\"str\"]:<2} Mag:{p[\"mag\"]:<2} Skl:{p[\"skl\"]:<2} Spd:{p[\"spd\"]:<2} Def:{p[\"def\"]:<2} Res:{p[\"res\"]:<2}')
-    
-    print(f'╠══ OPPONENT ({len(opponent_pawns)} alive) ════════════════════')
-    for p in opponent_pawns:
-        marker = '◈ ' if p['name'] == cp else '  '
-        can = ''
-        if not p['can_move'] and not p['can_attack']:
-            can = ' [done]'
-        elif not p['can_move']:
-            can = ' [atk only]'
-        elif not p['can_attack']:
-            can = ' [move only]'
-        print(f'║ {marker}{p[\"name\"]:<18} HP:{p[\"hp\"]:>2}/{p[\"max_hp\"]:<2}  [{p[\"grid_col\"]},{p[\"grid_row\"]}]  M:{p[\"movement\"]} R:{p[\"attack_range\"]}{can}')
-        print(f'║   Str:{p[\"str\"]:<2} Mag:{p[\"mag\"]:<2} Skl:{p[\"skl\"]:<2} Spd:{p[\"spd\"]:<2} Def:{p[\"def\"]:<2} Res:{p[\"res\"]:<2}')
-    
-    if dead_pawns:
-        print(f'╠══ DEAD ══════════════════════════════════════')
-        for p in dead_pawns:
-            print(f'║   {p[\"name\"]} ({p[\"team\"]})')
-    
-    print(f'╚═══════════════════════════════════════════════════')
-else:
-    print('\nAucun pion sur le terrain.')
-" 2>/dev/null || echo "Erreur parsing JSON. Utilise --raw pour voir le contenu brut."
-    else
+render() {
+    if [ ! -f "$STATE_FILE" ]; then
         echo "Aucun état disponible. Le jeu tourne ?"
         echo "Fichier attendu: $STATE_FILE"
+        return 1
     fi
-fi
+    CIEL_STATE_FILE="$STATE_FILE" CIEL_MODE="$1" CIEL_ARG="${2:-}" python3 <<'PY'
+import json, os, sys
+
+path = os.environ["CIEL_STATE_FILE"]
+mode = os.environ.get("CIEL_MODE", "summary")
+arg = os.environ.get("CIEL_ARG", "")
+
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+except Exception as exc:
+    print("Erreur de lecture de l'état (%s). Essaie --raw." % exc)
+    sys.exit(1)
+
+pawns = data.get("pawns", [])
+
+def fmt_pawn(p, active):
+    marker = "◈ " if active else "  "
+    flags = ""
+    if not p.get("can_move") and not p.get("can_attack"):
+        flags = " [terminé]"
+    elif not p.get("can_move"):
+        flags = " [attaque seule]"
+    elif not p.get("can_attack"):
+        flags = " [mouvement seul]"
+    head = "║ %s%-18s HP:%2s/%-3s [%s,%s] M:%s R:%s%s" % (
+        marker, p.get("name", "?"), p.get("hp", "?"), p.get("max_hp", "?"),
+        p.get("grid_col", "?"), p.get("grid_row", "?"),
+        p.get("movement", "?"), p.get("attack_range", "?"), flags)
+    stats = "║   Str:%-2s Mag:%-2s Skl:%-2s Spd:%-2s Def:%-2s Res:%-2s Lv:%-2s %s" % (
+        p.get("str", "?"), p.get("mag", "?"), p.get("skl", "?"), p.get("spd", "?"),
+        p.get("def", "?"), p.get("res", "?"), p.get("level", "?"),
+        p.get("class_name", ""))
+    extra = ""
+    terrain = p.get("terrain")
+    if terrain:
+        extra = "║   Terrain: %s (+%s DEF)" % (terrain, p.get("terrain_def", 0))
+    return "\n".join(x for x in [head, stats, extra] if x)
+
+if mode == "--events":
+    events = data.get("events", [])
+    if not events:
+        print("Aucun événement enregistré.")
+    for e in events:
+        print("#%-4s %-16s %s" % (
+            e.get("seq", "?"), e.get("kind_name", "?"),
+            ", ".join("%s=%s" % (k, v) for k, v in e.items()
+                      if k not in ("seq", "kind", "kind_name", "t"))))
+    sys.exit(0)
+
+if mode == "--tiles":
+    target = arg.lower()
+    for p in pawns:
+        if p.get("name", "").lower() != target:
+            continue
+        print("Portée de %s :" % p.get("name"))
+        print("  Déplacement : %s" % ", ".join(
+            "(%s,%s)" % (t.get("col"), t.get("row")) for t in p.get("reachable_tiles", [])) or "—")
+        print("  Attaque     : %s" % ", ".join(
+            "(%s,%s)" % (t.get("col"), t.get("row")) for t in p.get("attack_tiles", [])) or "—")
+        sys.exit(0)
+    print("Pion introuvable : %s" % arg)
+    sys.exit(1)
+
+# --- Résumé ---
+grid = data.get("grid_size", {})
+print("Turn %s | %s | Stage: %s (%s) | seq %s" % (
+    data.get("turn_number", "?"), data.get("turn", "?"),
+    data.get("stage_name", "?"), data.get("stage", "?"), data.get("seq", "?")))
+print("Mode: %s | Difficulté: %s | Contrôle adverse: %s" % (
+    data.get("mode", "?"), data.get("difficulty", "?"), data.get("opponent_controller", "?")))
+if data.get("current_pawn"):
+    print("Actif: %s" % data["current_pawn"])
+if data.get("message"):
+    print("Message: %s" % data["message"])
+if data.get("last_error"):
+    print("⚠️  Dernier rejet: %s" % data["last_error"])
+print("Grid: %sx%s | Objectif: %s" % (
+    grid.get("x", "?"), grid.get("y", "?"), data.get("objective", "—")))
+
+if not pawns:
+    print("\nAucun pion sur le terrain.")
+    sys.exit(0)
+
+cp = data.get("current_pawn", "")
+players = [p for p in pawns if p.get("team") == "player" and p.get("alive")]
+opponents = [p for p in pawns if p.get("team") == "opponent" and p.get("alive")]
+dead = [p for p in pawns if not p.get("alive")]
+
+print("\n╔══ PLAYER (%d vivants) ══════════════════════" % len(players))
+for p in players:
+    print(fmt_pawn(p, p.get("name") == cp))
+print("╠══ OPPONENT (%d vivants) ════════════════════" % len(opponents))
+for p in opponents:
+    print(fmt_pawn(p, p.get("name") == cp))
+if dead:
+    print("╠══ TOMBÉS ══════════════════════════════════")
+    for p in dead:
+        print("║   %s (%s)" % (p.get("name"), p.get("team")))
+print("╚════════════════════════════════════════════")
+
+events = data.get("events", [])[-5:]
+if events:
+    print("\nDerniers événements :")
+    for e in events:
+        if e.get("kind_name") == "attack":
+            print("  #%s %s → %s : %s dmg%s%s" % (
+                e.get("seq"), e.get("attacker"), e.get("defender"), e.get("damage"),
+                " CRIT" if e.get("crit") else "", " (raté)" if not e.get("hit") else ""))
+        elif e.get("kind_name") == "death":
+            print("  #%s ☠ %s (%s)" % (e.get("seq"), e.get("pawn"), e.get("team")))
+        else:
+            print("  #%s %s" % (e.get("seq"), e.get("kind_name")))
+PY
+}
+
+case "$MODE" in
+    --watch)
+        while true; do
+            clear
+            echo "=== Ciel Emblem — état du jeu ==="
+            echo ""
+            render summary || true
+            sleep 0.5
+        done
+        ;;
+    --raw)
+        cat "$STATE_FILE" 2>/dev/null || echo "{}"
+        ;;
+    --path)
+        echo "userdata : $USERDATA_DIR"
+        echo "state    : $STATE_FILE"
+        echo "command  : $CMD_FILE"
+        echo "feedback : $FEEDBACK_FILE"
+        echo "replays  : $REPLAY_DIR"
+        ;;
+    --events|--tiles)
+        render "$MODE" "$ARG"
+        ;;
+    *)
+        render summary
+        ;;
+esac

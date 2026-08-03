@@ -1,400 +1,439 @@
 extends Node
-## Ciel AI Controller — Pont Godot ↔ Ciel.
+## CielAI (autoload) — pont Godot ↔ Ciel.
 ##
-## Quand activé, Ciel contrôle l'adversaire via fichiers.
-## - Exporte l'état du jeu dans ai_state.json (lisible par Ciel)
-## - Lit les commandes depuis ai_command.json (écrites par Ciel)
-## - Prend le relais dans handle_opponent_turn() au lieu de l'IA basique.
+## Quand le camp adverse est confié à Ciel :
+##   * Godot exporte l'état complet du champ de bataille dans `ai_state.json` ;
+##   * Ciel dépose un ordre dans `ai_command.json` (supprimé après lecture) ;
+##   * chaque ordre est validé par [CielCommand] avant d'atteindre le moteur ;
+##   * un ordre invalide est rejeté proprement, journalisé, et renvoyé dans
+##     `ai_feedback.json` — le moteur n'est jamais mis dans un état incohérent ;
+##   * si aucun ordre valide n'arrive à temps, l'IA locale ([LocalAIBrain]) joue
+##     le tour à la place de Ciel : la partie ne peut pas se bloquer.
 ##
-## Commandes supportées :
-##   { "action": "select_pawn", "name": "Skeleton" }
-##   { "action": "move",        "col": 5, "row": 3 }
-##   { "action": "attack",      "name": "Lord" }
-##   { "action": "wait" }
-##   { "action": "end_pawn" }
-##   { "action": "end_turn" }
+## Le protocole complet est documenté dans docs/CIEL_PROTOCOL.md
 
-static var enabled: bool = true  # Activé par défaut
+const CMD = preload("res://data/models/world/ai/ciel_command.gd")
+const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
+const CD = preload("res://data/models/world/stats/class_data.gd")
+const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const LOG = preload("res://data/services/combat/battle_log.gd")
+
+## Compatibilité : reflète l'état du contrôleur adverse dans [GameSession].
+static var enabled: bool = true
 
 const STATE_FILE: String = "user://ai_state.json"
-const CMD_FILE: String  = "user://ai_command.json"
-const MAX_WAIT_FRAMES: int = 240  # ~4s avant auto-end-turn
-const WAIT_BETWEEN_COMMANDS: int = 10  # Frames entre commandes
+const CMD_FILE: String = "user://ai_command.json"
+const FEEDBACK_FILE: String = "user://ai_feedback.json"
+
+## Sans pion capable d'agir, on termine le tour au bout de ~4 s
+const MAX_WAIT_FRAMES: int = 240
+## Sans ordre valide de Ciel, l'IA locale prend la main (~10 s à 60 ips)
+const FALLBACK_AFTER_FRAMES: int = 600
+## Cadence d'export de l'état hors tour adverse (1 frame sur N)
+const EXPORT_EVERY_FRAMES: int = 3
 
 var _level_ref: WeakRef = weakref(null)
 var _frame: int = 0
 var _wait_frames: int = 0
+var _idle_frames: int = 0
 var _last_state_hash: int = 0
+var _seq: int = 0
+var _turn_number: int = 1
+var _last_turn_owner: String = ""
+var _last_error: String = ""
+var _last_error_code: int = CMD.Err.NONE
 
-# Cache pour le gestionnaire d'opponent
+# Cache du camp adverse en cours de jeu
 var _opponent: TacticsOpponent = null
 var _participant: TacticsParticipant = null
+var _cmd: Dictionary = {}
+
 
 # ---------------------------------------------------------------------------
 # Initialisation
 # ---------------------------------------------------------------------------
 func _ready() -> void:
-	var f = FileAccess.open(STATE_FILE, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify({
-			"turn": "waiting",
-			"stage": 0,
-			"stage_name": "waiting",
-			"current_pawn": "",
-			"pawns": [],
-			"message": "CielAI ready."
-		}, "\t"))
-		f.close()
-	
-	# Affiche le chemin user:// pour debug
+	_write_json(STATE_FILE, {
+		"protocol_version": CMD.PROTOCOL_VERSION,
+		"turn": "waiting",
+		"stage": 0,
+		"stage_name": "waiting",
+		"current_pawn": "",
+		"pawns": [],
+		"message": "CielAI ready.",
+	})
 	print("[CielAI] Ready — state path: ", ProjectSettings.globalize_path(STATE_FILE))
+	print("[CielAI] Protocole v%d — commandes : %s" % [
+		CMD.PROTOCOL_VERSION, ", ".join(CMD.supported_actions())
+	])
 
 
 func _physics_process(_delta: float) -> void:
-	if not enabled:
+	if not is_active():
 		return
-	
+
 	var level: TacticsLevel = _resolve_level()
 	if not level:
 		return
-	if level.turn_stage != 1:
-		return
-	
+
+	# On exporte dès que le niveau existe (même avant le premier tour) : Ciel voit
+	# ainsi le terrain et les effectifs pendant l'initialisation, avec turn="unknown".
 	_frame += 1
-	if _frame % 3 == 0:
+	if _frame % EXPORT_EVERY_FRAMES == 0:
 		_export_state(level)
 
+	# Hors tour adverse, on traite quand même le fichier de commande :
+	# `toggle` est global, et tout le reste doit être rejeté (OUT_OF_TURN)
+	# plutôt que de rester en attente et d'être rejoué au mauvais moment.
+	if _whose_turn(level) != "opponent":
+		_drain_out_of_turn_command(level)
+
+
+## Le camp adverse est-il piloté par Ciel ? (source de vérité : [GameSession])
+func is_active() -> bool:
+	var session: Node = _session()
+	if session:
+		enabled = session.is_ciel_controlled()
+	return enabled
+
 
 # ---------------------------------------------------------------------------
-# Appelé par TacticsParticipantTurnService — remplace l'IA basique
+# Boucle de tour adverse — appelée par TacticsParticipantTurnService
 # ---------------------------------------------------------------------------
 func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: TacticsParticipant) -> void:
-	# Cache references
 	_opponent = opponent
 	_participant = participant
-	
-	var pr = participant.res
-	var arena = _resolve_level().arena if _resolve_level() else null
+
+	var level: TacticsLevel = _resolve_level()
+	var arena: TacticsArena = level.arena if level else null
 	if not arena:
 		return
-	
-	# Reset stage if out of bounds
+
+	var pr: TacticsParticipantResource = participant.res
 	if pr.stage > 4:
 		pr.stage = 0
-	
-	# Export state on stage transitions
-	_export_state(_resolve_level())
-	
-	# Check for global commands (toggle, etc.)
+
+	_export_state(level)
 	_check_global_commands()
-	if not enabled:
-		# Disabled — let normal AI take over by clearing this function and returning
+
+	if not is_active():
+		# Bascule vers l'IA locale : c'est turn.gd qui reprend la main au prochain frame.
 		_opponent = null
 		_participant = null
 		return
-	
-	# Safety: if no pawns can act, end turn
+
+	# Plus personne ne peut agir : on clôt le tour après un court délai de grâce.
 	if _all_pawns_done(opponent) and pr.stage <= pr.STAGE_SELECT_PAWN:
 		_wait_frames += 1
-		if _wait_frames >= 30:  # 0.5s grace period
+		if _wait_frames >= 30:
 			_do_end_turn(pr)
 		return
-	
+
+	# Verrou anti-blocage : sans ordre valide, l'IA locale joue à la place de Ciel.
+	if pr.stage in CMD.INTERACTIVE_STAGES:
+		_idle_frames += 1
+		if _idle_frames >= FALLBACK_AFTER_FRAMES:
+			_idle_frames = 0
+			_play_local_fallback(opponent, participant, arena, pr)
+			return
+
 	match pr.stage:
 		pr.STAGE_SELECT_PAWN:
 			_handle_select_pawn_stage(opponent, pr)
-		
 		pr.STAGE_SHOW_ACTIONS:
 			_handle_show_actions_stage(opponent, pr, arena)
-		
 		pr.STAGE_SHOW_MOVEMENTS:
-			_handle_show_movements_stage(opponent, pr)
-		
+			_handle_show_movements_stage(pr)
 		pr.STAGE_SELECT_LOCATION:
 			_handle_select_location_stage(opponent, pr, arena)
-		
 		pr.STAGE_MOVE_PAWN:
-			_handle_move_pawn_stage(delta, opponent, participant, pr)
-		
+			_handle_move_pawn_stage(delta, participant)
 		_:
-			# Unknown stage — reset for safety
 			pr.stage = pr.STAGE_SELECT_PAWN
 
 
 # ---------------------------------------------------------------------------
-# Stage handlers
+# Étapes
 # ---------------------------------------------------------------------------
 func _handle_select_pawn_stage(opponent: TacticsOpponent, pr: TacticsParticipantResource) -> void:
-	# Si plus aucun pion adverse ne peut agir, on skip
-	var _any_can_act := false
-	for p in opponent.get_children():
-		if p is TacticsPawn and is_instance_valid(p) and p.can_act():
-			_any_can_act = true
-			break
-	if not _any_can_act:
+	if not _any_pawn_can_act(opponent):
 		_wait_frames += 1
 		if _wait_frames >= MAX_WAIT_FRAMES:
 			_do_end_turn(pr)
 		return
-	
-	# Reset wait counter when we have pawns that can act
 	_wait_frames = 0
-	
-	# Process a command if available
-	if not _check_command_file():
+
+	var cmd: Dictionary = _next_command(pr)
+	if cmd.is_empty():
 		return
-	
-	_wait_frames = 0
-	var cmd = _cmd
-	if cmd.get("action") == "select_pawn":
-		var name: String = cmd.get("name", "")
-		if name == "":
-			return
-		for p in opponent.get_children():
-			if not p is TacticsPawn or not is_instance_valid(p):
-				continue
-			if _pawn_name(p) == name and p.stats.curr_health > 0:
-				pr.curr_pawn = p
-				pr.stage = pr.STAGE_SHOW_ACTIONS
-				if _resolve_level() and _resolve_level().arena:
-					_resolve_level().arena.res.reset_all_tile_markers()
-					_resolve_level().arena.res.mark_hover_tile(p.get_tile())
+
+	match str(cmd["action"]):
+		"select_pawn":
+			var wanted: String = str(cmd["args"]["name"])
+			var pawn: Node = EXECUTOR.find_pawn_by_name(opponent, wanted)
+			if not pawn:
+				_reject_runtime("select_pawn", "aucun pion adverse vivant nommé \"%s\"" % wanted)
+				return
+			if not pawn.can_act():
+				_reject_runtime("select_pawn", "%s a déjà joué ce tour-ci" % wanted)
+				return
+			pr.curr_pawn = pawn
+			pr.stage = pr.STAGE_SHOW_ACTIONS
+			var level: TacticsLevel = _resolve_level()
+			if level and level.arena:
+				# Marquer la portée dès la sélection : l'état exporté doit dire à
+				# Ciel où ce pion peut aller avant qu'il ne demande un `move`.
+				_mark_movement_range(level.arena, pawn)
+				level.arena.res.mark_hover_tile(pawn.get_tile())
+		"end_turn":
+			_do_end_turn(pr)
 
 
 func _handle_show_actions_stage(opponent: TacticsOpponent, pr: TacticsParticipantResource, arena: TacticsArena) -> void:
-	var pawn = pr.curr_pawn
+	var pawn: TacticsPawn = pr.curr_pawn
 	if not pawn or not is_instance_valid(pawn):
 		pr.stage = pr.STAGE_SELECT_PAWN
 		return
-	
-	# Auto-skip si le pion ne peut plus rien faire
+
 	if not pawn.res.can_move and not pawn.res.can_attack:
 		_do_end_pawn(pawn, pr)
 		return
-	
-	if not _check_command_file():
+
+	var cmd: Dictionary = _next_command(pr)
+	if cmd.is_empty():
 		return
-	
-	var cmd = _cmd
-	match cmd.get("action", ""):
+
+	match str(cmd["action"]):
 		"move":
-			var col = cmd.get("col", -1)
-			var row = cmd.get("row", -1)
-			if not _do_move(pawn, pr, arena, col, row):
-				return
+			_do_move(pawn, pr, arena, int(cmd["args"]["col"]), int(cmd["args"]["row"]))
 		"attack":
-			var name = cmd.get("name", "")
-			if not _do_attack_setup(opponent, pawn, pr, arena, name):
-				return
-		"end_pawn":
+			_do_attack_setup(pawn, pr, arena, str(cmd["args"]["name"]))
+		"heal":
+			_do_heal_setup(opponent, pawn, pr, arena, str(cmd["args"]["name"]))
+		"use_item":
+			_do_use_item(opponent, pawn, pr, cmd["args"])
+		"promote":
+			_do_promote(pawn, cmd["args"].get("class", null))
+		"flee":
+			_do_flee(pawn, pr, arena)
+		"guard":
+			_do_guard(pawn, pr)
+		"wait", "end_pawn":
 			_do_end_pawn(pawn, pr)
 		"end_turn":
 			_do_end_turn(pr)
 
 
-func _handle_show_movements_stage(opponent: TacticsOpponent, pr: TacticsParticipantResource) -> void:
-	var pawn = pr.curr_pawn
+func _handle_show_movements_stage(pr: TacticsParticipantResource) -> void:
+	var pawn: TacticsPawn = pr.curr_pawn
 	if not pawn or not is_instance_valid(pawn):
 		pr.stage = pr.STAGE_SELECT_PAWN
 		return
-	
-	# Wait for movement animation to complete
+	# On attend la fin de l'animation de déplacement.
 	if pawn.res and not pawn.res.pathfinding_tilestack.is_empty():
-		return  # Still moving, wait
-		
-	# Movement is done — advance to location selection
+		return
 	pr.stage = pr.STAGE_SELECT_LOCATION
 	pr.turn_just_started = true
 
 
 func _handle_select_location_stage(opponent: TacticsOpponent, pr: TacticsParticipantResource, arena: TacticsArena) -> void:
-	var pawn = pr.curr_pawn
+	var pawn: TacticsPawn = pr.curr_pawn
 	if not pawn or not is_instance_valid(pawn):
 		pr.stage = pr.STAGE_SELECT_PAWN
 		return
-	
-	# Auto-skip si le pion ne peut plus attaquer
+
 	if not pawn.res.can_attack:
 		_do_end_pawn(pawn, pr)
 		return
-	
-	if not _check_command_file():
+
+	var cmd: Dictionary = _next_command(pr)
+	if cmd.is_empty():
 		return
-	
-	var cmd = _cmd
-	match cmd.get("action", ""):
+
+	match str(cmd["action"]):
 		"attack":
-			var name = cmd.get("name", "")
-			# Set up attack targets
-			var target = _find_attack_target(opponent, arena, name)
-			if target:
-				pr.attackable_pawn = target
-				
-				# Advance to MOVE_PAWN which triggers combat in the next stage
-				arena.res.reset_all_tile_markers()
-				pr.stage = pr.STAGE_MOVE_PAWN
-				pr.turn_just_started = true
-				
-				# Mark target tile as hovered
-				if target.get_tile():
-					arena.res.mark_hover_tile(target.get_tile())
-		"end_pawn":
+			_commit_target(pr, arena, _find_enemy(str(cmd["args"]["name"])), "attack")
+		"heal":
+			_commit_target(pr, arena, EXECUTOR.find_pawn_by_name(opponent, str(cmd["args"]["name"])), "heal")
+		"use_item":
+			_do_use_item(opponent, pawn, pr, cmd["args"])
+		"guard":
+			_do_guard(pawn, pr)
+		"wait", "end_pawn":
 			_do_end_pawn(pawn, pr)
 		"end_turn":
 			_do_end_turn(pr)
 
 
-func _handle_move_pawn_stage(delta: float, opponent: TacticsOpponent, participant: TacticsParticipant, pr: TacticsParticipantResource) -> void:
-	# Execute combat (same as normal flow)
+func _handle_move_pawn_stage(delta: float, participant: TacticsParticipant) -> void:
 	participant.serv.combat_service.attack_pawn(delta, false)
 
 
 # ---------------------------------------------------------------------------
-# Background export (called from _physics_process and handle_opponent_turn)
+# Actions
 # ---------------------------------------------------------------------------
-func _export_state(level: TacticsLevel) -> void:
-	if not level or not is_instance_valid(level):
+## Recalcule et marque les tuiles atteignables par un pion (pathfinding du moteur).
+func _mark_movement_range(arena: TacticsArena, pawn: TacticsPawn) -> void:
+	if not arena or not pawn or not pawn.get_tile():
 		return
-	var part = _participant
-	var opponent = _opponent
-	
-	if not part or not opponent:
-		part = level.participant
-		if level.player:
-			for c in level.player.get_children():
-				if c is TacticsParticipant:
-					part = c
-					break
-		if level.opponent:
-			for c in level.opponent.get_children():
-				if c is TacticsOpponent:
-					opponent = c
-					break
-		if not part or not opponent:
-			return
-	
-	var arena = level.arena
-	var pr = part.res if is_instance_valid(part) else null
-	if not pr:
-		return
-	
-	# Determine whose turn it is
-	var whose_turn: String = "unknown"
-	if level.participant and is_instance_valid(level.participant):
-		if level.participant.can_act(level.player if level.player else null):
-			whose_turn = "player"
-		elif level.participant.can_act(opponent):
-			whose_turn = "opponent"
-	
-	var state = {
-		"turn": whose_turn,
-		"stage": pr.stage,
-		"stage_name": _stage_name(pr.stage),
-		"current_pawn": "",
-		"pawns": []
-	}
-	
-	var cp = pr.curr_pawn
-	if cp and is_instance_valid(cp):
-		state["current_pawn"] = _pawn_name(cp)
-	
-	if level.player and is_instance_valid(level.player):
-		for p in level.player.get_children():
-			if p is TacticsPawn and is_instance_valid(p):
-				state["pawns"].append(_pawn_dict(p, "player"))
-	
-	if opponent and is_instance_valid(opponent):
-		for p in opponent.get_children():
-			if p is TacticsPawn and is_instance_valid(p):
-				state["pawns"].append(_pawn_dict(p, "opponent"))
-	
-	# Add grid info
-	if arena and is_instance_valid(arena) and arena.res and arena.res.map_data:
-		var md = arena.res.map_data
-		state["tile_size"] = md.tile_size
-		state["grid_size"] = {"x": md.grid_size.x, "y": md.grid_size.y}
-	
-	var json_str = JSON.stringify(state, "\t")
-	var h = hash(json_str)
-	if h == _last_state_hash:
-		return
-	_last_state_hash = h
-	
-	var f = FileAccess.open(STATE_FILE, FileAccess.WRITE)
-	if f:
-		f.store_string(json_str)
-		f.close()
-
-
-# ---------------------------------------------------------------------------
-# Action helpers
-# ---------------------------------------------------------------------------
-func _do_move(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsArena, col: int, row: int) -> bool:
-	if not pawn.res.can_move:
-		return false
-	
-	var target_tile = _find_tile_at(arena, col, row)
-	if not target_tile:
-		return false
-	
-	var allies = []
-	if _opponent and is_instance_valid(_opponent):
-		allies = _opponent.get_children()
-	
+	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
 	arena.res.reset_all_tile_markers()
 	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
 	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
-	
-	var path = arena.get_pathfinding_tilestack(target_tile)
-	pawn.res.pathfinding_tilestack = path if not path.is_empty() else []
-	
+
+
+func _do_move(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsArena, col: int, row: int) -> bool:
+	if not pawn.res.can_move:
+		_reject_runtime("move", "%s a déjà bougé" % EXECUTOR.display_name(pawn))
+		return false
+
+	var target_tile: Node = TacticsGrid.find_tile(arena, col, row)
+	if not target_tile:
+		_reject_runtime("move", "aucune tuile en (%d,%d)" % [col, row])
+		return false
+
+	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
+	arena.res.reset_all_tile_markers()
+	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
+	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
+
+	if not target_tile.get("reachable"):
+		_reject_runtime("move", "(%d,%d) hors de portée de %s (MOV %d)" % [
+			col, row, EXECUTOR.display_name(pawn), pawn.stats.movement
+		])
+		return false
+
+	var path: Array = arena.get_pathfinding_tilestack(target_tile)
+	if path.is_empty():
+		_reject_runtime("move", "aucun chemin vers (%d,%d)" % [col, row])
+		return false
+
+	var from: Vector2i = TacticsGrid.tile_to_grid(arena, pawn.get_tile())
+	pawn.res.pathfinding_tilestack = path
 	pr.stage = pr.STAGE_SHOW_MOVEMENTS
 	pr.turn_just_started = true
+	_record(&"record_move", [EXECUTOR.display_name(pawn), from.x, from.y, col, row])
 	return true
 
 
-func _do_attack_setup(opponent: TacticsOpponent, pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsArena, name: String) -> bool:
+func _do_attack_setup(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsArena, target_name: String) -> bool:
 	if not pawn.res.can_attack:
+		_reject_runtime("attack", "%s a déjà attaqué" % EXECUTOR.display_name(pawn))
 		return false
-	
-	var target = _find_pawn_by_name(opponent.get_parent(), name)  # Look in level's children (player side)
-	if not target:
-		# Try all pawns that are not opponent
-		var level = _resolve_level()
-		if level and level.player:
-			for c in level.player.get_children():
-				if c is TacticsPawn and _pawn_name(c) == name and c.stats.curr_health > 0:
-					target = c
-					break
-	
+	return _commit_target(pr, arena, _find_enemy(target_name), "attack")
+
+
+func _do_heal_setup(opponent: TacticsOpponent, pawn: TacticsPawn, pr: TacticsParticipantResource,
+		arena: TacticsArena, target_name: String) -> bool:
+	if not WT.is_magical(pawn.stats.weapon_type):
+		_reject_runtime("heal", "%s ne porte pas de bâton" % EXECUTOR.display_name(pawn))
+		return false
+	if not pawn.res.can_attack:
+		_reject_runtime("heal", "%s a déjà agi" % EXECUTOR.display_name(pawn))
+		return false
+	return _commit_target(pr, arena, EXECUTOR.find_pawn_by_name(opponent, target_name), "heal")
+
+
+## Verrouille une cible (attaque ou soin) et enchaîne sur la résolution du combat.
+func _commit_target(pr: TacticsParticipantResource, arena: TacticsArena, target: Node, kind: String) -> bool:
 	if not target or not is_instance_valid(target):
+		_reject_runtime(kind, "cible introuvable ou déjà tombée")
 		return false
-	
+
+	var pawn: TacticsPawn = pr.curr_pawn
+	if pawn and is_instance_valid(pawn) and pawn.get_tile() and target.get_tile():
+		var a: Vector2i = TacticsGrid.tile_to_grid(arena, pawn.get_tile())
+		var b: Vector2i = TacticsGrid.tile_to_grid(arena, target.get_tile())
+		var dist: int = absi(a.x - b.x) + absi(a.y - b.y)
+		if dist > pawn.stats.attack_range:
+			_reject_runtime(kind, "%s est à %d cases, portée %d" % [
+				EXECUTOR.display_name(target), dist, pawn.stats.attack_range
+			])
+			return false
+
 	pr.attackable_pawn = target
 	arena.res.reset_all_tile_markers()
 	arena.res.mark_hover_tile(target.get_tile())
-	pr.stage = pr.STAGE_SELECT_LOCATION
+	pr.stage = pr.STAGE_MOVE_PAWN
 	pr.turn_just_started = true
 	return true
 
 
-func _find_attack_target(opponent: TacticsOpponent, arena: TacticsArena, name: String) -> TacticsPawn:
-	var level = _resolve_level()
-	if not level:
-		return null
-	# Search player children and all pawns under level
-	var search_nodes = []
-	if level.player:
-		search_nodes.append(level.player)
-	
-	for node in search_nodes:
-		if not is_instance_valid(node):
-			continue
-		for c in node.get_children():
-			if c is TacticsPawn and is_instance_valid(c):
-				if _pawn_name(c) == name and c.stats.curr_health > 0:
-					return c
-	return null
+func _do_use_item(opponent: TacticsOpponent, pawn: TacticsPawn, pr: TacticsParticipantResource, args: Dictionary) -> void:
+	var item_name: String = str(args.get("item", ""))
+	var user: Node = pawn
+	if args.has("name"):
+		user = EXECUTOR.find_pawn_by_name(opponent, str(args["name"]))
+		if not user:
+			_reject_runtime("use_item", "allié introuvable : %s" % str(args["name"]))
+			return
+
+	var result: Dictionary = user.stats.use_item(item_name)
+	if not bool(result.get("ok", false)):
+		_reject_runtime("use_item", str(result.get("reason", "objet inutilisable")))
+		return
+
+	print_rich("[color=aqua]🧪 %s utilise %s (%s +%d)[/color]" % [
+		EXECUTOR.display_name(user), result["item"], result["effect"], int(result.get("amount", 0))
+	])
+	_record(&"record", [LOG.Kind.HEAL, {"pawn": EXECUTOR.display_name(user),
+		"item": result["item"], "effect": result["effect"],
+		"amount": result.get("amount", 0)}])
+
+	# Utiliser un objet consomme l'action du pion.
+	_do_end_pawn(pawn, pr)
+
+
+func _do_promote(pawn: TacticsPawn, choice: Variant) -> void:
+	var result: Dictionary = pawn.stats.promote_to(choice)
+	if not bool(result.get("promoted", false)):
+		_reject_runtime("promote", str(result.get("reason", "promotion impossible")))
+		return
+	_record(&"record", [LOG.Kind.PROMOTION, {
+		"pawn": EXECUTOR.display_name(pawn),
+		"to": CD.get_class_name(int(result["to"])),
+		"bonuses": result.get("bonuses", {}),
+	}])
+
+
+func _do_flee(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsArena) -> void:
+	if not pawn.res.can_move:
+		_reject_runtime("flee", "%s a déjà bougé" % EXECUTOR.display_name(pawn))
+		return
+
+	var level: TacticsLevel = _resolve_level()
+	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
+	arena.res.reset_all_tile_markers()
+	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
+	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
+
+	var tile: Node = EXECUTOR.safest_retreat_tile(arena, pawn, level.player if level else null)
+	if not tile:
+		_reject_runtime("flee", "aucune case de repli atteignable")
+		return
+
+	var dest: Vector2i = TacticsGrid.tile_to_grid(arena, tile)
+	var path: Array = arena.get_pathfinding_tilestack(tile)
+	if path.is_empty():
+		_reject_runtime("flee", "aucun chemin de repli")
+		return
+
+	pawn.res.pathfinding_tilestack = path
+	pawn.res.can_attack = false  # Fuir, c'est renoncer à frapper.
+	pr.stage = pr.STAGE_SHOW_MOVEMENTS
+	pr.turn_just_started = true
+	print_rich("[color=orange]🏃 %s se replie en (%d,%d)[/color]" % [
+		EXECUTOR.display_name(pawn), dest.x, dest.y
+	])
+
+
+func _do_guard(pawn: TacticsPawn, pr: TacticsParticipantResource) -> void:
+	# Se mettre en garde : +2 DÉF / +2 RÉS jusqu'au prochain tour du pion.
+	pawn.stats.apply_buff("def", 2, 2)
+	pawn.stats.apply_buff("res", 2, 2)
+	print_rich("[color=cyan]🛡 %s se met en garde (+2 DÉF/RÉS)[/color]" % EXECUTOR.display_name(pawn))
+	_do_end_pawn(pawn, pr)
 
 
 func _do_end_pawn(pawn: TacticsPawn, pr: TacticsParticipantResource) -> void:
@@ -404,166 +443,385 @@ func _do_end_pawn(pawn: TacticsPawn, pr: TacticsParticipantResource) -> void:
 		pawn.end_pawn_turn()
 	pr.stage = pr.STAGE_SELECT_PAWN
 	pr.curr_pawn = null
+	_idle_frames = 0
 
 
 func _do_end_turn(pr: TacticsParticipantResource) -> void:
-	var level = _resolve_level()
+	var level: TacticsLevel = _resolve_level()
 	if level and level.opponent and is_instance_valid(level.opponent):
 		for p in level.opponent.get_children():
 			if p is TacticsPawn and is_instance_valid(p):
 				p.end_pawn_turn()
 	pr.stage = pr.STAGE_SELECT_PAWN
 	pr.curr_pawn = null
+	_wait_frames = 0
+	_idle_frames = 0
 
 
-func _skip_turn() -> void:
-	if _opponent and is_instance_valid(_opponent) and _participant and is_instance_valid(_participant):
-		_do_end_turn(_participant.res)
+# ---------------------------------------------------------------------------
+# Repli sur l'IA locale (verrou anti-blocage)
+# ---------------------------------------------------------------------------
+func _play_local_fallback(opponent: TacticsOpponent, participant: TacticsParticipant,
+		arena: TacticsArena, pr: TacticsParticipantResource) -> void:
+	var level: TacticsLevel = _resolve_level()
+	if not level:
+		return
+
+	# Choisir un pion si Ciel n'en a pas sélectionné.
+	var pawn: TacticsPawn = pr.curr_pawn
+	if not pawn or not is_instance_valid(pawn) or not pawn.can_act():
+		pawn = null
+		for p in opponent.get_children():
+			if p is TacticsPawn and is_instance_valid(p) and p.can_act():
+				pawn = p
+				break
+	if not pawn:
+		_do_end_turn(pr)
+		return
+
+	pr.curr_pawn = pawn
+	var difficulty: int = _difficulty()
+	var plan: Dictionary = EXECUTOR.plan(arena, pawn, opponent, level.player, difficulty)
+
+	print_rich("[color=yellow]⏱ CielAI silencieux — l'IA locale joue %s : %s[/color]" % [
+		EXECUTOR.display_name(pawn), str(plan.get("decision", {}).get("reason", "attente"))
+	])
+
+	if bool(plan.get("needs_move", false)) and plan.get("tile"):
+		var path: Array = arena.get_pathfinding_tilestack(plan["tile"])
+		if not path.is_empty():
+			pawn.res.pathfinding_tilestack = path
+			pr.stage = pr.STAGE_SHOW_MOVEMENTS
+			pr.turn_just_started = true
+			return
+
+	if str(plan.get("action", "")) == "attack" and plan.get("target"):
+		_commit_target(pr, arena, plan["target"], "attack")
+		return
+
+	_do_end_pawn(pawn, pr)
 
 
-func _all_pawns_done(opponent: TacticsOpponent) -> bool:
-	for p in opponent.get_children():
-		if p is TacticsPawn and is_instance_valid(p) and p.can_act():
-			return false
-	return true
+# ---------------------------------------------------------------------------
+# Lecture & validation des commandes
+# ---------------------------------------------------------------------------
+## Lit le prochain ordre valide. Renvoie {} si aucun ordre, ou si l'ordre a été rejeté.
+func _next_command(pr: TacticsParticipantResource) -> Dictionary:
+	var raw: String = _consume_command_file()
+	if raw.is_empty():
+		return {}
+
+	var level: TacticsLevel = _resolve_level()
+	var ctx: Dictionary = {
+		"stage": pr.stage,
+		"turn": "opponent",
+		"grid_size": TacticsGrid.grid_size(level.arena if level else null),
+	}
+
+	var parsed: Dictionary = CMD.parse(raw, ctx)
+	if not bool(parsed["ok"]):
+		_reject(parsed)
+		return {}
+
+	_idle_frames = 0
+	_last_error = ""
+	_last_error_code = CMD.Err.NONE
+	_cmd = parsed
+	_write_feedback(parsed["action"], true, CMD.Err.NONE, "")
+	return parsed
 
 
+## Consomme un ordre déposé alors que ce n'est pas le tour de Ciel.
+## `toggle` est appliqué, le reste est rejeté avec le code OUT_OF_TURN.
+func _drain_out_of_turn_command(level: TacticsLevel) -> void:
+	if not FileAccess.file_exists(CMD_FILE):
+		return
+	var raw: String = _consume_command_file()
+	if raw.is_empty():
+		return
+
+	var parsed: Dictionary = CMD.parse(raw, {"turn": _whose_turn(level)})
+	if not bool(parsed["ok"]):
+		_reject(parsed)
+		return
+
+	if str(parsed["action"]) == "toggle":
+		toggle(bool(parsed["args"]["enabled"]))
+	else:
+		_write_feedback(str(parsed["action"]), true, CMD.Err.NONE, "")
+
+
+## À qui appartient le tour en cours ?
+func _whose_turn(level: TacticsLevel) -> String:
+	if not level or not level.participant or not is_instance_valid(level.participant):
+		return "unknown"
+	if level.player and is_instance_valid(level.player) and level.participant.can_act(level.player):
+		return "player"
+	if level.opponent and is_instance_valid(level.opponent) and level.participant.can_act(level.opponent):
+		return "opponent"
+	return "unknown"
+
+
+## Commandes globales (toggle) — acceptées à tout moment, y compris hors tour.
 func _check_global_commands() -> void:
 	if not FileAccess.file_exists(CMD_FILE):
 		return
-	var f = FileAccess.open(CMD_FILE, FileAccess.READ)
+	var f := FileAccess.open(CMD_FILE, FileAccess.READ)
 	if not f:
 		return
-	var content = f.get_as_text()
+	var content: String = f.get_as_text()
 	f.close()
-	
-	var json = JSON.new()
-	if json.parse(content) != OK:
+
+	var json := JSON.new()
+	if json.parse(content) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return  # Les ordres malformés sont traités (et rejetés) par _next_command.
+	if str(json.data.get("action", "")) != "toggle":
 		return
-	if typeof(json.data) != TYPE_DICTIONARY:
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(CMD_FILE))
+	var parsed: Dictionary = CMD.validate(json.data, {})
+	if not bool(parsed["ok"]):
+		_reject(parsed)
 		return
-	
-	var cmd = json.data
-	if cmd.get("action") == "toggle":
-		DirAccess.remove_absolute(CMD_FILE)
-		var val = cmd.get("enabled", true)
-		if val is bool:
-			enabled = val
-		_print_status()
+
+	toggle(bool(parsed["args"]["enabled"]))
 
 
-# ---------------------------------------------------------------------------
-# Command file management
-# ---------------------------------------------------------------------------
-var _cmd: Dictionary = {}
-
-func _check_command_file() -> bool:
+func _consume_command_file() -> String:
 	if not FileAccess.file_exists(CMD_FILE):
-		return false
-	
-	var f = FileAccess.open(CMD_FILE, FileAccess.READ)
+		return ""
+	var f := FileAccess.open(CMD_FILE, FileAccess.READ)
 	if not f:
-		return false
-	var content = f.get_as_text()
+		return ""
+	var content: String = f.get_as_text()
 	f.close()
-	
-	DirAccess.remove_absolute(CMD_FILE)
-	
-	var json = JSON.new()
-	var err = json.parse(content)
-	if err != OK:
-		return false
-	if typeof(json.data) != TYPE_DICTIONARY:
-		return false
-	
-	_cmd = json.data
-	return true
+	# Le fichier est consommé, valide ou non : Ciel ne doit jamais rejouer un ordre.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(CMD_FILE))
+	return content
+
+
+## Rejet d'une commande invalidée par le schéma.
+func _reject(parsed: Dictionary) -> void:
+	_last_error = str(parsed["error"])
+	_last_error_code = int(parsed["code"])
+	push_warning("[CielAI] Commande rejetée [%s] %s" % [_error_name(_last_error_code), _last_error])
+	print_rich("[color=red]⛔ CielAI — commande rejetée : %s[/color]" % _last_error)
+	_record(&"record_rejected_command", [str(parsed.get("action", "")), _last_error_code, _last_error])
+	_write_feedback(str(parsed.get("action", "")), false, _last_error_code, _last_error)
+
+
+## Rejet d'une commande bien formée mais inapplicable (cible absente, hors portée…).
+func _reject_runtime(action: String, reason: String) -> void:
+	_last_error = reason
+	_last_error_code = CMD.Err.OUT_OF_RANGE
+	print_rich("[color=red]⛔ CielAI — %s impossible : %s[/color]" % [action, reason])
+	_record(&"record_rejected_command", [action, _last_error_code, reason])
+	_write_feedback(action, false, _last_error_code, reason)
+
+
+func _write_feedback(action: String, ok: bool, code: int, message: String) -> void:
+	_write_json(FEEDBACK_FILE, {
+		"protocol_version": CMD.PROTOCOL_VERSION,
+		"action": action,
+		"ok": ok,
+		"code": code,
+		"code_name": _error_name(code),
+		"error": message,
+		"seq": _seq,
+		"at": Time.get_datetime_string_from_system(true),
+	})
+
+
+static func _error_name(code: int) -> String:
+	match code:
+		CMD.Err.NONE: return "OK"
+		CMD.Err.MALFORMED_JSON: return "MALFORMED_JSON"
+		CMD.Err.NOT_A_DICT: return "NOT_A_DICT"
+		CMD.Err.MISSING_ACTION: return "MISSING_ACTION"
+		CMD.Err.UNKNOWN_ACTION: return "UNKNOWN_ACTION"
+		CMD.Err.MISSING_ARG: return "MISSING_ARG"
+		CMD.Err.BAD_ARG_TYPE: return "BAD_ARG_TYPE"
+		CMD.Err.OUT_OF_RANGE: return "OUT_OF_RANGE"
+		CMD.Err.WRONG_STAGE: return "WRONG_STAGE"
+		CMD.Err.OUT_OF_TURN: return "OUT_OF_TURN"
+		_: return "UNKNOWN"
 
 
 # ---------------------------------------------------------------------------
-# Utility helpers
+# Export de l'état
 # ---------------------------------------------------------------------------
-func _pawn_name(p: TacticsPawn) -> String:
-	if p.stats and p.stats.override_name != "":
-		return p.stats.override_name
-	return p.expertise
+func _export_state(level: TacticsLevel) -> void:
+	if not level or not is_instance_valid(level):
+		return
+
+	var part: TacticsParticipant = _participant
+	var opponent: TacticsOpponent = _opponent
+	if not part or not opponent:
+		part = level.participant
+		opponent = level.opponent
+	if not part or not opponent or not is_instance_valid(part):
+		return
+
+	var pr: TacticsParticipantResource = part.res
+	if not pr:
+		return
+
+	var arena: TacticsArena = level.arena
+
+	var whose_turn: String = _whose_turn(level)
+
+	# Comptage des tours : un tour complet = joueur puis adversaire.
+	if whose_turn != _last_turn_owner and whose_turn != "unknown":
+		if whose_turn == "player" and _last_turn_owner == "opponent":
+			_turn_number += 1
+		_last_turn_owner = whose_turn
+		_record(&"record_turn_start", [whose_turn, _turn_number])
+
+	var state: Dictionary = {
+		"protocol_version": CMD.PROTOCOL_VERSION,
+		"turn": whose_turn,
+		"turn_number": _turn_number,
+		"stage": pr.stage,
+		"stage_name": _stage_name(pr.stage),
+		"stage_actions": _actions_for_stage(pr.stage),
+		"current_pawn": "",
+		"mode": _mode_name(),
+		"difficulty": _difficulty_name(),
+		"opponent_controller": _controller_name(),
+		"last_error": _last_error,
+		"last_error_code": _last_error_code,
+		"pawns": [],
+	}
+
+	var cp: TacticsPawn = pr.curr_pawn
+	if cp and is_instance_valid(cp):
+		state["current_pawn"] = EXECUTOR.display_name(cp)
+
+	if level.player and is_instance_valid(level.player):
+		for p in level.player.get_children():
+			if p is TacticsPawn and is_instance_valid(p):
+				state["pawns"].append(_pawn_dict(arena, p, "player", cp))
+
+	for p in opponent.get_children():
+		if p is TacticsPawn and is_instance_valid(p):
+			state["pawns"].append(_pawn_dict(arena, p, "opponent", cp))
+
+	if arena and is_instance_valid(arena):
+		var gs: Vector2i = TacticsGrid.grid_size(arena)
+		state["tile_size"] = TacticsGrid.tile_size(arena)
+		state["grid_size"] = {"x": gs.x, "y": gs.y}
+		state["terrain"] = _terrain_map(arena)
+
+	var recorder: Node = _recorder()
+	if recorder:
+		state["events"] = recorder.recent()
+		state["event_cursor"] = recorder.seq
+
+	var chapter: Node = _campaign()
+	if chapter and chapter.current_chapter():
+		state["objective"] = chapter.current_chapter().objective_text()
+
+	var json_str: String = JSON.stringify(state, "\t")
+	var h: int = hash(json_str)
+	if h == _last_state_hash:
+		return
+	_last_state_hash = h
+
+	_seq += 1
+	state["seq"] = _seq
+	state["timestamp"] = Time.get_unix_time_from_system()
+	_write_json(STATE_FILE, state)
 
 
-func _pawn_dict(p: TacticsPawn, team: String) -> Dictionary:
-	var tile = p.get_tile()
-	var grid = {"col": -1, "row": -1}
-	if tile:
-		grid = _tile_to_grid(tile)
-	
-	return {
-		"name": _pawn_name(p),
+func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: TacticsPawn) -> Dictionary:
+	var tile: Node = p.get_tile()
+	var g: Vector2i = TacticsGrid.tile_to_grid(arena, tile) if tile else Vector2i(-1, -1)
+	var s = p.stats
+
+	var d: Dictionary = {
+		"name": EXECUTOR.display_name(p),
 		"team": team,
-		"grid_col": grid["col"],
-		"grid_row": grid["row"],
-		"hp": p.stats.curr_health,
-		"max_hp": p.stats.hp,
-		"str": p.stats.str,
-		"mag": p.stats.mag,
-		"skl": p.stats.skl,
-		"spd": p.stats.spd,
-		"lck": p.stats.lck,
-		"def": p.stats.def,
-		"res": p.stats.res,
-		"movement": p.stats.movement,
-		"attack_range": p.stats.attack_range,
-		"weapon_type": p.stats.weapon_type,
+		"grid_col": g.x,
+		"grid_row": g.y,
+		"hp": s.hp,
+		"max_hp": s.max_hp,
+		"level": s.level,
+		"exp": s.exp,
+		"class_name": CD.get_class_name(s.character_class),
+		"is_promoted": s.is_promoted,
+		"is_flying": CD.is_flying(s.character_class),
+		"str": s.str, "mag": s.mag, "skl": s.skl, "spd": s.spd,
+		"lck": s.lck, "def": s.def, "res": s.res,
+		"movement": s.movement,
+		"attack_range": s.attack_range,
+		"weapon_type": s.weapon_type,
+		"weapon_name": WT.get_weapon_name(s.weapon_type),
+		"weapon_might": s.weapon_might,
+		"is_magical": WT.is_magical(s.weapon_type),
+		"items": s.items.duplicate(),
+		"buffs": s.active_buffs(),
+		"terrain": TacticsGrid.terrain_name(tile),
+		"terrain_def": TacticsGrid.terrain_defense(tile),
 		"can_move": p.res.can_move,
 		"can_attack": p.res.can_attack,
-		"alive": p.stats.curr_health > 0,
+		"alive": p.is_alive(),
 	}
 
+	# Portées : uniquement pour le pion actif, pour ne pas alourdir l'export.
+	# Le déplacement vient du pathfinding marqué ; la portée d'attaque est
+	# géométrique (la calculer via le pathfinding écraserait le marquage).
+	if current and p == current and arena and p.is_alive():
+		d["reachable_tiles"] = TacticsGrid.reachable_tiles(arena)
+		d["attack_tiles"] = TacticsGrid.tiles_in_range(arena, g, s.attack_range)
+	return d
 
-func _tile_to_grid(tile: TacticsTile) -> Dictionary:
-	if not tile or not is_instance_valid(tile):
-		return {"col": -1, "row": -1}
-	
-	var level = _resolve_level()
-	var arena = level.arena if level else null
-	if not arena or not is_instance_valid(arena) or not arena.res or not arena.res.map_data:
-		var pos = tile.global_position
-		return {"col": int(round(pos.x + 8.0 - 0.5)), "row": int(round(pos.z + 5.0 - 0.5))}
-	
-	var md = arena.res.map_data
-	var ts = md.tile_size
-	var gs = md.grid_size
-	var pos = tile.global_position
-	
-	var col = int(round((pos.x / ts) + (gs.x / 2.0) - 0.5))
-	var row = int(round((pos.z / ts) + (gs.y / 2.0) - 0.5))
-	
+
+## Carte des terrains : une ligne de codes par rangée + la légende des bonus.
+func _terrain_map(arena: TacticsArena) -> Dictionary:
+	var gs: Vector2i = TacticsGrid.grid_size(arena)
+	var rows: Array = []
+	var grid: Array = []
+	for _r in gs.y:
+		var row: Array = []
+		row.resize(gs.x)
+		row.fill("?")
+		grid.append(row)
+
+	for tile in TacticsGrid.tiles(arena):
+		var g: Vector2i = TacticsGrid.tile_to_grid(arena, tile)
+		if g.x < 0 or g.y < 0 or g.y >= grid.size() or g.x >= gs.x:
+			continue
+		grid[g.y][g.x] = TacticsGrid.terrain_name(tile).substr(0, 1)
+
+	for row: Array in grid:
+		rows.append("".join(row))
+
 	return {
-		"col": clampi(col, 0, gs.x - 1),
-		"row": clampi(row, 0, gs.y - 1)
+		"legend": {"g": "grass", "f": "forest (+1 DEF)", "m": "mountain (bloqué)",
+			"w": "water (bloqué)", "p": "path", "a": "wall (bloqué)", "i": "pit (bloqué)"},
+		"rows": rows,
 	}
 
 
-func _find_tile_at(arena: TacticsArena, col: int, row: int) -> TacticsTile:
-	if not arena or not is_instance_valid(arena):
+# ---------------------------------------------------------------------------
+# Utilitaires
+# ---------------------------------------------------------------------------
+func _find_enemy(pawn_name: String) -> Node:
+	var level: TacticsLevel = _resolve_level()
+	if not level or not level.player:
 		return null
-	var tiles_node = arena.get_node_or_null("Tiles")
-	if not tiles_node:
-		return null
-	for child in tiles_node.get_children():
-		if child is TacticsTile:
-			var g = _tile_to_grid(child)
-			if g["col"] == col and g["row"] == row:
-				return child
-	return null
+	return EXECUTOR.find_pawn_by_name(level.player, pawn_name)
 
 
-func _find_pawn_by_name(parent: Node, name: String) -> TacticsPawn:
-	if not parent or not is_instance_valid(parent):
-		return null
-	for c in parent.get_children():
-		if c is TacticsPawn and is_instance_valid(c):
-			if _pawn_name(c) == name:
-				return c
-	return null
+func _any_pawn_can_act(opponent: TacticsOpponent) -> bool:
+	for p in opponent.get_children():
+		if p is TacticsPawn and is_instance_valid(p) and p.can_act():
+			return true
+	return false
+
+
+func _all_pawns_done(opponent: TacticsOpponent) -> bool:
+	return not _any_pawn_can_act(opponent)
 
 
 func _stage_name(stage: int) -> String:
@@ -576,35 +834,111 @@ func _stage_name(stage: int) -> String:
 		_: return "stage_%d" % stage
 
 
+## Commandes acceptées à l'étape courante — évite à Ciel de deviner.
+func _actions_for_stage(stage: int) -> Array:
+	var actions: Array = []
+	for action: String in CMD.supported_actions():
+		var stages: Array = CMD.SCHEMA[action]["stages"]
+		if stages.is_empty() or stage in stages:
+			actions.append(action)
+	return actions
+
+
+func _write_json(path: String, data: Dictionary) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if not f:
+		push_error("[CielAI] Écriture impossible : %s" % path)
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+
+
+func _record(method: StringName, args: Array) -> void:
+	var recorder: Node = _recorder()
+	if recorder and recorder.has_method(method):
+		recorder.callv(method, args)
+
+
+func _recorder() -> Node:
+	var tree := get_tree()
+	return tree.root.get_node_or_null("BattleRecorder") if tree else null
+
+
+func _session() -> Node:
+	var tree := get_tree()
+	return tree.root.get_node_or_null("GameSession") if tree else null
+
+
+func _campaign() -> Node:
+	var tree := get_tree()
+	return tree.root.get_node_or_null("Campaign") if tree else null
+
+
+func _difficulty() -> int:
+	var session: Node = _session()
+	return int(session.difficulty) if session else 1
+
+
+func _difficulty_name() -> String:
+	var session: Node = _session()
+	if not session:
+		return "normal"
+	return DifficultyDB.get_level_name(session.difficulty)
+
+
+func _mode_name() -> String:
+	var session: Node = _session()
+	if not session:
+		return "ciel"
+	match session.mode:
+		0: return "solo"
+		1: return "ciel"
+		2: return "hotseat"
+		3: return "network"
+		_: return "inconnu"
+
+
+func _controller_name() -> String:
+	var session: Node = _session()
+	if not session:
+		return "CielAI"
+	return TeamData.controller_name(session.controller_for(TeamData.Side.OPPONENT))
+
+
 func _resolve_level() -> TacticsLevel:
 	var ref = _level_ref.get_ref()
-	if ref:
+	if ref and is_instance_valid(ref):
 		return ref as TacticsLevel
-	var tree = get_tree()
+	var tree := get_tree()
 	if not tree:
 		return null
-	for child in tree.root.get_children():
-		if child is TacticsLevel:
-			_level_ref = weakref(child)
-			return child
+	# Le niveau peut être n'importe où dans l'arbre (racine, ou Main/World/…).
+	var found: TacticsLevel = _search_level(tree.root)
+	if found:
+		_level_ref = weakref(found)
+	return found
+
+
+func _search_level(node: Node) -> TacticsLevel:
+	if node is TacticsLevel:
+		return node
+	for child in node.get_children():
+		var found: TacticsLevel = _search_level(child)
+		if found:
+			return found
 	return null
 
 
 # ---------------------------------------------------------------------------
-# Public static API
+# API publique
 # ---------------------------------------------------------------------------
-static func toggle(val: bool = true) -> void:
+## Active/désactive le contrôle de Ciel (l'IA locale prend le relais si off).
+func toggle(val: bool = true) -> void:
 	enabled = val
-	_print_status()
-
-
-static func _print_status() -> void:
-	var msg = "CielAI: enabled" if enabled else "CielAI: disabled"
+	var session: Node = _session()
+	if session:
+		session.set_ciel_enabled(val)
+	_idle_frames = 0
+	var msg: String = "CielAI: enabled" if val else "CielAI: disabled (IA locale)"
 	print(msg)
-	var f = FileAccess.open(STATE_FILE, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify({"turn": "waiting", "stage": 0, "message": msg}, "\t"))
-		f.close()
-
-
-
+	_write_feedback("toggle", true, CMD.Err.NONE, msg)

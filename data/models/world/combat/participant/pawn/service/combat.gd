@@ -90,6 +90,9 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 		
 		print(log_msg)
 		
+		_record(&"record_attack", [attacker_name, defender_name, total_damage,
+			true, bool(outcome["crit"]), bool(outcome["double"]), target_pawn.stats.hp])
+
 		var dmg_type: String = "magical" if preview.is_magical else "physical"
 		print_rich("[color=pink]%s → %s: %d %s dmg [Hit: %d%% | Crit: %d%% | Double: %s] | %s HP: %d/%d[/color]" % [
 			attacker_name, defender_name,
@@ -109,6 +112,8 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 		# --- Support Point Gains ---
 		_award_support_points(pawn)
 	else:
+		_record(&"record_attack", [attacker_name, defender_name, 0, false, false, false,
+			target_pawn.stats.hp])
 		print(attacker_name, " missed! (roll avg: ", outcome["hit_rate"], " vs ", preview.hit_rate, "% hit)")
 
 
@@ -121,6 +126,7 @@ func _resolve_heal(healer: TacticsPawn, target: TacticsPawn) -> void:
 	
 	var h_name := _get_name(healer)
 	var t_name := _get_name(target)
+	_record(&"record_heal", [h_name, t_name, actual_heal, target.stats.hp])
 	print("%s soigne %s de %d HP → %d/%d" % [h_name, t_name, actual_heal, target.stats.hp, target.stats.max_hp])
 	print_rich("[color=green]%s ⚕ Heal → %s: +%d HP (%d/%d)[/color]" % [h_name, t_name, actual_heal, target.stats.hp, target.stats.max_hp])
 	
@@ -145,7 +151,11 @@ func _check_death(p: TacticsPawn) -> void:
 	# Only process if dead
 	if p.is_alive():
 		return
-	
+
+	# Journal de bataille : la mort est l'événement le plus utile à Ciel.
+	var team_name: String = "player" if p.get_parent() and p.get_parent().has_method("show_available_pawn_actions") else "opponent"
+	_record(&"record_death", [_get_name(p), team_name, ""])
+
 	# Make invisible and non-interactive
 	p.visible = false
 	p.res.can_move = false
@@ -195,12 +205,19 @@ func _check_victory(killed_pawn: TacticsPawn) -> void:
 	var is_player_team := killed_team.has_method("show_available_pawn_actions")
 	
 	await tree.create_timer(0.8).timeout
-	
+
 	if is_player_team:
 		print_rich("[color=red][b]💀 DÉFAITE ! Toute l'armée est tombée...[/b][/color]")
 	else:
 		print_rich("[color=gold][b]⚔️ VICTOIRE ! Tous les ennemis sont vaincus ![/b][/color]")
-	
+
+	# Replay persisté : sert à relire après coup les décisions de Ciel.
+	var recorder: Node = tree.root.get_node_or_null("BattleRecorder")
+	if recorder:
+		var path: String = recorder.save_replay("defeat" if is_player_team else "victory")
+		if not path.is_empty():
+			print("[Replay] ", ProjectSettings.globalize_path(path))
+
 	_show_victory_screen(tree)
 
 
@@ -290,9 +307,20 @@ func award_exp(attacker: TacticsPawn, defender: TacticsPawn, is_kill: bool) -> v
 		pass
 
 
-## Helper: get display name of a pawn
+## Journalise un événement via l'autoload BattleRecorder, s'il est présent.
+## Reste silencieux hors runtime complet (tests unitaires headless).
+func _record(method: StringName, args: Array) -> void:
+	var loop := Engine.get_main_loop()
+	if not loop is SceneTree:
+		return
+	var recorder: Node = (loop as SceneTree).root.get_node_or_null("BattleRecorder")
+	if recorder and recorder.has_method(method):
+		recorder.callv(method, args)
+
+
+## Helper: get display name of a pawn (unique au sein du camp)
 func _get_name(p: TacticsPawn) -> String:
-	return p.stats.override_name if p.stats.override_name else p.stats.expertise
+	return p.display_name()
 
 
 ## Get a combat preview (before committing to attack) for UI display
