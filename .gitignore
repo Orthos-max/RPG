@@ -6,8 +6,8 @@ export.cfg
 # (voir docs/INSTALL.md). Ne contient aucun secret — les identifiants de
 # signature restent dans l'environnement (CODESIGN_IDENTITY).
 
-# Artefacts de build
-build/
+# Artefacts de build (dossier racine uniquement — scripts/build/ est versionné)
+/build/
 
 # Imported translations (automatically generated from CSV files)
 *.translation
