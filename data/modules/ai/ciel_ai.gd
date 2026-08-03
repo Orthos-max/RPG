@@ -759,6 +759,7 @@ func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: Tact
 		"weapon_might": s.weapon_might,
 		"is_magical": WT.is_magical(s.weapon_type),
 		"items": s.items.duplicate(),
+		"skills": s.get_skills(),
 		"buffs": s.active_buffs(),
 		"terrain": TacticsGrid.terrain_name(tile),
 		"terrain_def": TacticsGrid.terrain_defense(tile),

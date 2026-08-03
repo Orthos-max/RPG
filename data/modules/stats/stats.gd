@@ -6,6 +6,7 @@ extends Node
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ClassDataDB = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const SkillDB = preload("res://data/models/world/stats/skill_db.gd")
 
 #region Identity
 var override_name: String
@@ -43,6 +44,11 @@ var max_health: int:  ## Alias for max_hp
 	get: return max_hp
 var curr_health: int: ## Alias for hp
 	get: return hp
+#endregion
+
+#region Compétences
+## Compétences acquises hors classe (récompense, objet, scénario)
+var extra_skills: Array = []
 #endregion
 
 #region Inventaire & états temporaires
@@ -189,6 +195,36 @@ func get_attack_speed() -> int:
 	return spd
 
 
+#region Compétences
+## Compétences actives de l'unité : celles de sa classe débloquées à son niveau,
+## plus les compétences acquises hors classe.
+func get_skills() -> Array:
+	var ids: Array = ClassDataDB.unlocked_skills(character_class, level)
+	for id in extra_skills:
+		if not id in ids:
+			ids.append(id)
+	return ids
+
+
+## Accorde une compétence hors classe. Refusée si inconnue ou déjà présente.
+func learn_skill(skill_id: String) -> bool:
+	if not SkillDB.exists(skill_id) or skill_id in get_skills():
+		return false
+	extra_skills.append(skill_id)
+	return true
+
+
+## Contexte de combat de cette unité, pour l'évaluation des compétences.
+func skill_context(attacking: bool, terrain_def: int = 0, vs_flying: bool = false) -> Dictionary:
+	return {
+		"attacking": attacking,
+		"hp_ratio": float(hp) / float(maxi(1, max_hp)),
+		"terrain_def": terrain_def,
+		"vs_flying": vs_flying,
+	}
+#endregion
+
+
 #region Inventaire
 ## Ajoute un consommable (refusé si inconnu ou inventaire plein).
 func add_item(item_name: String) -> bool:
@@ -230,6 +266,16 @@ func use_item(item_name: String) -> Dictionary:
 			var amount: int = int(item.get("amount", 2))
 			apply_buff(stat, amount, int(item.get("turns", 2)))
 			return {"ok": true, "item": key, "effect": "buff",
+				"amount": amount, "stat": stat, "reason": ""}
+		ITEMS.Kind.BOOST:
+			# Gain permanent : les PV max augmentent aussi les PV courants.
+			var stat: String = str(item.get("stat", "str"))
+			var amount: int = int(item.get("amount", 2))
+			set(stat, int(get(stat)) + amount)
+			if stat == "max_hp":
+				hp += amount
+			attack_power = get_total_attack()
+			return {"ok": true, "item": key, "effect": "boost",
 				"amount": amount, "stat": stat, "reason": ""}
 
 	return {"ok": false, "reason": "effet non supporté"}

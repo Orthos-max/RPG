@@ -7,6 +7,7 @@ extends RefCounted
 const CombatCalc = preload("res://data/services/combat/fe_combat.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const MapDataRef = preload("res://data/models/world/map/map_data.gd")
+const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 
 var _victory_checked: bool = false  ## Prevents duplicate victory/defeat triggers
 
@@ -87,6 +88,11 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 			log_msg += " | Support 💬"
 		if terrain_def > 0:
 			log_msg += " | Terrain 🛡️+%d" % terrain_def
+		if not preview.triggered.is_empty():
+			var names: Array = []
+			for skill_id in preview.triggered:
+				names.append(SkillDBRef.get_skill_name(str(skill_id)))
+			log_msg += " | ✨ %s" % ", ".join(names)
 		
 		print(log_msg)
 		

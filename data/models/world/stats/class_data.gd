@@ -49,6 +49,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "duelist", "level": 1}, {"id": "focus", "level": 5}],
 	},
 	Id.GREAT_LORD: {
 		"name": "Great Lord",
@@ -59,6 +60,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "duelist", "level": 1}, {"id": "guardian", "level": 5}, {"id": "wrath", "level": 10}],
 	},
 	Id.MASTER_LORD: {
 		"name": "Master Lord",
@@ -69,6 +71,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "duelist", "level": 1}, {"id": "focus", "level": 1}, {"id": "astra", "level": 8}],
 	},
 	Id.CAVALIER: {
 		"name": "Cavalier",
@@ -79,6 +82,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "charge", "level": 3}],
 	},
 	Id.PALADIN: {
 		"name": "Paladin",
@@ -89,6 +93,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "charge", "level": 1}, {"id": "bulwark", "level": 6}],
 	},
 	Id.ARCHER: {
 		"name": "Archer",
@@ -99,6 +104,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "falcon_eye", "level": 4}],
 	},
 	Id.SNIPER: {
 		"name": "Sniper",
@@ -109,6 +115,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "falcon_eye", "level": 1}, {"id": "focus", "level": 5}],
 	},
 	Id.BOW_KNIGHT: {
 		"name": "Bow Knight",
@@ -119,6 +126,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "falcon_eye", "level": 1}, {"id": "charge", "level": 5}],
 	},
 	Id.CLERIC: {
 		"name": "Cleric",
@@ -129,6 +137,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "serenity", "level": 1}],
 	},
 	Id.WAR_CLERIC: {
 		"name": "War Cleric",
@@ -139,6 +148,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "serenity", "level": 1}, {"id": "guardian", "level": 6}],
 	},
 	Id.SAGE: {
 		"name": "Sage",
@@ -149,6 +159,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "serenity", "level": 1}, {"id": "luna", "level": 8}],
 	},
 	Id.TACTICIAN: {
 		"name": "Tactician",
@@ -159,6 +170,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "focus", "level": 5}],
 	},
 	Id.GRANDMASTER: {
 		"name": "Grandmaster",
@@ -169,6 +181,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "focus", "level": 1}, {"id": "luna", "level": 8}],
 	},
 	Id.BRIGAND: {
 		"name": "Brigand",
@@ -179,6 +192,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "wrath", "level": 6}],
 	},
 	Id.BERSERKER: {
 		"name": "Berserker",
@@ -189,6 +203,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "wrath", "level": 1}, {"id": "charge", "level": 5}],
 	},
 	Id.DARK_MAGE: {
 		"name": "Dark Mage",
@@ -199,6 +214,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "serenity", "level": 4}],
 	},
 	Id.SORCERER: {
 		"name": "Sorcerer",
@@ -209,6 +225,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "serenity", "level": 1}, {"id": "luna", "level": 6}],
 	},
 	Id.KNIGHT: {
 		"name": "Knight",
@@ -219,6 +236,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
+		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 5}],
 	},
 	Id.GREAT_KNIGHT: {
 		"name": "Great Knight",
@@ -229,6 +247,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
+		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 1}, {"id": "charge", "level": 8}],
 	},
 	Id.PEGASUS_KNIGHT: {
 		"name": "Pegasus Knight",
@@ -239,6 +258,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": true,
+		"skills": [{"id": "terrain_affinity", "level": 3}],
 	},
 	Id.FALCON_KNIGHT: {
 		"name": "Falcon Knight",
@@ -249,6 +269,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": true,
+		"skills": [{"id": "terrain_affinity", "level": 1}, {"id": "focus", "level": 6}],
 	},
 	Id.WYVERN_RIDER: {
 		"name": "Wyvern Rider",
@@ -259,6 +280,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": true,
+		"skills": [{"id": "bulwark", "level": 4}],
 	},
 	Id.WYVERN_LORD: {
 		"name": "Wyvern Lord",
@@ -269,6 +291,7 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": true,
+		"skills": [{"id": "bulwark", "level": 1}, {"id": "charge", "level": 6}],
 	},
 }
 #endregion
@@ -353,6 +376,30 @@ static func can_promote(class_id: int) -> bool:
 ## Get the promotion level requirement
 static func get_promo_level(class_id: int) -> int:
 	return DATA[class_id].get("promo_level", 10) if DATA.has(class_id) else 10
+
+
+## Compétences de la classe : [{id, level}]
+static func get_class_skills(class_id: int) -> Array:
+	return DATA[class_id].get("skills", []) if DATA.has(class_id) else []
+
+
+## Identifiants des compétences débloquées à ce niveau.
+static func unlocked_skills(class_id: int, level: int) -> Array:
+	var ids: Array = []
+	for entry: Dictionary in get_class_skills(class_id):
+		if level >= int(entry.get("level", 1)):
+			ids.append(str(entry.get("id", "")))
+	return ids
+
+
+## Compétences encore à débloquer : [{id, level}] triées par niveau requis.
+static func upcoming_skills(class_id: int, level: int) -> Array:
+	var pending: Array = []
+	for entry: Dictionary in get_class_skills(class_id):
+		if level < int(entry.get("level", 1)):
+			pending.append(entry)
+	pending.sort_custom(func(a, b): return int(a["level"]) < int(b["level"]))
+	return pending
 
 
 ## La classe est-elle volante ? (cible privilégiée des arcs)
