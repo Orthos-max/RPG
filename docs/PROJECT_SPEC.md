@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-03
+> Dernière mise à jour : 2026-08-03 (après la passe multijoueur — voir §6 pour la reprise)
 
 ---
 
@@ -220,6 +220,13 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       complète — +100 or chacun.
 - [x] **Difficulty** : facile/normal/brutal, module l'IA locale (agressivité, prise de
       risque, focus sur les blessés) et le handicap adverse.
+- [ ] **Étoffer le contenu** : 3 chapitres seulement, et l'objectif « prise de point »
+      est supporté par `ObjectiveDB` sans qu'aucune carte ne l'utilise. Ajouter des
+      chapitres, c'est ajouter une entrée dans `CampaignDB.CHAPTERS` + une carte.
+- [ ] **Choix des cases de déploiement** : le bonus de terrain est actif en combat,
+      mais le joueur ne choisit pas où poser ses unités. Aujourd'hui le roster est
+      plaqué sur les pions déjà placés dans la scène (`ChapterRunner._apply_roster`) ;
+      il faudrait des points de déploiement dans la carte et une sélection à la souris.
 
 ### 🤝 P2 — Multijoueur (chantier structuré en phases)
 > Concret et minimal : créer une partie + inviter des amis avec un **code d'accès**.
@@ -241,7 +248,16 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       (joueur local, invité distant, Ciel) dans une même partie.
 - [x] **Règles réseau** : autorité de l'hôte (il seul simule), validation de chaque
       ordre reçu, reprise par l'IA locale si l'invité part.
-      *Reste à faire : reconnexion en cours de partie.*
+- [ ] **Vérifier une partie en ligne sur deux vraies machines** ⚠️ *(la seule brique
+      livrée sans preuve de bout en bout)* : `scripts/test_net.sh` couvre le
+      transport (code, connexion, diffusion d'état, relais d'ordre, acquittement),
+      mais le déroulé d'une bataille à deux n'a jamais tourné — le mode headless ne
+      crée pas les collisions de tuiles. À faire fenêtre ouverte, deux instances.
+      Points à surveiller : fidélité du miroir après un déplacement, ordre des
+      ordres pendant une animation, fin de tour vue des deux côtés.
+- [ ] **Reconnexion en cours de partie** : aujourd'hui, si l'invité tombe, l'IA
+      locale reprend son camp et il ne peut plus revenir. Il faut garder sa place
+      un temps et lui renvoyer l'état complet à la reconnexion.
 
 ### 📦 P2 — Installateur & distribution (jouer simplement)
 > Objectif : un joueur peut lancer le jeu sans installer/télécharger Godot ni configurer quoi que ce soit.
@@ -249,9 +265,13 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       `scripts/build/export.sh`. *Nécessite les modèles d'export Godot 4.3 installés.*
 - [x] **Packaging natif** : `scripts/build/package.sh` produit un `.dmg` (create-dmg
       ou hdiutil), un `.zip` Windows et un `.tar.gz` Linux, notice et pont CielAI
-      inclus. *Reste à faire : signature/notarisation macOS.*
+      inclus.
 - [x] **Installateur Linux** : `install.sh` pose le jeu dans `~/.local` avec une
-      entrée de menu. *Reste à faire : installeur Windows (Inno Setup).*
+      entrée de menu.
+- [ ] **Installeur Windows** (Inno Setup) : raccourci menu Démarrer + désinstallation.
+- [ ] **Signature & notarisation macOS** : sans elles, le premier lancement impose
+      le détour « clic droit → Ouvrir » (documenté dans `INSTALL.md`). Demande un
+      certificat Développeur Apple, puis `codesign/codesign=1` dans `export_presets.cfg`.
 - [x] **Portabilité du pont CielAI** : `scripts/ciel_game/_paths.sh` résout le dossier
       `user://` selon l'OS, honore `CIEL_USERDATA`/`GODOT_BIN`, crée le dossier au besoin
       et retombe sur l'ancien nom de projet. Les scripts sont copiés à côté du binaire.
@@ -261,7 +281,10 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 ### 🏅 P3 — Vision long terme (hors modes de jeu ci-dessus)
 - [ ] **Sons & animations de combat** (sprites en croisade, caméra de duel).
 - [ ] **Version `fe_2d/`** : poursuivre le port 2D si la direction artistique évolue.
-- [ ] **Polissage UX** : tooltips stats, aperçu des dégâts avant engagement, undo de déplacement.
+- [ ] **Polissage UX** : **aperçu des dégâts avant d'engager** (le manque le plus
+      criant pour un joueur de Fire Emblem — toutes les données sont déjà là,
+      `FECombatCalculator.calculate()` renvoie hit/crit/dégâts/double avant le jet),
+      tooltips de stats, annulation d'un déplacement.
 - [ ] **Mods / éditeur de niveau intégré** (map_editor déjà présent) pour créer ses cartes.
 
 ---
@@ -289,24 +312,39 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 
 ## 6. Prochaines étapes immédiates
 
-Les deux passes du 2026-08-03 ont livré le §6 initial puis le multijoueur,
-les compétences, l'économie et le packaging — voir §7. La suite :
+Les deux passes du 2026-08-03 ont livré le §6 initial puis le multijoueur, les
+compétences, l'économie et le packaging — voir §7. **Backlog : 33 items faits, 11
+restants.** Ordre conseillé pour la reprise :
 
-1. **Partie en ligne à l'épreuve du terrain** : la vérifier fenêtre ouverte sur deux
-   machines, puis traiter la reconnexion en cours de partie (l'IA locale prend le
-   relais aujourd'hui, mais l'invité ne peut pas revenir).
-2. **M5 — Ciel contre un ami en réseau** : autoriser trois camps dans une même
-   partie (joueur local, invité distant, Ciel) — le chemin d'ordres est déjà commun.
-3. **Contenu de campagne** : plus de chapitres, objectif « prise de point » (déjà
-   supporté par `ObjectiveDB`, aucune carte ne l'utilise), dialogues plus riches.
-4. **Choix du terrain / placement en préparation** (le bonus DÉF/RÉS est déjà actif
-   en combat, mais le joueur ne choisit pas encore ses cases de déploiement).
-5. **Installeur Windows** (Inno Setup) et **signature/notarisation macOS**.
-6. **Animations et sons de combat** (P3), le dernier gros morceau de finition.
+1. ⚠️ **Vérifier une partie en ligne sur deux machines.** C'est la seule brique
+   livrée sans preuve de bout en bout : le transport est testé (`scripts/test_net.sh`),
+   pas le déroulé d'une bataille. À faire en premier, parce qu'un défaut trouvé là
+   peut changer la suite du plan. *Nécessite une manipulation humaine : le mode
+   headless ne crée pas les collisions de tuiles.*
+2. **Aperçu des dégâts avant d'engager** (P3/UX). Le plus gros gain de confort pour
+   le coût le plus faible : le calculateur renvoie déjà hit/crit/dégâts/double avant
+   le jet, il ne manque que l'affichage au survol d'une cible.
+3. **M5 — Ciel contre un ami en réseau.** La promesse la plus singulière du projet :
+   un humain et l'IA externe dans la même bataille. Le chemin d'ordres est déjà
+   commun aux deux ; il faut surtout gérer trois camps.
+4. **Reconnexion réseau** et **contenu de campagne** (chapitres, objectif « prise de
+   point » jamais utilisé), selon l'envie du moment.
+5. **Distribution** : installeur Windows, signature macOS — utile seulement au
+   moment de diffuser une version à des joueurs extérieurs.
+6. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
+   les règles ne bougeront plus.
 
 ---
 
 ## 7. Journal d'implémentation
+
+> **État de vérification au 2026-08-03.** Sont prouvés par des tests automatiques :
+> le combat et ses règles, la validation des ordres, l'IA locale, la campagne et sa
+> sauvegarde, l'économie, les compétences, le transport réseau. Sont prouvés à la
+> main, fenêtre ouverte : le chargement d'un chapitre, un tour d'IA locale complet,
+> un aller-retour d'ordres avec Ciel (sélection → déplacement réel → rejet d'un
+> ordre illégal → fin de tour), le hotseat et le salon en ligne. **N'est pas encore
+> prouvé : une bataille complète en réseau entre deux machines.**
 
 ### Passe du 2026-08-03 — les 8 étapes du §6
 
