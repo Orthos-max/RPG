@@ -38,6 +38,7 @@ environment = SubResource("env_default")
 unique_name_in_owner = true
 
 [node name="TacticsParticipant" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0.5)
 script = ExtResource("5_breuy")
 
 [node name="TacticsPlayer" type="Node3D" parent="TacticsParticipant"]
