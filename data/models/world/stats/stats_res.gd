@@ -57,6 +57,9 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 
 #region Growth Rates
 @export_category("Growth Rates (%)")
+## Si vrai, les croissances de la classe (class_data.gd) remplacent les valeurs
+## ci-dessous à l'import. Décocher pour donner un profil unique à un personnage.
+@export var use_class_growths: bool = true
 ## Chance (0-100) to gain HP on level up
 @export var hp_growth: int = 50
 ## Chance (0-100) to gain Str on level up
@@ -73,6 +76,12 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 @export var def_growth: int = 50
 ## Chance (0-100) to gain Res on level up
 @export var res_growth: int = 50
+#endregion
+
+#region Inventaire
+@export_category("Inventaire")
+## Consommables transportés (voir [ItemDB]). Limité à ItemDB.MAX_ITEMS.
+@export var items: Array[String] = ["Vulnerary"]
 #endregion
 
 #region Legacy aliases (for template compatibility)

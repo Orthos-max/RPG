@@ -28,6 +28,12 @@ const MAGICAL_WEAPONS: Array[Type] = [
 	Type.TOME, Type.STAFF, Type.DRAGONSTONE, Type.BREATH
 ]
 
+## Armes efficaces contre les unités volantes (dégâts d'arme triplés, façon FE)
+const EFFECTIVE_VS_FLYING: Array[Type] = [Type.BOW]
+
+## Multiplicateur appliqué au might de l'arme sur une cible sensible
+const EFFECTIVE_MULTIPLIER: int = 3
+
 ## Weapon triangle advantage map: attacker_type → disadvantaged type
 const TRIANGLE: Dictionary = {
 	Type.SWORD: Type.AXE,   # Sword beats Axe
@@ -58,6 +64,20 @@ static func get_triangle_damage_bonus(attacker: Type, defender: Type) -> int:
 	elif has_disadvantage(attacker, defender):
 		return -1
 	return 0
+
+## L'arme est-elle efficace contre les volants ? (arcs)
+static func is_effective_vs_flying(type: Type) -> bool:
+	return type in EFFECTIVE_VS_FLYING
+
+
+## Multiplicateur de might contre une cible donnée.
+## [param defender_flying] La cible est-elle une unité volante ?
+## [returns] 3 si l'arme est efficace contre elle, 1 sinon.
+static func get_effective_multiplier(type: Type, defender_flying: bool) -> int:
+	if defender_flying and is_effective_vs_flying(type):
+		return EFFECTIVE_MULTIPLIER
+	return 1
+
 
 ## Check if a weapon type deals magical damage (targets RES)
 static func is_magical(type: Type) -> bool:

@@ -2,6 +2,7 @@ class_name FECombatCalculator
 extends RefCounted
 
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const CD = preload("res://data/models/world/stats/class_data.gd")
 ## Fire Emblem combat calculator
 ## Computes hit rate, critical hit, damage, and double attack
 ## using the full FE formula with weapon triangle bonuses.
@@ -20,10 +21,15 @@ class CombatResult:
 	var triangle_bonus: int = 0   ## Weapon triangle damage modifier
 	var triangle_hit: int = 0     ## Weapon triangle hit modifier
 	var is_magical: bool = false  ## Whether this is a magical attack
+	var effective_mult: int = 1   ## Multiplicateur d'arme efficace (arc vs volant = 3)
+	var is_effective: bool = false ## L'attaque bénéficie-t-elle d'un bonus d'efficacité
+	var terrain_defense: int = 0  ## Bonus de DÉF/RÉS apporté par la tuile du défenseur
 
 	func _to_string() -> String:
-		return "Hit: %d%% | Dmg: %d | Crit: %d%% | Double: %s | Triangle: %+d" % [
-			hit_rate, damage, crit_rate, "Yes" if can_double else "No", triangle_bonus
+		return "Hit: %d%% | Dmg: %d | Crit: %d%% | Double: %s | Triangle: %+d%s%s" % [
+			hit_rate, damage, crit_rate, "Yes" if can_double else "No", triangle_bonus,
+			(" | Efficace x%d" % effective_mult) if is_effective else "",
+			(" | Terrain +%d" % terrain_defense) if terrain_defense > 0 else ""
 		]
 
 
@@ -48,7 +54,14 @@ static func calculate(attacker: Stats, defender: Stats, support_bonuses: Diction
 	# --- Damage calculation ---
 	# Physical: ATK = STR + weapon_might, reduced by DEF
 	# Magical:  ATK = MAG + weapon_might, reduced by RES
-	var atk = attacker.get_total_attack()
+	# Arme efficace (arc contre volant) : le might est triplé avant réduction.
+	result.effective_mult = WT.get_effective_multiplier(
+		attacker.weapon_type, CD.is_flying(defender.character_class)
+	)
+	result.is_effective = result.effective_mult > 1
+	result.terrain_defense = terrain_defense
+
+	var atk = attacker.get_attack_stat() + attacker.weapon_might * result.effective_mult
 	var def_stat = defender.res if result.is_magical else defender.def
 	
 	# Weapon triangle damage bonus
