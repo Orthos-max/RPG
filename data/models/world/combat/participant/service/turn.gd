@@ -33,23 +33,34 @@ func _init(_res: TacticsParticipantResource, _camera: TacticsCameraResource, _co
 ## @param delta: Time elapsed since the last frame
 ## @param player: The TacticsPlayer node
 ## @param participant: The TacticsParticipant node
-func handle_player_turn(delta: float, player: TacticsPlayer, participant: TacticsParticipant) -> void:
+## [param camp] Camp joué à la main : le joueur 1, ou l'adversaire en hotseat.
+func handle_player_turn(delta: float, camp: TacticsParticipant, participant: TacticsParticipant) -> void:
 	if res.turn_just_started:
-		camera.target = player.get_children().front()
+		camera.target = camp.get_children().front()
 		res.turn_just_started = false
-	
+
+	# Les cibles sont toujours le camp d'en face.
+	res.targets = _opposing_camp(camp, participant)
+
 	controls.move_camera(delta)
 	controls.set_actions_menu_visibility(res.stage in [res.STAGE_SHOW_ACTIONS, res.STAGE_SHOW_MOVEMENTS, res.STAGE_SELECT_LOCATION, res.STAGE_DISPLAY_TARGETS, res.STAGE_SELECT_ATTACK_TARGET], res.curr_pawn if is_instance_valid(res.curr_pawn) else null)
-	
+
 	match res.stage:
-		res.STAGE_SELECT_PAWN: controls.select_pawn(player)
-		res.STAGE_SHOW_ACTIONS: player.show_available_pawn_actions()
-		res.STAGE_SHOW_MOVEMENTS: player.show_available_movements()
+		res.STAGE_SELECT_PAWN: controls.select_pawn(camp)
+		res.STAGE_SHOW_ACTIONS: camp.show_available_pawn_actions()
+		res.STAGE_SHOW_MOVEMENTS: camp.show_available_movements()
 		res.STAGE_SELECT_LOCATION: controls.select_new_location()
-		res.STAGE_MOVE_PAWN: player.move_pawn()
-		res.STAGE_DISPLAY_TARGETS: player.display_attackable_targets()
+		res.STAGE_MOVE_PAWN: camp.move_pawn()
+		res.STAGE_DISPLAY_TARGETS: camp.display_attackable_targets()
 		res.STAGE_SELECT_ATTACK_TARGET: controls.select_pawn_to_attack()
 		res.STAGE_ATTACK: participant.serv.combat_service.attack_pawn(delta, true)
+
+
+## Camp opposé à celui qui joue.
+func _opposing_camp(camp: TacticsParticipant, participant: TacticsParticipant) -> Node:
+	var player_camp: Node = participant.get_node_or_null("%TacticsPlayer")
+	var opponent_camp: Node = participant.get_node_or_null("%TacticsOpponent")
+	return opponent_camp if camp == player_camp else player_camp
 
 
 ## Handles the opponent's turn
@@ -71,9 +82,17 @@ func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: 
 				ciel.handle_opponent_turn(delta, opponent, participant)
 				return
 		TeamDataClass.Controller.LOCAL_PLAYER:
-			# Hotseat (M2) : les contrôles partagés ne sont pas encore branchés.
-			# L'IA locale assure l'intérim plutôt que de figer la partie.
-			DebugLog.debug_nospam("hotseat_pending", "Hotseat (M2) non implémenté — IA locale")
+			# Hotseat (M2) : le second humain joue le camp adverse avec les mêmes
+			# contrôles, sur la même machine.
+			handle_player_turn(delta, opponent, participant)
+			return
+		TeamDataClass.Controller.REMOTE_PLAYER:
+			# Réseau (M3) : les ordres du joueur distant arrivent par le même
+			# vocabulaire que Ciel et sont appliqués par le même chemin validé.
+			var ciel_remote: Node = _autoload("CielAI")
+			if ciel_remote:
+				ciel_remote.handle_opponent_turn(delta, opponent, participant)
+				return
 
 	if res.stage > 4:
 		res.stage = 0

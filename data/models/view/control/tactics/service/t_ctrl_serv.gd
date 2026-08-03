@@ -69,8 +69,8 @@ func set_actions_menu_visibility(v: bool, p: Variant, ctrl: TacticsControls) -> 
 
 
 ## Delegates pawn selection to the pawn selection service.
-func select_pawn(player: TacticsPlayer, ctrl: TacticsControls) -> void:
-	pawn_selection_service.select_pawn(player, ctrl)
+func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
+	pawn_selection_service.select_pawn(camp, ctrl)
 
 
 ## Delegates new location selection to the pawn selection service.

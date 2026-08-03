@@ -43,8 +43,8 @@ func move_camera(delta: float) -> void:
 
 
 ## Selects a pawn for the given player.
-func select_pawn(player: TacticsPlayer) -> void:
-	called_select_pawn.emit(player)
+func select_pawn(camp: TacticsParticipant) -> void:
+	called_select_pawn.emit(camp)
 
 
 ## Selects a pawn to attack.

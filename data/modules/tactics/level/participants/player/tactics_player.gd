@@ -1,20 +1,12 @@
 class_name TacticsPlayer
 extends TacticsParticipant
 ## Handles player-specific actions and logic in the tactics game
-## 
-## Extends TacticsParticipant to provide player-specific functionality
+##
+## Les actions humaines (sélection, portées, ciblage, déplacement) vivent
+## désormais dans [TacticsParticipant] : en hotseat (M2), le camp adverse peut
+## lui aussi être joué par un humain et a besoin des mêmes actions.
+## Ce nœud ne garde que ce qui est propre au camp du joueur 1.
 ## Service: [TacticsPlayerService]
-
-## Service handling player-specific logic and operations
-var player_serv: TacticsPlayerService
-
-
-## Initializes the TacticsPlayer node
-func _ready() -> void:
-	# Call the parent class's _ready function
-	super._ready()
-	# Initialize the player service with necessary resources
-	player_serv = TacticsPlayerService.new(res, camera, controls, arena)
 
 
 ## Processes player-related physics updates
@@ -30,23 +22,3 @@ func _physics_process(_delta: float) -> void:
 ## @return: Whether the player's pawn is configured
 func is_pawn_configured() -> bool:
 	return player_serv.is_pawn_configured(self)
-
-
-## Displays the available actions for the player's pawn
-func show_available_pawn_actions() -> void:
-	player_serv.show_available_pawn_actions()
-
-
-## Displays the available movement options for the player's pawn
-func show_available_movements() -> void:
-	player_serv.show_available_movements()
-
-
-## Displays the attackable targets for the player's pawn
-func display_attackable_targets() -> void:
-	player_serv.display_attackable_targets()
-
-
-## Initiates the movement of the player's pawn
-func move_pawn() -> void:
-	player_serv.move_pawn()

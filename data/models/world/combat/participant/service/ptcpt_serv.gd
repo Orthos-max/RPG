@@ -50,7 +50,8 @@ func setup(_participant: TacticsParticipant) -> void:
 func act(delta: float, is_player: bool, parent: Node3D, participant: TacticsParticipant) -> void:
 	DebugLog.debug_nospam("participant_turn", is_player)
 	DebugLog.debug_nospam("turn_stage", res.stage)
-	
+	res.acting_camp = parent
+
 	if is_player:
 		var player: TacticsPlayer = parent as TacticsPlayer
 		turn_service.handle_player_turn(delta, player, participant)

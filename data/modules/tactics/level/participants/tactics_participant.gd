@@ -13,6 +13,10 @@ extends Node3D
 @export var controls: TacticsControlsResource = load("res://data/models/view/control/tactics/control.tres")
 ## Service handling participant logic and operations
 var serv: TacticsParticipantService
+## Service des actions « humaines » (sélection, portées, ciblage).
+## Porté par la classe de base : en hotseat (M2), les deux camps peuvent être
+## joués par un humain, donc les deux ont besoin de ces actions.
+var player_serv: TacticsPlayerService
 ## Reference to the TacticsArena node
 @onready var arena: TacticsArena = %TacticsArena
 ## Reference to the TacticsPlayer node
@@ -27,6 +31,8 @@ func _ready() -> void:
 	serv = TacticsParticipantService.new(res, camera, controls)
 	# Set up the service with this node as context
 	serv.setup(self)
+	# Actions humaines, disponibles pour les deux camps (hotseat)
+	player_serv = TacticsPlayerService.new(res, camera, controls, arena)
 	# Connect the skip_turn signal to the skip_turn method
 	res.connect("called_skip_turn", skip_turn)
 
@@ -72,8 +78,32 @@ func reset_turn(parent: Node3D) -> void:
 
 
 ## Skips the participant's turn
+## Le camp qui passe est celui qui joue (en hotseat, ce n'est pas toujours le joueur 1).
 func skip_turn() -> void:
-	serv.skip_turn(player)
+	var camp: Node3D = res.acting_camp if res.acting_camp and is_instance_valid(res.acting_camp) else player
+	serv.skip_turn(camp)
+
+
+#region Actions humaines (partagées par les deux camps — hotseat)
+## Displays the available actions for the current pawn
+func show_available_pawn_actions() -> void:
+	player_serv.show_available_pawn_actions()
+
+
+## Displays the available movement options for the current pawn
+func show_available_movements() -> void:
+	player_serv.show_available_movements()
+
+
+## Displays the attackable targets for the current pawn
+func display_attackable_targets() -> void:
+	player_serv.display_attackable_targets()
+
+
+## Initiates the movement of the current pawn
+func move_pawn() -> void:
+	player_serv.move_pawn()
+#endregion
 
 
 ## Resets the participant's pawn references when unloading a level

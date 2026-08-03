@@ -37,6 +37,9 @@ var curr_pawn: TacticsPawn = null:
 var attackable_pawn: TacticsPawn = null
 ## The node containing the target pawns
 var targets: Node = null
+## Camp actuellement en train de jouer (utile en hotseat, où les deux camps
+## peuvent être humains : « passer le tour » doit viser le bon camp).
+var acting_camp: Node3D = null
 
 ## Flag to control the display of opponent stats
 var display_opponent_stats: bool = false
