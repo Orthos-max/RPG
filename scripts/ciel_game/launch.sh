@@ -1,24 +1,29 @@
 #!/bin/bash
-# Ciel Game Launcher — lance Godot avec le projet tactical-rpg
-# Usage: bash scripts/ciel_game/launch.sh
+# Lance Ciel Emblem depuis les sources Godot.
+# Usage: bash scripts/ciel_game/launch.sh [args godot...]
+#
+# Surcharges possibles :
+#   GODOT_BIN=/chemin/vers/Godot   binaire Godot à utiliser
+#   CIEL_USERDATA=/chemin          dossier d'échange du pont CielAI
 
-PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GODOT="/Users/tamilahciel/Applications/Godot-4.3.app/Contents/MacOS/Godot"
+set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_paths.sh"
 
-if [ ! -f "$GODOT" ]; then
-    GODOT="/Applications/Godot.app/Contents/MacOS/Godot"
-fi
-
-if [ ! -f "$GODOT" ]; then
-    echo "Godot introuvable. Chemins testés:"
-    echo "  - /Users/tamilahciel/Applications/Godot-4.3.app"
-    echo "  - /Applications/Godot.app"
+if [ -z "$GODOT" ]; then
+    echo "Godot introuvable. Chemins testés :" >&2
+    echo "  - \$GODOT_BIN" >&2
+    echo "  - ~/Applications/Godot-4.3.app" >&2
+    echo "  - /Applications/Godot-4.3.app, /Applications/Godot.app" >&2
+    echo "  - godot / godot4 dans le PATH" >&2
     exit 1
 fi
 
-echo "Lancement de Godot avec $PROJECT_DIR..."
-echo "Une fois le jeu lancé, CielAI prendra le contrôle du camp adverse."
+echo "Godot   : $GODOT"
+echo "Projet  : $PROJECT_DIR"
+echo "Userdata: $USERDATA_DIR"
+echo ""
+echo "Une fois le jeu lancé, le camp adverse est piloté par Ciel"
+echo "(bascule possible à tout moment : command.sh toggle off)."
 echo ""
 
-# Lancer Godot avec le projet
-"$GODOT" --path "$PROJECT_DIR" "$@"
+exec "$GODOT" --path "$PROJECT_DIR" "$@"

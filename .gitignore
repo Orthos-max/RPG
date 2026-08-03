@@ -2,7 +2,12 @@
 .godot/
 .import/
 export.cfg
-export_presets.cfg
+# export_presets.cfg est versionné : c'est la recette de build officielle
+# (voir docs/INSTALL.md). Ne contient aucun secret — les identifiants de
+# signature restent dans l'environnement (CODESIGN_IDENTITY).
+
+# Artefacts de build
+build/
 
 # Imported translations (automatically generated from CSV files)
 *.translation
