@@ -6,19 +6,33 @@ extends RefCounted
 ## portées par [StatsResource] (weapon_type / weapon_might).
 
 enum Kind {
-	HEAL = 0,  ## Rend des PV
-	BUFF = 1,  ## Bonus de stat temporaire (en tours)
+	HEAL = 0,   ## Rend des PV
+	BUFF = 1,   ## Bonus de stat temporaire (en tours)
+	BOOST = 2,  ## Gain de stat permanent (utilisé depuis l'intendance)
 }
 
 ## Nombre maximum d'objets transportés par unité
 const MAX_ITEMS: int = 5
 
+## Prix de revente, en fraction du prix d'achat
+const RESALE_RATIO: float = 0.5
+
 static var DATA: Dictionary = {
-	"Vulnerary": {"kind": Kind.HEAL, "amount": 10, "label": "Potion"},
-	"Concoction": {"kind": Kind.HEAL, "amount": 20, "label": "Élixir mineur"},
-	"Elixir": {"kind": Kind.HEAL, "amount": 999, "label": "Élixir"},
-	"Def Tonic": {"kind": Kind.BUFF, "stat": "def", "amount": 2, "turns": 2, "label": "Tonique de défense"},
-	"Spd Tonic": {"kind": Kind.BUFF, "stat": "spd", "amount": 2, "turns": 2, "label": "Tonique de vitesse"},
+	"Vulnerary": {"kind": Kind.HEAL, "amount": 10, "price": 100, "label": "Potion"},
+	"Concoction": {"kind": Kind.HEAL, "amount": 20, "price": 220, "label": "Élixir mineur"},
+	"Elixir": {"kind": Kind.HEAL, "amount": 999, "price": 500, "label": "Élixir"},
+	"Def Tonic": {"kind": Kind.BUFF, "stat": "def", "amount": 2, "turns": 2, "price": 180,
+		"label": "Tonique de défense"},
+	"Spd Tonic": {"kind": Kind.BUFF, "stat": "spd", "amount": 2, "turns": 2, "price": 180,
+		"label": "Tonique de vitesse"},
+	"Energy Drop": {"kind": Kind.BOOST, "stat": "str", "amount": 2, "price": 900,
+		"label": "Potion de force (+2 FOR définitif)"},
+	"Speedwing": {"kind": Kind.BOOST, "stat": "spd", "amount": 2, "price": 900,
+		"label": "Aile de vitesse (+2 VIT définitif)"},
+	"Dracoshield": {"kind": Kind.BOOST, "stat": "def", "amount": 2, "price": 900,
+		"label": "Écaille de dragon (+2 DÉF définitif)"},
+	"Seraph Robe": {"kind": Kind.BOOST, "stat": "max_hp", "amount": 5, "price": 1000,
+		"label": "Robe séraphique (+5 PV définitif)"},
 }
 
 
@@ -47,3 +61,34 @@ static func all_items() -> Array:
 	var names: Array = DATA.keys()
 	names.sort()
 	return names
+
+
+## Prix d'achat (0 si l'objet est inconnu)
+static func price(item_name: String) -> int:
+	return int(get_item(item_name).get("price", 0))
+
+
+## Prix de revente
+static func resale_price(item_name: String) -> int:
+	return int(floor(float(price(item_name)) * RESALE_RATIO))
+
+
+## Libellé affichable
+static func label(item_name: String) -> String:
+	var item: Dictionary = get_item(item_name)
+	return str(item.get("label", item_name))
+
+
+## L'objet donne-t-il un gain permanent ? (utilisable seulement hors combat)
+static func is_boost(item_name: String) -> bool:
+	return int(get_item(item_name).get("kind", Kind.HEAL)) == Kind.BOOST
+
+
+## Objets vendus en boutique (tous ceux qui ont un prix), triés par prix
+static func shop_stock() -> Array:
+	var stock: Array = []
+	for key: String in DATA:
+		if price(key) > 0:
+			stock.append(key)
+	stock.sort_custom(func(a, b): return price(a) < price(b))
+	return stock

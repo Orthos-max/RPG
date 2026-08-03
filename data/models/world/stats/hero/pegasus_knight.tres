@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://b1pegasusrec01"]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_peg01"]
+
+[resource]
+script = ExtResource("1_peg01")
+override_name = "Cordelia"
+expertise = "Pegasus Knight"
+strategy = 1
+character_class = 19
+level = 3
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/actor/character/chr_pawn_mage.png"
+hp = 18
+str = 6
+mag = 1
+skl = 8
+spd = 10
+lck = 6
+def = 5
+res = 6
+movement = 7
+jump = 3.0
+attack_range = 1
+weapon_type = 1
+weapon_might = 5
+items = Array[String](["Vulnerary"])
+max_health = 18
+attack_power = 11

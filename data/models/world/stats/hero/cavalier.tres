@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://b1cavalierrec01"]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_cav01"]
+
+[resource]
+script = ExtResource("1_cav01")
+override_name = "Sully"
+expertise = "Cavalier"
+strategy = 1
+character_class = 2
+level = 2
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/actor/character/chr_pawn_knight.png"
+hp = 21
+str = 8
+mag = 0
+skl = 6
+spd = 7
+lck = 4
+def = 7
+res = 1
+movement = 7
+jump = 3.0
+attack_range = 1
+weapon_type = 1
+weapon_might = 6
+items = Array[String](["Vulnerary"])
+max_health = 21
+attack_power = 14

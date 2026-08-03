@@ -13,6 +13,7 @@ const CDB = preload("res://data/models/world/stats/class_data.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
@@ -40,6 +41,8 @@ func _init() -> void:
 	_test_campaign_save()
 	_test_difficulty()
 	_test_session()
+	_test_skills()
+	_test_economy()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -530,4 +533,172 @@ func _test_session() -> void:
 	_check(team.is_ai() and team.is_local_authority(), "TeamData : CielAI est une IA locale")
 	_check(TeamData.controller_name(TeamData.Controller.REMOTE_PLAYER) == "Joueur distant",
 		"libellés de contrôleur")
+#endregion
+
+
+#region 11. Compétences
+func _test_skills() -> void:
+	print("\n✨ Test 11: arbre de compétences")
+
+	# Déblocage par niveau de classe
+	_check(CDB.unlocked_skills(CDB.Id.LORD, 1) == ["duelist"],
+		"Lord Lv.1 : duelist seulement", str(CDB.unlocked_skills(CDB.Id.LORD, 1)))
+	_check("focus" in CDB.unlocked_skills(CDB.Id.LORD, 5),
+		"Lord Lv.5 : focus débloqué")
+	var upcoming: Array = CDB.upcoming_skills(CDB.Id.LORD, 1)
+	_check(upcoming.size() == 1 and str(upcoming[0]["id"]) == "focus",
+		"compétences à venir listées", str(upcoming))
+
+	# Conditions de déclenchement
+	_check(SKILLS.is_active("duelist", {"attacking": true}), "duelist actif en attaque")
+	_check(not SKILLS.is_active("duelist", {"attacking": false}), "duelist inactif en défense")
+	_check(SKILLS.is_active("wrath", {"hp_ratio": 0.3}), "fureur active à 30% PV")
+	_check(not SKILLS.is_active("wrath", {"hp_ratio": 0.9}), "fureur inactive à 90% PV")
+	_check(SKILLS.is_active("terrain_affinity", {"terrain_def": 2}), "affinité terrain sur forêt")
+	_check(not SKILLS.is_active("terrain_affinity", {"terrain_def": 0}), "affinité terrain hors couvert")
+	_check(SKILLS.is_active("falcon_eye", {"attacking": true, "vs_flying": true}),
+		"œil de faucon contre un volant")
+	_check(not SKILLS.is_active("falcon_eye", {"attacking": true, "vs_flying": false}),
+		"œil de faucon inactif au sol")
+
+	# Agrégation
+	var mods: Dictionary = SKILLS.aggregate(["duelist", "charge", "wrath"],
+		{"attacking": true, "hp_ratio": 0.2})
+	_check(int(mods["hit"]) == 10 and int(mods["damage"]) == 2 and int(mods["crit"]) == 20,
+		"agrégat : +10 hit, +2 dmg, +20 crit", str(mods))
+	var none: Dictionary = SKILLS.aggregate(["duelist"], {"attacking": false})
+	_check(int(none["hit"]) == 0, "agrégat vide hors condition")
+
+	# Compétences à déclenchement
+	var procs: Array = SKILLS.active_procs(["luna", "astra", "duelist"], {"attacking": true}, 20)
+	_check(procs.size() == 2, "2 procs disponibles", str(procs))
+	var by_id: Dictionary = {}
+	for p: Dictionary in procs:
+		by_id[str(p["id"])] = p
+	_check(int(by_id["luna"]["chance"]) == 20 and int(by_id["astra"]["chance"]) == 10,
+		"chances calculées sur la Skl (20 / 10)", str(procs))
+
+	# Effet réel sur un combat
+	var lord: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	var mob: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	_check("duelist" in lord.get_skills(), "Chrom connaît duelliste (%s)" % str(lord.get_skills()))
+
+	var with_skill = Calc.calculate(lord, mob)
+	var stripped: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	stripped.character_class = CDB.Id.CAVALIER  # Classe sans compétence au Lv.1
+	var without = Calc.calculate(stripped, mob)
+	_check(with_skill.skill_hit == 10 and without.skill_hit == 0,
+		"duelliste ajoute +10 de précision (%d vs %d)" % [with_skill.skill_hit, without.skill_hit])
+	_check(with_skill.hit_rate == mini(100, without.hit_rate + 10) or with_skill.hit_rate == 100,
+		"précision répercutée dans le jet")
+
+	# Défense : le gardien encaisse mieux
+	var brute: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	brute.str = 40  # Frappe assez fort pour que la réduction soit visible
+	var knight: CharStats = _live("res://data/models/world/stats/hero/great_knight.tres")
+	knight.character_class = CDB.Id.KNIGHT
+	knight.level = 5
+	var vs_knight = Calc.calculate(brute, knight)
+	knight.character_class = CDB.Id.CAVALIER
+	var vs_plain = Calc.calculate(brute, knight)
+	_check(vs_knight.damage < vs_plain.damage,
+		"rempart + gardien réduisent les dégâts (%d vs %d)" % [vs_knight.damage, vs_plain.damage])
+
+	# Compétence hors classe
+	var learner: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	_check(learner.learn_skill("wrath") and "wrath" in learner.get_skills(),
+		"compétence hors classe apprise")
+	_check(not learner.learn_skill("wrath"), "pas de doublon")
+	_check(not learner.learn_skill("inexistante"), "compétence inconnue refusée")
+#endregion
+
+
+#region 12. Économie entre chapitres
+func _test_economy() -> void:
+	print("\n🛒 Test 12: intendance (boutique, soins, recrutement)")
+
+	var campaign: Node = root.get_node_or_null("Campaign")
+	if not campaign:
+		_ko("Autoload Campaign", "introuvable")
+		return
+
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	campaign.gold = 1000
+	var id: String = str(campaign.roster[0]["id"])
+
+	# Prix et catalogue
+	_check(ITEMS.price("Vulnerary") > 0 and ITEMS.resale_price("Vulnerary") == ITEMS.price("Vulnerary") / 2,
+		"prix d'achat et de revente")
+	_check(ITEMS.shop_stock().size() >= 8, "catalogue de boutique (%d articles)" % ITEMS.shop_stock().size())
+	_check(ITEMS.is_boost("Energy Drop") and not ITEMS.is_boost("Vulnerary"),
+		"objets à effet permanent identifiés")
+
+	# Achat
+	var gold_before: int = campaign.gold
+	var items_before: int = campaign.get_unit(id).get("items", []).size()
+	var bought: Dictionary = campaign.buy_item(id, "Vulnerary")
+	_check(bool(bought["ok"]) and campaign.gold == gold_before - ITEMS.price("Vulnerary"),
+		"achat débité (%d → %d or)" % [gold_before, campaign.gold], str(bought))
+	_check(campaign.get_unit(id).get("items", []).size() == items_before + 1,
+		"objet remis à l'unité")
+
+	# Revente
+	var gold_mid: int = campaign.gold
+	var sold: Dictionary = campaign.sell_item(id, "Vulnerary")
+	_check(bool(sold["ok"]) and campaign.gold == gold_mid + ITEMS.resale_price("Vulnerary"),
+		"revente créditée à moitié prix")
+	_check(not bool(campaign.sell_item(id, "Elixir")["ok"]), "revente d'un objet absent refusée")
+
+	# Or insuffisant
+	campaign.gold = 10
+	_check(not bool(campaign.buy_item(id, "Elixir")["ok"]), "achat refusé sans or")
+
+	# Inventaire plein
+	campaign.gold = 5000
+	var unit: Dictionary = campaign.get_unit(id)
+	unit["items"] = []
+	for i in ITEMS.MAX_ITEMS:
+		campaign.buy_item(id, "Vulnerary")
+	var overflow: Dictionary = campaign.buy_item(id, "Vulnerary")
+	_check(not bool(overflow["ok"]) and campaign.get_unit(id)["items"].size() == ITEMS.MAX_ITEMS,
+		"inventaire plafonné à %d objets" % ITEMS.MAX_ITEMS)
+
+	# Booster permanent
+	unit["items"] = ["Energy Drop"]
+	var str_before: int = int(campaign.get_unit(id)["str"])
+	var boosted: Dictionary = campaign.use_booster(id, "Energy Drop")
+	_check(bool(boosted["ok"]) and int(campaign.get_unit(id)["str"]) == str_before + 2,
+		"potion de force : +2 FOR définitif (%d → %d)" % [str_before, int(campaign.get_unit(id)["str"])])
+	_check(not bool(campaign.use_booster(id, "Vulnerary")["ok"]),
+		"objet de combat refusé à l'intendance")
+
+	# Soins payants
+	campaign.gold = 1000
+	unit["hp"] = int(unit["max_hp"]) - 10
+	var cost: int = campaign.heal_cost(id)
+	_check(cost == 10 * campaign.HEAL_COST_PER_HP, "coût de soin proportionnel (%d or)" % cost)
+	var healed: Dictionary = campaign.heal_unit(id)
+	_check(bool(healed["ok"]) and int(campaign.get_unit(id)["hp"]) == int(unit["max_hp"]),
+		"unité soignée à plein")
+	_check(not bool(campaign.heal_unit(id)["ok"]), "soin refusé si déjà au maximum")
+
+	# Les blessures survivent au chapitre (sinon l'intendance ne servirait à rien)
+	campaign.apply_battle_result({"id": id, "hp": 3})
+	_check(int(campaign.get_unit(id)["hp"]) == 3, "blessures conservées entre chapitres")
+
+	# Recrutement
+	campaign.gold = 2000
+	var recruits: Array = campaign.available_recruits()
+	_check(recruits.size() >= 2, "unités recrutables proposées (%d)" % recruits.size())
+	if recruits.is_empty():
+		return
+	var roster_before: int = campaign.roster.size()
+	var hired: Dictionary = campaign.hire(str(recruits[0]["path"]))
+	_check(bool(hired["ok"]) and campaign.roster.size() == roster_before + 1,
+		"%s recruté pour %d or" % [str(recruits[0]["name"]), int(hired.get("cost", 0))])
+	_check(not bool(campaign.hire(str(recruits[0]["path"]))["ok"]), "pas de recrutement en double")
+	campaign.gold = 0
+	if campaign.available_recruits().size() > 0:
+		_check(not bool(campaign.hire(str(campaign.available_recruits()[0]["path"]))["ok"]),
+			"recrutement refusé sans or")
 #endregion

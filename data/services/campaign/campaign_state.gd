@@ -9,12 +9,15 @@ const CampaignDBClass = preload("res://data/models/campaign/campaign_db.gd")
 const ChapterDataClass = preload("res://data/models/campaign/chapter_data.gd")
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 const ClassDataDBClass = preload("res://data/models/world/stats/class_data.gd")
+const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 
 signal roster_changed()
 signal chapter_completed(chapter_id: String, bonuses: Array)
 
 const SAVE_DIR: String = "user://saves"
 const SAVE_VERSION: int = 1
+## Coût en or d'un point de vie rendu à l'intendance
+const HEAL_COST_PER_HP: int = 6
 
 ## Roster complet du joueur (unités recrutées, vivantes ou tombées)
 var roster: Array = []
@@ -180,8 +183,8 @@ func apply_battle_result(snapshot: Dictionary) -> void:
 				# Sans mort permanente : l'unité se relève avec 1 PV entre deux chapitres.
 				u["hp"] = 1
 		else:
-			# On repart au maximum au chapitre suivant (soins de garnison).
-			u["hp"] = int(u.get("max_hp", hp))
+			# Les blessures persistent : les soigner coûte de l'or à l'intendance.
+			u["hp"] = clampi(hp, 1, int(u.get("max_hp", hp)))
 		roster_changed.emit()
 		return
 
@@ -189,6 +192,172 @@ func apply_battle_result(snapshot: Dictionary) -> void:
 ## Classe lisible d'une unité du roster.
 func unit_class_name(unit: Dictionary) -> String:
 	return ClassDataDBClass.get_class_name(int(unit.get("class_id", 0)))
+#endregion
+
+
+#region Intendance (économie entre chapitres)
+## Coût de soin d'une unité (par point de vie manquant).
+func heal_cost(unit_id: String) -> int:
+	var unit: Dictionary = get_unit(unit_id)
+	if unit.is_empty() or not bool(unit.get("alive", true)):
+		return 0
+	var missing: int = maxi(0, int(unit.get("max_hp", 0)) - int(unit.get("hp", 0)))
+	return missing * HEAL_COST_PER_HP
+
+
+## Soigne une unité si l'or suffit.
+## [returns] {ok, cost, healed, reason}
+func heal_unit(unit_id: String) -> Dictionary:
+	var unit: Dictionary = get_unit(unit_id)
+	if unit.is_empty():
+		return {"ok": false, "reason": "unité inconnue"}
+	var cost: int = heal_cost(unit_id)
+	if cost <= 0:
+		return {"ok": false, "reason": "%s est déjà au maximum" % str(unit.get("name", ""))}
+	if gold < cost:
+		return {"ok": false, "reason": "il manque %d or" % (cost - gold)}
+
+	var healed: int = int(unit["max_hp"]) - int(unit["hp"])
+	gold -= cost
+	unit["hp"] = int(unit["max_hp"])
+	roster_changed.emit()
+	return {"ok": true, "cost": cost, "healed": healed, "reason": ""}
+
+
+## Coût total pour remettre toute l'armée d'aplomb.
+func heal_all_cost() -> int:
+	var total: int = 0
+	for u: Dictionary in available_units():
+		total += heal_cost(str(u.get("id", "")))
+	return total
+
+
+## Soigne toutes les unités abordables, de la moins chère à la plus chère.
+## [returns] {ok, cost, healed_units}
+func heal_all() -> Dictionary:
+	var ids: Array = []
+	for u: Dictionary in available_units():
+		if heal_cost(str(u["id"])) > 0:
+			ids.append(str(u["id"]))
+	ids.sort_custom(func(a, b): return heal_cost(a) < heal_cost(b))
+
+	var spent: int = 0
+	var healed: int = 0
+	for id: String in ids:
+		var result: Dictionary = heal_unit(id)
+		if bool(result.get("ok", false)):
+			spent += int(result["cost"])
+			healed += 1
+	return {"ok": healed > 0, "cost": spent, "healed_units": healed}
+
+
+## Achète un objet et le remet à une unité.
+## [returns] {ok, cost, reason}
+func buy_item(unit_id: String, item_name: String) -> Dictionary:
+	var key: String = ITEMS.canonical_name(item_name)
+	if key.is_empty():
+		return {"ok": false, "reason": "objet inconnu : %s" % item_name}
+	var unit: Dictionary = get_unit(unit_id)
+	if unit.is_empty():
+		return {"ok": false, "reason": "unité inconnue"}
+
+	var price: int = ITEMS.price(key)
+	if gold < price:
+		return {"ok": false, "reason": "il manque %d or" % (price - gold)}
+
+	var inventory: Array = unit.get("items", [])
+	if inventory.size() >= ITEMS.MAX_ITEMS:
+		return {"ok": false, "reason": "%s ne peut porter que %d objets" % [
+			str(unit.get("name", "")), ITEMS.MAX_ITEMS
+		]}
+
+	gold -= price
+	inventory.append(key)
+	unit["items"] = inventory
+	roster_changed.emit()
+	return {"ok": true, "cost": price, "reason": ""}
+
+
+## Revend un objet (moitié prix).
+func sell_item(unit_id: String, item_name: String) -> Dictionary:
+	var key: String = ITEMS.canonical_name(item_name)
+	var unit: Dictionary = get_unit(unit_id)
+	if key.is_empty() or unit.is_empty():
+		return {"ok": false, "reason": "objet ou unité inconnu"}
+
+	var inventory: Array = unit.get("items", [])
+	if not key in inventory:
+		return {"ok": false, "reason": "%s ne porte pas de %s" % [str(unit.get("name", "")), key]}
+
+	inventory.erase(key)
+	unit["items"] = inventory
+	var earned: int = ITEMS.resale_price(key)
+	gold += earned
+	roster_changed.emit()
+	return {"ok": true, "earned": earned, "reason": ""}
+
+
+## Consomme un objet à effet permanent depuis l'intendance (hors combat).
+func use_booster(unit_id: String, item_name: String) -> Dictionary:
+	var key: String = ITEMS.canonical_name(item_name)
+	var unit: Dictionary = get_unit(unit_id)
+	if key.is_empty() or unit.is_empty():
+		return {"ok": false, "reason": "objet ou unité inconnu"}
+	if not ITEMS.is_boost(key):
+		return {"ok": false, "reason": "%s ne s'utilise qu'en combat" % key}
+
+	var inventory: Array = unit.get("items", [])
+	if not key in inventory:
+		return {"ok": false, "reason": "%s ne porte pas de %s" % [str(unit.get("name", "")), key]}
+
+	var item: Dictionary = ITEMS.get_item(key)
+	var stat: String = str(item.get("stat", "str"))
+	var amount: int = int(item.get("amount", 2))
+	unit[stat] = int(unit.get(stat, 0)) + amount
+	if stat == "max_hp":
+		unit["hp"] = int(unit.get("hp", 0)) + amount
+	inventory.erase(key)
+	unit["items"] = inventory
+	roster_changed.emit()
+	return {"ok": true, "stat": stat, "amount": amount, "reason": ""}
+
+
+## Unités recrutables encore absentes du roster : [{path, cost, name, class}]
+func available_recruits() -> Array:
+	var out: Array = []
+	for entry: Dictionary in CampaignDBClass.RECRUITS:
+		var path: String = str(entry.get("path", ""))
+		var preview: Dictionary = unit_from_resource(path)
+		if preview.is_empty() or not get_unit(str(preview["id"])).is_empty():
+			continue
+		out.append({
+			"path": path,
+			"cost": int(entry.get("cost", 0)),
+			"name": str(preview["name"]),
+			"class": unit_class_name(preview),
+			"level": int(preview["level"]),
+		})
+	return out
+
+
+## Recrute une unité contre de l'or.
+func hire(path: String) -> Dictionary:
+	var cost: int = 0
+	var found: bool = false
+	for entry: Dictionary in CampaignDBClass.RECRUITS:
+		if str(entry.get("path", "")) == path:
+			cost = int(entry.get("cost", 0))
+			found = true
+			break
+	if not found:
+		return {"ok": false, "reason": "unité non recrutable"}
+	if gold < cost:
+		return {"ok": false, "reason": "il manque %d or" % (cost - gold)}
+	if not recruit(path):
+		return {"ok": false, "reason": "unité déjà dans l'armée"}
+
+	gold -= cost
+	return {"ok": true, "cost": cost, "reason": ""}
 #endregion
 
 

@@ -16,10 +16,15 @@ const C_BUTTON := Color("#0f3460")
 
 var chapter: ChapterData = null
 
+const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
+const CDB = preload("res://data/models/world/stats/class_data.gd")
+
 var _selected: Array = []
 var _slots_label: Label
 var _unit_rows: VBoxContainer
 var _start_button: Button
+var _shop_panel: Control = null
 
 
 func _ready() -> void:
@@ -107,6 +112,10 @@ func _build() -> void:
 	back.pressed.connect(func() -> void: back_requested.emit())
 	buttons.add_child(back)
 
+	var shop := _make_button("🛒  Intendance", false)
+	shop.pressed.connect(_toggle_shop)
+	buttons.add_child(shop)
+
 	_start_button = _make_button("⚔️  Lancer la bataille", true)
 	_start_button.pressed.connect(_on_start)
 	buttons.add_child(_start_button)
@@ -147,13 +156,18 @@ func _make_unit_row(unit: Dictionary, campaign: Node) -> Control:
 	row.button_pressed = id in _selected
 	row.custom_minimum_size = Vector2(0, 42)
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	row.text = "%s  %-14s Lv.%-3d %-14s PV %d/%d  MOV %d" % [
+	var skills: Array = []
+	for skill_id in CDB.unlocked_skills(int(unit.get("class_id", 0)), int(unit.get("level", 1))):
+		skills.append(SKILLS.get_skill_name(str(skill_id)))
+
+	row.text = "%s  %-14s Lv.%-3d %-14s PV %d/%d  MOV %d  %s" % [
 		"✔" if row.button_pressed else "  ",
 		str(unit.get("name", "?")),
 		int(unit.get("level", 1)),
 		campaign.unit_class_name(unit),
 		int(unit.get("hp", 0)), int(unit.get("max_hp", 0)),
 		int(unit.get("movement", 0)),
+		("✨ " + ", ".join(skills)) if not skills.is_empty() else "",
 	]
 	row.add_theme_font_size_override("font_size", 14)
 
@@ -190,6 +204,173 @@ func _on_start() -> void:
 	if campaign:
 		campaign.set_deployment(_selected)
 	battle_requested.emit()
+
+
+#region Intendance
+## Ouvre/ferme la boutique : achats, soins et recrutement entre deux chapitres.
+func _toggle_shop() -> void:
+	if _shop_panel and is_instance_valid(_shop_panel):
+		_shop_panel.queue_free()
+		_shop_panel = null
+		_refresh()
+		return
+	_shop_panel = _build_shop()
+	add_child(_shop_panel)
+
+
+func _build_shop() -> Control:
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(dim)
+
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 120
+	box.offset_right = -120
+	box.offset_top = 60
+	box.offset_bottom = -60
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "🛒  INTENDANCE — Or : %d" % (campaign.gold if campaign else 0)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", C_GOLD)
+	box.add_child(title)
+
+	if not campaign:
+		return panel
+
+	# Unité destinataire des achats
+	var target := OptionButton.new()
+	target.custom_minimum_size = Vector2(0, 34)
+	for u: Dictionary in campaign.available_units():
+		target.add_item("%s (%d/%d PV, %d objet(s))" % [
+			str(u["name"]), int(u["hp"]), int(u["max_hp"]), u.get("items", []).size()
+		])
+		target.set_item_metadata(target.item_count - 1, str(u["id"]))
+	if target.item_count > 0:
+		target.select(0)
+	box.add_child(target)
+
+	var status := Label.new()
+	status.add_theme_font_size_override("font_size", 13)
+	status.add_theme_color_override("font_color", C_ACCENT)
+	status.text = "Choisis une unité, puis achète, soigne ou recrute."
+	box.add_child(status)
+
+	var selected_id := func() -> String:
+		if target.item_count == 0 or target.selected < 0:
+			return ""
+		return str(target.get_item_metadata(target.selected))
+
+	# --- Soins ---
+	var heal_row := HBoxContainer.new()
+	heal_row.add_theme_constant_override("separation", 8)
+	var heal_one := _make_button("⚕ Soigner l'unité", false)
+	heal_one.custom_minimum_size = Vector2(260, 36)
+	heal_one.pressed.connect(func() -> void:
+		var r: Dictionary = campaign.heal_unit(selected_id.call())
+		status.text = ("Soigné de %d PV pour %d or." % [int(r.get("healed", 0)), int(r.get("cost", 0))]) \
+			if bool(r.get("ok", false)) else str(r.get("reason", ""))
+		_rebuild_shop())
+	heal_row.add_child(heal_one)
+
+	var heal_all := _make_button("⚕ Tout soigner (%d or)" % campaign.heal_all_cost(), false)
+	heal_all.custom_minimum_size = Vector2(260, 36)
+	heal_all.pressed.connect(func() -> void:
+		var r: Dictionary = campaign.heal_all()
+		status.text = "%d unité(s) soignée(s) pour %d or." % [
+			int(r.get("healed_units", 0)), int(r.get("cost", 0))]
+		_rebuild_shop())
+	heal_row.add_child(heal_all)
+	box.add_child(heal_row)
+
+	# --- Boutique ---
+	var shop_scroll := ScrollContainer.new()
+	shop_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var shop_list := VBoxContainer.new()
+	shop_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shop_list.add_theme_constant_override("separation", 4)
+	shop_scroll.add_child(shop_list)
+	box.add_child(shop_scroll)
+
+	for item_name: String in ITEMS.shop_stock():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+
+		var label := Label.new()
+		label.text = "%-28s %5d or" % [ITEMS.label(item_name), ITEMS.price(item_name)]
+		label.add_theme_font_size_override("font_size", 13)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var buy := _make_button("Acheter", false)
+		buy.custom_minimum_size = Vector2(120, 30)
+		buy.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.buy_item(selected_id.call(), item_name)
+			status.text = ("%s acheté (%d or)." % [item_name, int(r.get("cost", 0))]) \
+				if bool(r.get("ok", false)) else str(r.get("reason", ""))
+			_rebuild_shop())
+		row.add_child(buy)
+
+		if ITEMS.is_boost(item_name):
+			var use := _make_button("Utiliser", false)
+			use.custom_minimum_size = Vector2(120, 30)
+			use.pressed.connect(func() -> void:
+				var r: Dictionary = campaign.use_booster(selected_id.call(), item_name)
+				status.text = ("+%d %s définitif." % [int(r.get("amount", 0)), str(r.get("stat", ""))]) \
+					if bool(r.get("ok", false)) else str(r.get("reason", ""))
+				_rebuild_shop())
+			row.add_child(use)
+
+		shop_list.add_child(row)
+
+	# --- Recrutement ---
+	for recruit: Dictionary in campaign.available_recruits():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var label := Label.new()
+		label.text = "🎖 %s — %s Lv.%d — %d or" % [
+			str(recruit["name"]), str(recruit["class"]), int(recruit["level"]), int(recruit["cost"])]
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_color_override("font_color", C_GOLD)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var hire := _make_button("Recruter", false)
+		hire.custom_minimum_size = Vector2(120, 30)
+		hire.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.hire(str(recruit["path"]))
+			status.text = ("%s rejoint l'armée." % str(recruit["name"])) \
+				if bool(r.get("ok", false)) else str(r.get("reason", ""))
+			_rebuild_shop())
+		row.add_child(hire)
+		shop_list.add_child(row)
+
+	var close := _make_button("Fermer", true)
+	close.pressed.connect(_toggle_shop)
+	box.add_child(close)
+
+	return panel
+
+
+## Reconstruit le panneau après un achat (les prix et l'or ont changé).
+func _rebuild_shop() -> void:
+	if not _shop_panel or not is_instance_valid(_shop_panel):
+		return
+	var old: Control = _shop_panel
+	_shop_panel = _build_shop()
+	add_child(_shop_panel)
+	old.queue_free()
+	_refresh()
+#endregion
 
 
 func _make_button(text: String, accent: bool) -> Button:

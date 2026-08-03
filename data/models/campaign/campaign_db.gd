@@ -16,6 +16,12 @@ const STARTING_ROSTER: Array[String] = [
 	"res://data/models/world/stats/hero/great_knight.tres",
 ]
 
+## Unités recrutables à l'intendance, contre de l'or
+const RECRUITS: Array[Dictionary] = [
+	{"path": "res://data/models/world/stats/hero/cavalier.tres", "cost": 700},
+	{"path": "res://data/models/world/stats/hero/pegasus_knight.tres", "cost": 900},
+]
+
 const CHAPTERS: Array[Dictionary] = [
 	{
 		"id": "ch01",
