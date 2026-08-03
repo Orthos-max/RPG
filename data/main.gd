@@ -38,6 +38,7 @@ func _ready() -> void:
 func show_title() -> void:
 	unload_level()
 	_clear_ui()
+	_leave_network()
 
 	var screen := TitleScreen.new()
 	screen.new_game_requested.connect(_on_new_game)
@@ -84,6 +85,9 @@ func show_prep() -> void:
 func show_lobby(as_host: bool) -> void:
 	unload_level()
 	_clear_ui()
+	# Une session en cours ne doit pas survivre au changement d'écran :
+	# sans cela, un hôte qui repart vers « Rejoindre » laisserait son port ouvert.
+	_leave_network()
 
 	var screen := LobbyScreen.new()
 	screen.hosting = as_host
@@ -350,6 +354,13 @@ func _campaign() -> Node:
 
 func _session() -> Node:
 	return get_node_or_null("/root/GameSession")
+
+
+## Ferme proprement une éventuelle partie en ligne.
+func _leave_network() -> void:
+	var network: Node = get_node_or_null("/root/Network")
+	if network and network.is_online():
+		network.leave()
 
 
 func _input(event: InputEvent) -> void:
