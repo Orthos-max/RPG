@@ -28,7 +28,12 @@ Deux publics, deux chemins : **jouer** (aucune connaissance technique requise) e
 * **Nouvelle partie** → campagne solo (3 chapitres), difficulté et mort permanente réglables sur l'écran-titre.
 * **Continuer** → reprend la dernière sauvegarde.
 * **Escarmouche CielAI** → une carte, camp adverse piloté par l'IA externe Ciel (voir §3).
+* **Duel local (2 joueurs)** → deux humains sur la même machine, chacun son tour (voir §4).
+* **Créer une partie en ligne / Rejoindre avec un code** → duel privé entre amis (voir §4).
 * **Échap** → retour à l'écran-titre.
+
+Entre deux chapitres, le bouton **Intendance** de l'écran de préparation permet de
+dépenser l'or : potions, objets à gain permanent, soins des blessés et recrutement.
 
 Commandes de bataille : souris (clic pour sélectionner/déplacer), manette et clavier
 supportés (`ZQSD`/`WASD` pour la caméra, `A`/`E` pour pivoter).
@@ -56,12 +61,29 @@ GODOT_BIN=/chemin/vers/Godot bash scripts/build/export.sh
 
 Résultats dans `build/<plateforme>/`. La recette est versionnée dans `export_presets.cfg`.
 
-### Packaging optionnel (macOS `.dmg`)
+### Packaging (livrables prêts à distribuer)
 ```bash
-brew install create-dmg
-bash scripts/build/export.sh macos
-unzip -q build/macos/CielEmblem.zip -d build/macos/
-create-dmg --volname "Ciel Emblem" build/macos/CielEmblem.dmg "build/macos/Ciel Emblem.app"
+bash scripts/build/package.sh                      # plateforme courante
+bash scripts/build/package.sh macos windows linux  # tout d'un coup
+bash scripts/build/package.sh --no-export macos    # empaqueter sans réexporter
+```
+
+Résultats dans `build/dist/` :
+
+| Plateforme | Livrable | Contenu |
+|---|---|---|
+| macOS | `CielEmblem-<version>-macos.dmg` | `Ciel Emblem.app`, notice, pont `ciel_game/` |
+| Windows | `CielEmblem-<version>-windows.zip` | `CielEmblem.exe`, notice, pont `ciel_game/` |
+| Linux | `CielEmblem-<version>-linux.tar.gz` | binaire, `install.sh`, raccourci `.desktop`, pont |
+
+Le `.dmg` utilise `create-dmg` s'il est installé (`brew install create-dmg`), sinon
+`hdiutil`, fourni avec macOS — aucune dépendance obligatoire.
+
+Sur Linux, `install.sh` copie le jeu dans `~/.local/share/ciel-emblem` et pose une
+entrée dans le menu des applications :
+
+```bash
+tar -xzf CielEmblem-0.1.0-linux.tar.gz -C ciel-emblem && cd ciel-emblem && bash install.sh
 ```
 
 ### Signature (facultatif, macOS)
@@ -111,7 +133,45 @@ Sauvegardes de campagne : sous-dossier `saves/`. Replays de bataille : `replays/
 
 ---
 
-## 4. Dépannage
+## 4. Jouer à deux
+
+### Duel local (même machine)
+Écran-titre → **Duel local (2 joueurs)**. Les deux camps se jouent à la souris,
+chacun son tour ; le bandeau en haut de l'écran rappelle à qui de jouer.
+
+### Partie en ligne (réseau local ou VPN entre amis)
+1. L'hôte : **Créer une partie en ligne** → un **code de 7 caractères** s'affiche
+   (par ex. `KJH4FGA`), il choisit la carte et attend.
+2. L'invité : **Rejoindre avec un code** → il saisit le code.
+3. L'hôte lance la bataille ; les deux machines chargent la même carte.
+
+L'hôte joue le camp bleu, l'invité le camp rouge. **L'hôte fait autorité** : il
+simule la bataille et valide chaque ordre reçu (mêmes règles que pour Ciel). Si
+l'invité se déconnecte, l'IA locale reprend son camp — la partie ne se fige pas.
+
+Côté invité, les commandes sont : clic sur un de ses pions pour le sélectionner,
+clic sur une case pour se déplacer, clic sur un ennemi pour l'attaquer,
+`E` pour finir le pion, `T` pour finir le tour, `G` pour se mettre en garde.
+
+**Réseau** : port **24710** en UDP (ENet). Le code encode l'adresse IPv4 de l'hôte,
+il fonctionne donc sur un même réseau local ou via un VPN (Tailscale, Hamachi…).
+Pour jouer à travers Internet sans VPN, il faut rediriger ce port sur la box de
+l'hôte. Si la machine a plusieurs interfaces et que le code annonce la mauvaise
+adresse, forcer celle qui convient :
+
+```bash
+CIEL_HOST_IP=192.168.1.42 bash scripts/ciel_game/launch.sh
+```
+
+Test de bon fonctionnement du transport (deux processus locaux) :
+
+```bash
+bash scripts/test_net.sh
+```
+
+---
+
+## 5. Dépannage
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
@@ -121,10 +181,15 @@ Sauvegardes de campagne : sous-dossier `saves/`. Replays de bataille : `replays/
 | Ciel ne joue pas son tour | contrôle basculé sur l'IA locale | `command.sh toggle on` |
 | Commande sans effet | ordre rejeté | lire `ai_feedback.json` (ou `last_error` dans l'état) |
 | L'app macOS ne s'ouvre pas | build non signée | clic droit → Ouvrir → Ouvrir |
+| « Code invalide » | code mal recopié | 7 caractères, ni I ni O ni 0 ni 1 |
+| L'invité ne se connecte pas | pare-feu ou mauvaise interface | ouvrir le port 24710/UDP, ou `CIEL_HOST_IP=…` |
+| Partie en ligne figée | invité déconnecté | l'IA locale reprend le camp automatiquement |
 
 Tests de non-régression (développement) :
 ```bash
-godot --headless --path . --script test_combat.gd
-godot --headless --path . --script test_map.gd
-godot --headless --path . --script test_features.gd
+godot --headless --path . --script test_combat.gd    # combat FE
+godot --headless --path . --script test_map.gd       # cartes & terrains
+godot --headless --path . --script test_features.gd  # logique des features
+godot --headless --path . --script test_battle.gd    # intégration campagne + pont
+bash scripts/test_net.sh                             # transport réseau (2 processus)
 ```
