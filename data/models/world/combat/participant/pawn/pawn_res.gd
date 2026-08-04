@@ -39,18 +39,23 @@ var gravity: Vector3 = Vector3.ZERO
 var wait_delay: float = 0.0
 ## Speed at which the pawn walks
 var walk_speed: int = TacticsConfig.pawn.base_walk_speed
+## D'où le pion est parti, pour pouvoir revenir sur un déplacement
+var move_memory := PawnMoveMemory.new()
 
 
 ## Resets the pawn's turn, allowing it to move and attack again
 func reset_turn() -> void:
 	can_move = true
 	can_attack = true
+	move_memory.clear()
 
 
 ## Ends the pawn's turn, preventing further actions and emitting the turn_ended signal
 func end_pawn_turn() -> void:
 	can_move = false
 	can_attack = false
+	# Le tour fini, il n'y a plus rien à annuler : la position est acquise.
+	move_memory.clear()
 	turn_ended.emit()
 
 

@@ -34,6 +34,7 @@ func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 		ctrl.curr_pawn.show_pawn_stats(false)
 	
 	ctrl.curr_pawn = _select_hovered_pawn(ctrl)
+	_update_unit_sheet(ctrl.curr_pawn)
 	if not ctrl.curr_pawn:
 		return
 	else:
@@ -68,6 +69,8 @@ func select_new_location(ctrl: TacticsControls) -> void:
 	var tile: TacticsTile = input_service.get_3d_canvas_mouse_position(1, ctrl)
 	arena.mark_hover_tile(tile)
 	if Input.is_action_just_pressed("ui_accept") and tile and tile.reachable:
+		# Retenu avant le départ : c'est là qu'on reviendra si le joueur annule.
+		ctrl.curr_pawn.res.move_memory.record(ctrl.curr_pawn.global_position)
 		ctrl.curr_pawn.res.pathfinding_tilestack = arena.get_pathfinding_tilestack(tile)
 		t_cam.target = tile
 		participant.stage = 4
@@ -99,6 +102,7 @@ func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 				target = null
 	
 	participant.attackable_pawn = target
+	_update_unit_sheet(target if target else participant.curr_pawn)
 	if participant.attackable_pawn:
 		controls.set_actions_menu_visibility(true, participant.attackable_pawn)
 		participant.attackable_pawn.show_pawn_stats(true)
@@ -109,6 +113,22 @@ func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 		t_cam.target = participant.attackable_pawn
 		participant.stage = 7
 		controls.set_battle_forecast({})
+
+
+## Met à jour la fiche de l'unité survolée (masquée si le curseur est dans le vide).
+##
+## Le HUD au-dessus du pion ne montre que ses PV : la fiche donne les chiffres
+## qui décident réellement d'un combat — esquive, critique, vitesse d'attaque —
+## et le bonus du terrain occupé, qui n'apparaissait nulle part avant d'engager.
+func _update_unit_sheet(pawn: TacticsPawn) -> void:
+	if not pawn or not is_instance_valid(pawn) or not pawn.stats:
+		controls.set_unit_sheet({})
+		return
+	var tile: TacticsTile = pawn.get_tile()
+	controls.set_unit_sheet(UnitSheet.build(pawn.stats, {
+		"terrain": UnitSheet.terrain_label(TacticsGrid.terrain_name(tile)),
+		"terrain_def": TacticsGrid.terrain_defense(tile),
+	}))
 
 
 ## Met à jour l'encart de prévision pour la cible survolée.
@@ -158,3 +178,27 @@ func player_wants_to_skip_turn() -> void:
 ## Handles the player's intention to attack.
 func player_wants_to_attack() -> void:
 	participant.stage = 5
+
+
+## Annule le déplacement du pion courant et le remet d'où il venait.
+##
+## Fire Emblem autorise ce retour tant que l'unité n'a rien fait d'autre : sans
+## lui, avancer d'une case pour découvrir une portée ennemie coûte le tour.
+## L'action reste refusée dès que le pion a attaqué, soigné ou attendu.
+func player_wants_to_undo_move() -> void:
+	var p: TacticsPawn = participant.curr_pawn
+	if not p or not is_instance_valid(p):
+		return
+	if not p.res.move_memory.can_undo(p.res.can_attack, p.is_alive()):
+		return
+
+	controls.set_battle_forecast({})
+	p.res.pathfinding_tilestack = []
+	p.res.move_direction = Vector3.ZERO
+	p.global_position = p.res.move_memory.consume()
+	p.res.can_move = true
+	p.center()
+
+	arena.reset_all_tile_markers()
+	participant.display_opponent_stats = false
+	participant.stage = 1  # Retour au menu d'actions, déplacement rendu.

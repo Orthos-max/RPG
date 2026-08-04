@@ -18,6 +18,8 @@ signal called_set_cursor_shape_to_move
 signal called_set_cursor_shape_to_arrow
 ## Émis quand l'encart de prévision de combat doit être mis à jour.
 signal called_set_battle_forecast
+## Émis quand la fiche de l'unité survolée doit être mise à jour.
+signal called_set_unit_sheet
 
 ## Indicates whether the current input device is a joystick.
 @export var is_joystick: bool
@@ -27,6 +29,7 @@ signal called_set_battle_forecast
 ## Dictionary of available actions and their corresponding methods.
 var actions: Dictionary = {
 	"Move": "_player_wants_to_move",
+	"Undo": "_player_wants_to_undo_move",
 	"Wait": "_player_wants_to_wait",
 	"Cancel": "_player_wants_to_cancel",
 	"Attack": "_player_wants_to_attack",
@@ -72,3 +75,8 @@ func set_cursor_shape_to_arrow() -> void:
 ## Met à jour l'encart de prévision ; un dictionnaire vide le masque.
 func set_battle_forecast(forecast: Dictionary) -> void:
 	called_set_battle_forecast.emit(forecast)
+
+
+## Met à jour la fiche de l'unité survolée ; un dictionnaire vide la masque.
+func set_unit_sheet(sheet: Dictionary) -> void:
+	called_set_unit_sheet.emit(sheet)

@@ -48,6 +48,7 @@ func _init() -> void:
 	_test_three_way()
 	_test_reconnection()
 	_test_deployment()
+	_test_ux_polish()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1008,4 +1009,66 @@ func _test_deployment() -> void:
 	var ch = CAMPAIGN_DB.get_chapter(0)
 	_check(ch != null and ch.deploy_tiles is Array,
 		"les chapitres portent une zone de déploiement (vide = voisinage)")
+#endregion
+
+
+#region 17. Polissage UX — annulation d'un déplacement, fiche d'unité
+func _test_ux_polish() -> void:
+	print("\n🖱 Test 17: annulation d'un déplacement et fiche d'unité")
+
+	# --- Mémoire de déplacement ---
+	var memory := PawnMoveMemory.new()
+	_check(not memory.has_moved and not memory.can_undo(true),
+		"rien à annuler tant que le pion n'a pas bougé")
+
+	var start := Vector3(2.0, 0.5, -3.0)
+	memory.record(start)
+	_check(memory.has_moved and memory.can_undo(true), "un déplacement s'annule juste après")
+	_check(not memory.can_undo(false),
+		"un pion qui a déjà agi ne revient plus en arrière")
+	_check(not memory.can_undo(true, false), "un pion tombé ne revient pas non plus")
+	_check(memory.consume() == start, "l'annulation rend la position de départ")
+	_check(not memory.can_undo(true), "on n'annule pas deux fois le même déplacement")
+
+	memory.record(start)
+	memory.clear()
+	_check(not memory.can_undo(true), "fin de tour : le déplacement devient définitif")
+
+	# --- Fiche d'unité ---
+	var lord: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	var sheet: Dictionary = UnitSheet.build(lord, {"terrain": "Forêt", "terrain_def": 1})
+	_check(not sheet.is_empty() and str(sheet["name"]) == lord.override_name,
+		"fiche construite pour %s" % str(sheet.get("name", "?")))
+	_check(str(sheet["title"]).contains("Niv. %d" % lord.level), "la fiche annonce le niveau",
+		str(sheet["title"]))
+	_check(int(sheet["hp"]) == lord.hp and is_equal_approx(float(sheet["hp_ratio"]), 1.0),
+		"PV et ratio corrects")
+
+	# Le bonus de terrain doit être visible AVANT d'engager : c'est tout l'intérêt.
+	var def_shown: int = 0
+	for entry: Dictionary in sheet["stats"]:
+		if str(entry["label"]) == "DÉF":
+			def_shown = int(entry["value"])
+	_check(def_shown == lord.def + 1, "la défense affichée inclut le terrain (%d)" % def_shown)
+	_check(UnitSheet.context_line(sheet).contains("🛡+1"), "le terrain est annoncé avec son bonus",
+		UnitSheet.context_line(sheet))
+
+	# Valeurs de combat dérivées : ce sont elles qui décident d'un échange.
+	var combat: String = UnitSheet.combat_line(sheet)
+	_check(combat.contains("Esq %d" % lord.get_avoid()) and combat.contains("Crit %d" % lord.get_crit()),
+		"esquive et critique affichés", combat)
+	_check(UnitSheet.stats_line(sheet).begins_with("FOR %d" % lord.str),
+		"les stats principales ouvrent la ligne", UnitSheet.stats_line(sheet))
+
+	# Unité blessée : la fiche doit refléter l'état, pas les stats de base.
+	lord.hp = 5
+	var hurt: Dictionary = UnitSheet.build(lord)
+	_check(float(hurt["hp_ratio"]) < 0.3, "un pion à 5 PV est en état critique")
+	_check(UnitSheet.context_line(hurt).contains("Mvt %d" % lord.movement),
+		"sans terrain, la ligne de contexte reste lisible", UnitSheet.context_line(hurt))
+
+	_check(UnitSheet.build(null).is_empty(), "aucune fiche sans stats")
+	_check(UnitSheet.terrain_label("forest") == "Forêt"
+			and UnitSheet.terrain_label("inconnu").is_empty(),
+		"terrains traduits, inconnu ignoré")
 #endregion

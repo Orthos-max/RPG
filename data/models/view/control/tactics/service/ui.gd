@@ -32,6 +32,10 @@ func set_actions_menu_visibility(v: bool, p_raw: Variant, ctrl: TacticsControls)
 	
 	# Update action button states based on pawn's capabilities
 	ctrl.get_node("HBox/Actions/Move").disabled = not p.res.can_move
+	# Annuler n'a de sens que juste après un déplacement, avant toute autre action.
+	ctrl.get_node("HBox/Actions/Undo").disabled = not p.res.move_memory.can_undo(
+		p.res.can_attack, p.is_alive()
+	)
 	
 	# For staff users: show "Heal" instead of "Attack"
 	const WT = preload("res://data/models/world/stats/weapon_type.gd")

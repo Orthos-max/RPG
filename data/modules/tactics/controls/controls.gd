@@ -134,4 +134,20 @@ func _player_wants_to_skip_turn() -> void:
 ## Handles the player's intention to attack
 func _player_wants_to_attack() -> void:
 	serv.player_wants_to_attack()
+
+
+## Ramène le pion à son point de départ (annulation du déplacement)
+func _player_wants_to_undo_move() -> void:
+	serv.player_wants_to_undo_move()
+
+
+## Met à jour la fiche d'unité affichée au survol (dictionnaire vide = masquée)
+func set_unit_sheet(sheet: Dictionary) -> void:
+	var panel: Node = get_node_or_null("%UnitSheet")
+	if not panel or not panel.has_method("show_sheet"):
+		return
+	if sheet.is_empty():
+		panel.clear_sheet()
+	else:
+		panel.show_sheet(sheet)
 #endregion

@@ -47,6 +47,7 @@ func setup(ctrl: TacticsControls) -> void:
 		controls.connect("called_select_pawn_to_attack", ctrl.select_pawn_to_attack)
 		controls.connect("called_select_new_location", ctrl.select_new_location)
 		controls.connect("called_set_battle_forecast", ctrl.set_battle_forecast)
+		controls.connect("called_set_unit_sheet", ctrl.set_unit_sheet)
 	if not t_cam:
 		push_error("TacticsCamera needs a CameraResource (T Cam) from /data/models/view/camera/tactics/")
 	if not arena:
@@ -107,3 +108,8 @@ func player_wants_to_skip_turn() -> void:
 ## Handles player's attack action.
 func player_wants_to_attack() -> void:
 	pawn_selection_service.player_wants_to_attack()
+
+
+## Ramène le pion courant à son point de départ (annulation du déplacement).
+func player_wants_to_undo_move() -> void:
+	pawn_selection_service.player_wants_to_undo_move()
