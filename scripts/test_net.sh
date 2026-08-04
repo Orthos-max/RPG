@@ -67,6 +67,11 @@ check "$CLIENT_LOG" "NET_JOINED=true"          "l'invité confirme la connexion"
 check "$CLIENT_LOG" "NET_STATE_RECEIVED=true"  "l'état de l'hôte est reçu par l'invité" || FAILED=1
 check "$HOST_LOG"   "NET_COMMAND_RELAYED=true" "l'ordre de l'invité atteint la validation de l'hôte" || FAILED=1
 check "$CLIENT_LOG" "NET_FEEDBACK_OK="         "l'invité reçoit un acquittement" || FAILED=1
+check "$HOST_LOG"   "NET_SEAT_RESERVED=true"   "coupure : l'hôte garde la place de l'invité" || FAILED=1
+check "$CLIENT_LOG" "NET_RECONNECTING=true"    "l'invité retente la connexion tout seul" || FAILED=1
+check "$CLIENT_LOG" "NET_RECONNECTED=true"     "l'invité est revenu dans le délai de grâce" || FAILED=1
+check "$HOST_LOG"   "NET_SEAT_RESTORED=true"   "l'hôte rend son camp au revenant" || FAILED=1
+check "$CLIENT_LOG" "NET_STATE_RESYNCED=true"  "l'état complet est renvoyé au revenant" || FAILED=1
 
 echo ""
 if [ $FAILED -eq 0 ] && [ $CLIENT_STATUS -eq 0 ] && [ $HOST_STATUS -eq 0 ]; then

@@ -46,6 +46,7 @@ func _init() -> void:
 	_test_economy()
 	_test_network_codes()
 	_test_three_way()
+	_test_reconnection()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -842,4 +843,67 @@ func _named_node(node_name: String) -> Node:
 	var n := Node.new()
 	n.name = node_name
 	return n
+#endregion
+
+
+#region 15. Reconnexion en cours de partie
+## L'horloge est injectée : la règle se vérifie sans attendre 90 secondes.
+func _test_reconnection() -> void:
+	print("\n🔌 Test 15: reconnexion en cours de partie")
+
+	# --- Côté hôte : la place gardée ---
+	var seats := SeatRegistry.new()
+	var t0: float = 1000.0
+	_check(seats.is_empty() and not seats.has_seat(TeamData.Side.GUEST),
+		"aucune place gardée au départ")
+
+	seats.reserve(TeamData.Side.GUEST, t0, 90.0, TeamData.Controller.REMOTE_PLAYER)
+	_check(seats.has_seat(TeamData.Side.GUEST), "place gardée après une coupure")
+	_check(is_equal_approx(seats.remaining(TeamData.Side.GUEST, t0 + 30.0), 60.0),
+		"décompte du délai de grâce", str(seats.remaining(TeamData.Side.GUEST, t0 + 30.0)))
+	_check(seats.remaining(TeamData.Side.PLAYER, t0) == 0.0,
+		"un camp sans réservation n'a rien à décompter")
+	_check(seats.take_expired(t0 + 30.0) == -1, "rien n'expire avant la fin du délai")
+
+	# Retour dans les temps : le contrôleur d'origine est rendu tel quel.
+	var restored: int = seats.claim(TeamData.Side.GUEST, t0 + 30.0)
+	_check(restored == TeamData.Controller.REMOTE_PLAYER,
+		"retour dans les temps : l'invité récupère son camp", str(restored))
+	_check(seats.is_empty(), "la place est libérée une fois reprise")
+	_check(seats.claim(TeamData.Side.GUEST, t0 + 31.0) == -1,
+		"une place déjà reprise ne se reprend pas deux fois")
+
+	# Retour trop tard : la place est perdue, signalée une seule fois.
+	seats.reserve(TeamData.Side.GUEST, t0, 90.0, TeamData.Controller.REMOTE_PLAYER)
+	_check(seats.claim(TeamData.Side.GUEST, t0 + 91.0) == -1,
+		"retour hors délai : la place n'est plus rendue")
+	_check(seats.take_expired(t0 + 91.0) == TeamData.Side.GUEST,
+		"la place échue est signalée")
+	_check(seats.take_expired(t0 + 91.0) == -1, "une expiration n'est signalée qu'une fois")
+
+	# --- Côté invité : le plan de reconnexion ---
+	var plan := ReconnectPlan.new()
+	_check(not plan.is_active(), "aucune reconnexion en cours au départ")
+
+	plan.start("ABCDEFG", t0, 90.0, 3.0)
+	_check(plan.is_active() and plan.code == "ABCDEFG", "le code d'accès est conservé pour revenir")
+	_check(plan.consume_attempt(t0), "première tentative immédiate")
+	_check(plan.attempt == 1, "tentative comptée", str(plan.attempt))
+	_check(not plan.consume_attempt(t0 + 1.0), "pas de tentative avant l'intervalle")
+	_check(plan.consume_attempt(t0 + 3.0), "tentative suivante après l'intervalle")
+	_check(is_equal_approx(plan.remaining(t0 + 30.0), 60.0), "décompte du délai de retour")
+
+	_check(not plan.is_expired(t0 + 89.0), "toujours dans les temps")
+	_check(plan.is_expired(t0 + 90.0), "délai de retour écoulé")
+	_check(not plan.consume_attempt(t0 + 95.0), "plus aucune tentative après le délai")
+
+	plan.cancel()
+	_check(not plan.is_active() and plan.attempt == 0, "abandon : le plan est vidé")
+
+	# --- Autoload : l'état par défaut ne doit rien réserver ---
+	var net: Node = root.get_node_or_null("Network")
+	if net:
+		_check(not net.is_reconnecting(), "réseau au repos : aucune reconnexion")
+		_check(net.reserved_seats().is_empty(), "réseau au repos : aucune place gardée")
+		_check(not net.in_battle, "réseau au repos : aucune bataille en cours")
 #endregion

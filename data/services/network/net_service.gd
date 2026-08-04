@@ -14,6 +14,14 @@ signal joined()
 signal connection_failed(reason: String)
 signal peer_left(id: int)
 signal battle_started(scene_path: String)
+## La place d'un invité déconnecté lui reste réservée pendant `seconds`
+signal seat_reserved(side: int, seconds: float)
+## L'invité est revenu et a repris sa place
+signal seat_restored(side: int)
+## Le délai de grâce est écoulé : la place est perdue
+signal seat_expired(side: int)
+## L'invité tente de se reconnecter (numéro de tentative)
+signal reconnecting(attempt: int)
 signal state_received(state: Dictionary)
 signal command_feedback(feedback: Dictionary)
 
@@ -27,6 +35,12 @@ const MAX_CLIENTS: int = 1
 const ALPHABET: String = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 ## 7 caractères de 5 bits couvrent les 32 bits d'une adresse IPv4
 const CODE_LENGTH: int = 7
+## Durée pendant laquelle la place d'un invité déconnecté lui est gardée
+const SEAT_GRACE_SECONDS: float = 90.0
+## Intervalle entre deux tentatives de reconnexion automatique (invité)
+const RECONNECT_INTERVAL: float = 3.0
+## Délai avant de renvoyer carte et état à un pair qui vient de (re)venir
+const RESYNC_DELAY: float = 0.5
 
 enum Role { NONE = 0, HOST = 1, CLIENT = 2 }
 
@@ -42,7 +56,16 @@ var scene_path: String = "res://assets/maps/level/map_level.tscn"
 ## Ciel s'invite comme troisième camp (M5) — décidé par l'hôte, propagé à l'invité
 var three_way: bool = false
 
+## Une bataille est-elle en cours ? (sert à remettre un revenant dans la carte)
+var in_battle: bool = false
+
 var _peer: ENetMultiplayerPeer = null
+## Hôte : places gardées pour un invité tombé
+var _seats := SeatRegistry.new()
+## Invité : quand retenter la connexion après une coupure
+var _reconnect := ReconnectPlan.new()
+## Hôte : dernier état diffusé, renvoyé tel quel à un invité qui revient
+var _last_broadcast: Dictionary = {}
 
 
 func _ready() -> void:
@@ -51,6 +74,39 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+
+## Fait avancer les deux horloges de la reconnexion (hôte et invité).
+##
+## Rien de coûteux : deux comparaisons de dates tant que personne n'est tombé.
+func _process(_delta: float) -> void:
+	var now: float = Time.get_unix_time_from_system()
+
+	if role == Role.HOST:
+		if _seats.is_empty():
+			return
+		var lost: int = _seats.take_expired(now)
+		if lost != -1:
+			print_rich("[color=orange]⌛ Place perdue : %s ne revient plus, l'IA locale garde le camp.[/color]"
+				% TeamDataClass.side_name(lost))
+			seat_expired.emit(lost)
+		return
+
+	if not _reconnect.is_active():
+		return
+
+	if _reconnect.is_expired(now):
+		_reconnect.cancel()
+		leave()
+		connection_failed.emit("impossible de retrouver l'hôte")
+		return
+
+	# Une tentative en cours occupe déjà le pair : on attend son verdict.
+	if role == Role.NONE and _reconnect.consume_attempt(now):
+		reconnecting.emit(_reconnect.attempt)
+		print_rich("[color=cyan]↻ Reconnexion — tentative %d (%.0f s restantes)[/color]"
+			% [_reconnect.attempt, _reconnect.remaining(now)])
+		_open_client(_reconnect.code)
 
 
 #region Code d'accès
@@ -153,6 +209,11 @@ func host_game(map_path: String = "") -> Dictionary:
 ## Rejoint une partie à partir d'un code. [returns] {ok, ip, reason}
 func join_game(code: String) -> Dictionary:
 	leave()
+	return _open_client(code)
+
+
+## Ouvre le pair client vers l'hôte désigné par un code (première tentative ou retour).
+func _open_client(code: String) -> Dictionary:
 	var ip: String = decode_code(code)
 	if ip.is_empty():
 		return {"ok": false, "reason": "code invalide (%d caractères attendus)" % CODE_LENGTH}
@@ -170,7 +231,18 @@ func join_game(code: String) -> Dictionary:
 
 
 ## Quitte la partie et remet la session en local.
-func leave() -> void:
+##
+## [param keep_reconnect] laisse en place ce qu'il faut pour retenter la
+## connexion : sans cela, une coupure effacerait le code et la configuration
+## des camps, et l'invité ne pourrait plus revenir.
+func leave(keep_reconnect: bool = false) -> void:
+	# Un départ volontaire de l'hôte n'est pas une coupure : on le dit avant de
+	# fermer, sinon l'invité passerait 90 s à retenter une partie qui n'existe plus.
+	if role == Role.HOST and _peer and multiplayer.multiplayer_peer == _peer and not players.is_empty():
+		_rpc_host_closing.rpc()
+		if _peer.host:
+			_peer.host.flush()
+
 	if _peer:
 		_peer.close()
 	_peer = null
@@ -179,7 +251,42 @@ func leave() -> void:
 	players.clear()
 	last_state.clear()
 	join_code = ""
-	three_way = false
+	_seats.clear()
+	_last_broadcast.clear()
+	if not keep_reconnect:
+		three_way = false
+		in_battle = false
+		_reconnect.cancel()
+
+
+## Une reconnexion est-elle en cours (invité) ?
+func is_reconnecting() -> bool:
+	return _reconnect.is_active()
+
+
+## Secondes restantes à l'invité pour revenir (0 hors reconnexion).
+func reconnect_remaining() -> float:
+	return _reconnect.remaining(Time.get_unix_time_from_system())
+
+
+## Numéro de la tentative de reconnexion en cours (0 si aucune).
+func reconnect_attempt() -> int:
+	return _reconnect.attempt
+
+
+## Places gardées pour un invité absent : camp → secondes restantes.
+func reserved_seats() -> Dictionary:
+	return _seats.remaining_all(Time.get_unix_time_from_system())
+
+
+## Hôte : coupe la liaison d'un pair.
+##
+## Sa place lui reste gardée comme pour n'importe quelle coupure — c'est ce qui
+## permet de vérifier tout le chemin de reconnexion à deux processus
+## (`scripts/test_net.sh`), et ce qui servirait d'exclusion le jour venu.
+func drop_peer(id: int) -> void:
+	if role == Role.HOST and _peer:
+		_peer.disconnect_peer(id)
 
 
 ## Sommes-nous connectés à une partie (hôte ou invité) ?
@@ -237,9 +344,12 @@ func send_command(command: Dictionary) -> void:
 
 
 ## Hôte → clients : diffuser l'état de la bataille.
+##
+## Le dernier état est conservé : c'est lui qu'on renvoie à un invité qui revient.
 func broadcast_state(state: Dictionary) -> void:
 	if role != Role.HOST:
 		return
+	_last_broadcast = state
 	_rpc_push_state.rpc(state)
 
 
@@ -275,10 +385,30 @@ func _rpc_push_state(state: Dictionary) -> void:
 	state_received.emit(state)
 
 
+## État complet renvoyé à un invité qui revient.
+##
+## Diffusion courante et resynchronisation ne voyagent pas pareil : la première
+## est un flux qu'un paquet perdu n'abîme pas (le suivant corrige), la seconde
+## est l'unique instantané qui remet le revenant dans la bataille — elle part
+## donc en fiable, quitte à arriver un poil plus tard.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_resync_state(state: Dictionary) -> void:
+	last_state = state
+	state_received.emit(state)
+
+
+## L'hôte referme la partie de son plein gré (par opposition à une coupure).
+@rpc("authority", "call_remote", "reliable")
+func _rpc_host_closing() -> void:
+	in_battle = false
+	_reconnect.cancel()
+
+
 @rpc("authority", "call_local", "reliable")
 func _rpc_start_battle(map_path: String, with_ciel: bool = false) -> void:
 	scene_path = map_path
 	three_way = with_ciel
+	in_battle = true
 	_apply_session_roles()
 	battle_started.emit(map_path)
 #endregion
@@ -286,38 +416,105 @@ func _rpc_start_battle(map_path: String, with_ciel: bool = false) -> void:
 
 #region Signaux de connexion
 func _on_peer_connected(id: int) -> void:
-	if role == Role.HOST:
-		players[id] = {"name": "Invité", "side": TeamDataClass.Side.OPPONENT, "ready": true}
+	if role != Role.HOST:
+		return
+
+	var side: int = guest_side()
+	players[id] = {"name": "Invité", "side": side, "ready": true}
+
+	# Une place gardée signifie que c'est un retour, pas une première connexion :
+	# on lui rend son camp et son contrôleur d'origine plutôt que de tout rejouer.
+	var restored: int = _seats.claim(side, Time.get_unix_time_from_system())
+	if restored == -1:
 		_apply_session_roles()
 		lobby_updated.emit()
+		return
+
+	var session: Node = get_node_or_null("/root/GameSession")
+	if session:
+		session.set_controller(side, restored, "Invité")
+	print_rich("[color=green]↺ %s a repris sa place.[/color]" % TeamDataClass.side_name(side))
+	seat_restored.emit(side)
+	lobby_updated.emit()
+	_resync_peer(id)
+
+
+## Renvoie à un revenant tout ce qu'il a manqué : la carte, puis l'état complet.
+##
+## L'ordre compte — il doit recharger la bataille avant d'y appliquer un
+## instantané, sinon son miroir n'a rien à mettre à jour.
+##
+## L'envoi attend quelques frames : émis depuis le signal de connexion lui-même,
+## il partirait avant que le pair soit prêt à recevoir des RPC, et se perdrait
+## silencieusement (constaté à deux processus).
+func _resync_peer(id: int) -> void:
+	if not in_battle:
+		return
+	await get_tree().create_timer(RESYNC_DELAY).timeout
+	if role != Role.HOST or not players.has(id):
+		return  # Reparti entre-temps.
+	_rpc_start_battle.rpc_id(id, scene_path, three_way)
+	if not _last_broadcast.is_empty():
+		_rpc_resync_state.rpc_id(id, _last_broadcast)
 
 
 func _on_peer_disconnected(id: int) -> void:
 	players.erase(id)
 	peer_left.emit(id)
 	lobby_updated.emit()
-	# L'invité est parti : l'IA locale reprend son camp pour ne pas figer la partie.
-	if role == Role.HOST:
-		var session: Node = get_node_or_null("/root/GameSession")
-		if session:
-			session.set_controller(TeamDataClass.Side.OPPONENT, TeamDataClass.Controller.LOCAL_AI)
+	if role != Role.HOST:
+		return
+
+	# L'invité est parti : l'IA locale reprend son camp pour ne pas figer la
+	# partie, mais la place lui reste gardée le temps qu'il revienne.
+	var side: int = guest_side()
+	var session: Node = get_node_or_null("/root/GameSession")
+	var previous: int = session.controller_for(side) if session else TeamDataClass.Controller.REMOTE_PLAYER
+	if session:
+		session.set_controller(side, TeamDataClass.Controller.LOCAL_AI)
+
+	if not in_battle:
+		return  # Hors bataille, rien à garder : il n'a qu'à rejoindre le salon.
+	_seats.reserve(side, Time.get_unix_time_from_system(), SEAT_GRACE_SECONDS, previous)
+	print_rich("[color=orange]⏳ %s a été coupé — place gardée %d s.[/color]"
+		% [TeamDataClass.side_name(side), int(SEAT_GRACE_SECONDS)])
+	seat_reserved.emit(side, SEAT_GRACE_SECONDS)
 
 
 func _on_connected_to_server() -> void:
 	players[multiplayer.get_unique_id()] = {
-		"name": "Invité", "side": TeamDataClass.Side.OPPONENT, "ready": true,
+		"name": "Invité", "side": guest_side(), "ready": true,
 	}
 	_apply_session_roles()
-	joined.emit()
+
+	if _reconnect.is_active():
+		_reconnect.cancel()
+		print_rich("[color=green]↺ Reconnecté à l'hôte.[/color]")
+		seat_restored.emit(local_side())
+	else:
+		joined.emit()
 	lobby_updated.emit()
 
 
 func _on_connection_failed() -> void:
+	# En reconnexion, un échec n'est qu'une tentative de plus : on garde le plan
+	# et `_process` réessaiera jusqu'à la fin du délai de grâce.
+	if _reconnect.is_active():
+		leave(true)
+		return
 	leave()
 	connection_failed.emit("l'hôte n'a pas répondu")
 
 
 func _on_server_disconnected() -> void:
+	# En pleine bataille, une coupure n'est pas un abandon : on garde le code et
+	# on retente en boucle. Hors bataille (salon), l'hôte est simplement parti.
+	if in_battle and not _reconnect.is_active():
+		_reconnect.start(join_code, Time.get_unix_time_from_system(),
+			SEAT_GRACE_SECONDS, RECONNECT_INTERVAL)
+		leave(true)
+		reconnecting.emit(0)
+		return
 	leave()
 	connection_failed.emit("l'hôte a quitté la partie")
 

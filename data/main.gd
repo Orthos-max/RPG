@@ -30,7 +30,26 @@ var _chapter: ChapterData = null
 
 
 func _ready() -> void:
+	var network: Node = get_node_or_null("/root/Network")
+	if network:
+		network.battle_started.connect(_on_net_battle_started)
 	show_title()
+
+
+## L'hôte (re)désigne la carte de la bataille.
+##
+## Au premier lancement c'est le salon qui charge le niveau ; ici on ne traite
+## que le cas du retour après coupure — l'invité recharge la carte pour repartir
+## d'un miroir propre, que l'état diffusé juste après remplit.
+func _on_net_battle_started(map_path: String) -> void:
+	var network: Node = get_node_or_null("/root/Network")
+	if not network or network.role != 2:  # Role.CLIENT
+		return
+	if not _level or not is_instance_valid(_level):
+		return
+	print_rich("[color=cyan]↺ Reprise de la bataille après reconnexion.[/color]")
+	_chapter = null
+	_load_level(map_path)
 
 
 #region Écrans

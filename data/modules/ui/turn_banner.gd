@@ -44,6 +44,8 @@ func _process(_delta: float) -> void:
 	var side: int = -1
 	if level.player and level.participant.can_act(level.player):
 		side = TeamDataClass.Side.PLAYER
+	elif level.guest and level.participant.can_act(level.guest):
+		side = TeamDataClass.Side.GUEST
 	elif level.opponent and level.participant.can_act(level.opponent):
 		side = TeamDataClass.Side.OPPONENT
 	if side == -1:
@@ -55,7 +57,24 @@ func _process(_delta: float) -> void:
 	if team:
 		label_text += "  (%s)" % TeamDataClass.controller_name(team.controller)
 		_label.add_theme_color_override("font_color", team.color)
+	label_text += _absent_notice()
 
 	if label_text != _last_text:
 		_last_text = label_text
 		_label.text = label_text
+
+
+## Mention d'un joueur distant absent, place encore gardée (côté hôte).
+##
+## Sans elle, l'hôte verrait l'IA locale jouer le camp de son ami sans savoir
+## qu'il peut encore revenir.
+func _absent_notice() -> String:
+	var net: Node = get_node_or_null("/root/Network")
+	if not net or not net.is_online():
+		return ""
+	var seats: Dictionary = net.reserved_seats()
+	for absent_side: int in seats:
+		return "\n⏳ %s déconnecté — place gardée %d s" % [
+			TeamDataClass.side_name(absent_side), int(ceilf(float(seats[absent_side])))
+		]
+	return ""

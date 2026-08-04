@@ -18,6 +18,8 @@ var _hud: Label = null
 var _tiles: Dictionary = {}     ## "col,row" → TacticsTile
 var _last_seq: int = -1
 var _selected: String = ""
+## Liaison coupée : la barre affiche le décompte au lieu de l'état de la partie
+var _offline: bool = false
 
 
 func _ready() -> void:
@@ -25,6 +27,9 @@ func _ready() -> void:
 	if net:
 		net.state_received.connect(_on_state)
 		net.command_feedback.connect(_on_feedback)
+		net.reconnecting.connect(_on_reconnecting)
+		net.seat_restored.connect(_on_seat_restored)
+		net.connection_failed.connect(_on_connection_lost)
 	_build_hud()
 	# La simulation locale est coupée : seul l'hôte décide.
 	if level:
@@ -36,10 +41,14 @@ func _exit_tree() -> void:
 	var net: Node = _net()
 	if not net:
 		return
-	if net.state_received.is_connected(_on_state):
-		net.state_received.disconnect(_on_state)
-	if net.command_feedback.is_connected(_on_feedback):
-		net.command_feedback.disconnect(_on_feedback)
+	for pair in [
+		[net.state_received, _on_state], [net.command_feedback, _on_feedback],
+		[net.reconnecting, _on_reconnecting], [net.seat_restored, _on_seat_restored],
+		[net.connection_failed, _on_connection_lost],
+	]:
+		var sig: Signal = pair[0]
+		if sig.is_connected(pair[1]):
+			sig.disconnect(pair[1])
 
 
 ## Nœud de camp correspondant à une étiquette d'équipe de `ai_state.json`.
@@ -137,6 +146,35 @@ func _send(command: Dictionary) -> void:
 	if net:
 		net.send_command(command)
 		_set_hud_line("→ %s envoyé" % str(command.get("action", "")))
+
+
+## Décompte de reconnexion — n'affiche quelque chose que liaison coupée.
+func _process(_delta: float) -> void:
+	if not _offline:
+		return
+	var net: Node = _net()
+	if not net:
+		return
+	_set_hud_line("⚠ Liaison perdue — reconnexion (tentative %d, %d s restantes)" % [
+		maxi(1, int(net.reconnect_attempt())), int(ceilf(net.reconnect_remaining()))
+	])
+
+
+func _on_reconnecting(_attempt: int) -> void:
+	_offline = true
+
+
+func _on_seat_restored(_side: int) -> void:
+	_offline = false
+	# La carte est rechargée par [Main] : ce miroir-ci va disparaître, le message
+	# ne sert qu'au cas où l'hôte renvoie l'état sans redemander la scène.
+	_last_seq = -1
+	_set_hud_line("✔ Reconnecté — la bataille reprend")
+
+
+func _on_connection_lost(reason: String) -> void:
+	_offline = false
+	_set_hud_line("⛔ Partie interrompue : %s" % reason)
 
 
 func _on_feedback(feedback: Dictionary) -> void:

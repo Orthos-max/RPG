@@ -17,6 +17,12 @@ var _feedback: Dictionary = {}
 var _peer_seen: bool = false
 ## Variable membre et non locale : les lambdas GDScript capturent par valeur.
 var _joined: bool = false
+## Identifiant du pair invité, côté hôte (0 tant que personne n'est connecté)
+var _guest_id: int = 0
+## Places gardées / rendues (hôte) et retour effectif (invité)
+var _seat_reserved: bool = false
+var _seat_restored: bool = false
+var _reconnect_seen: bool = false
 
 
 func _init() -> void:
@@ -54,6 +60,8 @@ func _run_host() -> void:
 	_net.lobby_updated.connect(func() -> void:
 		if _net.players.size() >= 2:
 			_peer_seen = true)
+	_net.seat_reserved.connect(func(_side: int, _seconds: float) -> void: _seat_reserved = true)
+	_net.seat_restored.connect(func(_side: int) -> void: _seat_restored = true)
 
 	# Attente de l'invité
 	if not await _wait_for(func() -> bool: return _peer_seen):
@@ -61,6 +69,12 @@ func _run_host() -> void:
 		quit(1)
 		return
 	print("NET_PEER_CONNECTED=true")
+	for id: int in _net.players:
+		if id != 1:
+			_guest_id = id
+
+	# Bataille lancée : c'est elle qui rend une coupure « rattrapable ».
+	_net.start_battle()
 
 	# Diffusion d'un état de test
 	_net.broadcast_state({"seq": 1, "turn": "opponent", "stage_name": "select_pawn", "pawns": []})
@@ -83,6 +97,25 @@ func _run_host() -> void:
 
 	print("NET_COMMAND_RELAYED=true")
 	await create_timer(1.0).timeout  # laisse l'invité recevoir son acquittement
+
+	# --- Coupure et retour de l'invité ---
+	# On coupe la liaison depuis l'hôte : côté invité, c'est indiscernable d'une
+	# vraie perte de réseau, donc tout le chemin de reconnexion est exercé.
+	_net.drop_peer(_guest_id)
+	if not await _wait_for(func() -> bool: return _seat_reserved):
+		print("NET_FAIL la place de l'invité n'a pas été gardée")
+		quit(1)
+		return
+	print("NET_SEAT_RESERVED=true")
+
+	if not await _wait_for(func() -> bool: return _seat_restored):
+		print("NET_FAIL l'invité n'a pas repris sa place")
+		quit(1)
+		return
+	print("NET_SEAT_RESTORED=true")
+	print("NET_SEATS_CLEARED=", _net.reserved_seats().is_empty())
+
+	await create_timer(1.0).timeout  # laisse l'invité constater son retour
 	_net.leave()
 	print("NET_HOST_DONE")
 	quit(0)
@@ -98,6 +131,8 @@ func _run_client(code: String) -> void:
 
 	_net.state_received.connect(func(_s: Dictionary) -> void: _state_seen = true)
 	_net.command_feedback.connect(func(f: Dictionary) -> void: _feedback = f)
+	_net.reconnecting.connect(func(_attempt: int) -> void: _reconnect_seen = true)
+	_net.seat_restored.connect(func(_side: int) -> void: _seat_restored = true)
 
 	_net.joined.connect(func() -> void: _joined = true)
 	_net.connection_failed.connect(func(reason: String) -> void:
@@ -131,6 +166,28 @@ func _run_client(code: String) -> void:
 
 	print("NET_FEEDBACK_OK=", bool(_feedback.get("ok", false)))
 	print("NET_FEEDBACK_ERROR=", str(_feedback.get("error", "")))
+
+	# --- Coupure provoquée par l'hôte : on doit repartir tout seul ---
+	if not await _wait_for(func() -> bool: return _reconnect_seen):
+		print("NET_FAIL aucune tentative de reconnexion après la coupure")
+		quit(1)
+		return
+	print("NET_RECONNECTING=true")
+
+	_state_seen = false
+	if not await _wait_for(func() -> bool: return _seat_restored):
+		print("NET_FAIL la reconnexion n'a jamais abouti")
+		quit(1)
+		return
+	print("NET_RECONNECTED=true")
+
+	# L'hôte doit renvoyer l'état complet à celui qui revient.
+	if not await _wait_for(func() -> bool: return _state_seen):
+		print("NET_FAIL aucun état renvoyé après la reconnexion")
+		quit(1)
+		return
+	print("NET_STATE_RESYNCED=true")
+
 	_net.leave()
 	print("NET_CLIENT_DONE")
 	quit(0)
