@@ -43,9 +43,13 @@ enum Tool {
 const TERRAIN_LABELS: Array[String] = [
 	"🌿 Herbe", "🌲 Forêt", "⛰️ Montagne", "💧 Eau", "🛤️ Chemin", "🧱 Mur", "🕳️ Fosse",
 ]
+## Pastilles de la palette — les teintes viennent du décor, pour que le bouton
+## annonce la couleur que la case prendra vraiment.
 const TERRAIN_COLORS: Array[Color] = [
-	Color("#4a8c3f"), Color("#2d5a1e"), Color("#8b7355"),
-	Color("#2a6e8f"), Color("#c4a97d"), Color("#5a5a5a"), Color("#1a1a1a"),
+	Color(TacticsScenery.TERRAIN_COLORS[0]), Color(TacticsScenery.TERRAIN_COLORS[1]),
+	Color(TacticsScenery.TERRAIN_COLORS[2]), Color(TacticsScenery.TERRAIN_COLORS[3]),
+	Color(TacticsScenery.TERRAIN_COLORS[4]), Color(TacticsScenery.TERRAIN_COLORS[5]),
+	Color(TacticsScenery.TERRAIN_COLORS[6]),
 ]
 
 ## Unités posables, groupées par camp

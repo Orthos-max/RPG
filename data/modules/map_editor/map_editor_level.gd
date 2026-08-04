@@ -61,23 +61,9 @@ func _ready() -> void:
 
 #region Construction de la scène
 func _build_environment() -> void:
-	var light := DirectionalLight3D.new()
-	light.name = "EditorLight"
-	light.position = Vector3(6, 12, 6)
-	light.light_energy = 0.9
-	add_child(light)
-	light.look_at(Vector3.ZERO, Vector3.UP)
-
-	var world := WorldEnvironment.new()
-	world.name = "EditorEnv"
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#12101f")
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.32, 0.32, 0.38)
-	env.ambient_light_energy = 0.45
-	world.environment = env
-	add_child(world)
+	# Même ciel, même lumière et mêmes ombres qu'en bataille : dessiner une carte
+	# qui ne ressemble pas à ce qu'on jouera n'aurait aucun intérêt.
+	TacticsScenery.apply_to(self)
 
 	_markers = Node3D.new()
 	_markers.name = "EditorMarkers"
@@ -170,10 +156,10 @@ func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
 
 	body.position = _tile_center(pos, height)
 
-	var material := StandardMaterial3D.new()
+	# Matériau partagé du terrain (grain compris) : celui de la bataille.
 	var terrain: int = doc.terrain_at(pos)
-	material.albedo_color = UI.TERRAIN_COLORS[clampi(terrain, 0, UI.TERRAIN_COLORS.size() - 1)]
-	mesh_instance.material_override = material
+	mesh_instance.material_override = TacticsConfig.terrain_material.get(
+		terrain, TacticsConfig.terrain_material[MapDataClass.TerrainType.GRASS])
 
 
 ## Redessine les repères posés sur la carte : unités, zone de départ, point à prendre.

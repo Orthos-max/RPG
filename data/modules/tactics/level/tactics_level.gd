@@ -45,6 +45,7 @@ func _ready() -> void:
 	opponent = $TacticsParticipant/TacticsOpponent
 	arena = $TacticsArena
 
+	TacticsScenery.apply_to(self) # Ciel, lumière et ombres portées
 	arena.configure_tiles() # Configure arena tiles
 	_setup_camps() # Trois camps si la session le demande (M5), deux sinon
 	participant.configure(camera, ui_control) # Configure participant with camera and UI control

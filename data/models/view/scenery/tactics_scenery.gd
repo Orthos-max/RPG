@@ -1,0 +1,200 @@
+class_name TacticsScenery
+extends RefCounted
+## Le décor d'une bataille : ciel, lumière, ombres, grain du terrain.
+##
+## Le rendu tenait dans des cubes de couleur unie posés sur un fond noir, sans
+## ombre portée : des sprites 2D dans un monde 3D qui ne ressemblait ni à l'un
+## ni à l'autre. Ce module rassemble ce qui donne au plateau son épaisseur —
+## un ciel plutôt qu'un vide, une lumière qui projette les unités sur le sol,
+## et un grain qui empêche seize cases d'herbe d'être exactement la même case
+## répétée seize fois.
+##
+## Tout est procédural : aucune image à produire, aucun asset à charger. Les
+## textures sont du bruit teinté, projetées en coordonnées *monde* (triplanaire)
+## pour que deux cases voisines ne montrent jamais le même motif tout en
+## partageant un seul matériau — le surlignage de portée continue de remplacer
+## ce matériau d'un bloc, comme avant.
+##
+## Un seul endroit à retoucher pour la direction artistique, valable en
+## bataille comme dans l'éditeur de cartes.
+
+const MapDataClass = preload("res://data/models/world/map/map_data.gd")
+
+## Teinte de base de chaque terrain
+const TERRAIN_COLORS: Dictionary = {
+	MapDataClass.TerrainType.GRASS: "#4a8c3f",
+	MapDataClass.TerrainType.FOREST: "#2d5a1e",
+	MapDataClass.TerrainType.MOUNTAIN: "#8b7355",
+	MapDataClass.TerrainType.WATER: "#2a6e8f",
+	MapDataClass.TerrainType.PATH: "#c4a97d",
+	MapDataClass.TerrainType.WALL: "#5a5a5a",
+	MapDataClass.TerrainType.PIT: "#1a1a1a",
+}
+
+## Grain de chaque terrain : {frequency, contrast, roughness, metallic}
+##
+## `frequency` donne la taille des taches (bas = larges plaques, haut = grain
+## serré), `contrast` leur profondeur. L'eau est lisse et un peu métallique
+## pour accrocher la lumière ; la roche est mate et très marquée.
+const TERRAIN_GRAIN: Dictionary = {
+	MapDataClass.TerrainType.GRASS: {"frequency": 0.020, "contrast": 0.30, "roughness": 0.95, "metallic": 0.0},
+	MapDataClass.TerrainType.FOREST: {"frequency": 0.045, "contrast": 0.42, "roughness": 0.98, "metallic": 0.0},
+	MapDataClass.TerrainType.MOUNTAIN: {"frequency": 0.035, "contrast": 0.38, "roughness": 1.0, "metallic": 0.0},
+	MapDataClass.TerrainType.WATER: {"frequency": 0.030, "contrast": 0.16, "roughness": 0.18, "metallic": 0.25},
+	MapDataClass.TerrainType.PATH: {"frequency": 0.055, "contrast": 0.26, "roughness": 0.92, "metallic": 0.0},
+	MapDataClass.TerrainType.WALL: {"frequency": 0.040, "contrast": 0.28, "roughness": 0.85, "metallic": 0.0},
+	MapDataClass.TerrainType.PIT: {"frequency": 0.050, "contrast": 0.45, "roughness": 1.0, "metallic": 0.0},
+}
+
+## Échelle du bruit en unités monde : le motif se répète tous les 4 tuiles
+const GRAIN_WORLD_SCALE: float = 0.25
+## Côté des textures de grain (assez pour ne pas pixelliser de près)
+const GRAIN_SIZE: int = 256
+
+
+#region Décor
+## Ciel et lumière ambiante de la vue tactique.
+##
+## Vue de dessus, on ne voit du ciel que son hémisphère bas : ce sont les
+## couleurs « sol » qui remplacent le fond noir autour du plateau, accordées à
+## la teinte des menus.
+static func environment() -> Environment:
+	# Les deux couleurs d'horizon sont volontairement proches : c'est leur écart
+	# qui dessinait une ligne de démarcation en travers de l'écran, comme une mer.
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color("#3a4a72")
+	sky_material.sky_horizon_color = Color("#6a7492")
+	sky_material.ground_horizon_color = Color("#5c6480")
+	sky_material.ground_bottom_color = Color("#24213a")
+	sky_material.ground_curve = 0.06
+	sky_material.sun_angle_max = 40.0
+	sky_material.energy_multiplier = 1.0
+
+	var sky := Sky.new()
+	sky.sky_material = sky_material
+
+	var env := Environment.new()
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.55
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	# Filmic garde les verts saturés sans cramer les blancs des sprites.
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 1.8
+
+	# Brume légère : elle noie le bord lointain du plateau dans le ciel plutôt
+	# que de le laisser trancher net sur le vide.
+	env.fog_enabled = true
+	env.fog_light_color = Color("#5c6480")
+	env.fog_light_energy = 0.6
+	env.fog_density = 0.012
+	env.fog_sky_affect = 0.0
+	return env
+
+
+## Règle la lumière du plateau : soleil rasant, ombres portées activées.
+##
+## C'est l'ombre au pied des unités qui les pose sur la carte — sans elle, un
+## sprite en billboard flotte au-dessus de sa case. Les pions sont découpés en
+## `ALPHA_CUT_OPAQUE_PREPASS`, donc leur silhouette s'imprime correctement.
+static func configure_light(light: DirectionalLight3D) -> void:
+	if not light:
+		return
+	light.rotation_degrees = Vector3(-52.0, -132.0, 0.0)
+	light.light_color = Color("#fff1d6")
+	light.light_energy = 1.1
+	light.light_specular = 0.25
+	light.shadow_enabled = true
+	light.shadow_bias = 0.04
+	light.shadow_normal_bias = 1.4
+	# Ombres à peine adoucies : nettes, mais sans l'escalier de pixels.
+	light.light_angular_distance = 1.0
+	light.directional_shadow_max_distance = 60.0
+
+
+## Pose (ou remplace) ciel et lumière sur un niveau.
+##
+## [param root] reçoit un `WorldEnvironment` et un `DirectionalLight3D` s'il
+## n'en a pas déjà : bataille, carte du joueur et éditeur passent tous par ici,
+## et se ressemblent donc.
+static func apply_to(root: Node3D) -> void:
+	if not root:
+		return
+
+	var env_node: WorldEnvironment = null
+	var light: DirectionalLight3D = null
+	for child in root.get_children():
+		if child is WorldEnvironment and not env_node:
+			env_node = child
+		elif child is DirectionalLight3D and not light:
+			light = child
+
+	if not env_node:
+		env_node = WorldEnvironment.new()
+		env_node.name = "WorldEnvironment"
+		root.add_child(env_node)
+	env_node.environment = environment()
+
+	if not light:
+		light = DirectionalLight3D.new()
+		light.name = "DirectionalLight3D"
+		root.add_child(light)
+	configure_light(light)
+#endregion
+
+
+#region Terrain
+## Matériau d'un type de terrain : teinte, grain, réponse à la lumière.
+static func terrain_material(terrain_type: int) -> StandardMaterial3D:
+	var grain: Dictionary = TERRAIN_GRAIN.get(terrain_type, TERRAIN_GRAIN[MapDataClass.TerrainType.GRASS])
+
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.albedo_color = Color(str(TERRAIN_COLORS.get(terrain_type, "#4a8c3f")))
+	mat.albedo_texture = grain_texture(
+		float(grain["frequency"]), float(grain["contrast"]), terrain_type)
+	mat.roughness = float(grain["roughness"])
+	mat.metallic = float(grain["metallic"])
+
+	# Projection en coordonnées monde : le motif traverse les cases au lieu de
+	# recommencer à l'identique sur chacune.
+	mat.uv1_triplanar = true
+	mat.uv1_world_triplanar = true
+	mat.uv1_scale = Vector3.ONE * GRAIN_WORLD_SCALE
+	return mat
+
+
+## Texture de grain : du bruit ramené à une plage claire, qui module la teinte.
+##
+## Le dégradé ne descend jamais à zéro — sinon le bruit noircirait le terrain
+## au lieu de le nuancer.
+static func grain_texture(frequency: float, contrast: float, seed_value: int) -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = frequency
+	noise.seed = seed_value
+	noise.fractal_octaves = 3
+
+	var ramp := Gradient.new()
+	var floor_value: float = clampf(1.0 - contrast, 0.0, 1.0)
+	ramp.set_color(0, Color(floor_value, floor_value, floor_value))
+	ramp.set_color(1, Color.WHITE)
+
+	var texture := NoiseTexture2D.new()
+	texture.noise = noise
+	texture.width = GRAIN_SIZE
+	texture.height = GRAIN_SIZE
+	texture.seamless = true
+	texture.color_ramp = ramp
+	return texture
+
+
+## Tous les matériaux de terrain, prêts pour [TacticsConfig].
+static func terrain_materials() -> Dictionary:
+	var out: Dictionary = {}
+	for terrain_type: int in TERRAIN_COLORS:
+		out[terrain_type] = terrain_material(terrain_type)
+	return out
+#endregion

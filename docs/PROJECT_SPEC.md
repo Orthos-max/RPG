@@ -81,7 +81,7 @@ scripts/
   ciel_game/     → PONT CielAI (_paths, launch, command, state)
   build/         → export.sh, package.sh
   test_net.sh    → test réseau à deux processus
-fe_2d/           → variante 2D (work in progress)
+fe_2d/           → prototype 2D abandonné (voir backlog)
 test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
 ```
 
@@ -164,6 +164,11 @@ automatiquement par OS, surchargeable via `CIEL_USERDATA`).
   tuiles)*
 - **`test_net.gd`** + `scripts/test_net.sh` — transport réseau à deux processus,
   coupure réelle et reconnexion comprises.
+- **`shot.gd`** — *pas un test : des yeux.* Ouvre une vraie fenêtre, va jusqu'à
+  l'écran demandé (`title`, `battle`, `editor`), pose une caméra d'observation
+  orthographique et enregistre une image. C'est le seul moyen de juger le rendu,
+  que `--headless` ne dessine pas. `godot --path . --resolution 1600x900
+  --script shot.gd -- battle sortie.png free`
 
 Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 
@@ -318,7 +323,18 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       intention de chaque son dans [`assets/audio/README.md`](../assets/audio/README.md),
       et `Audio.missing_cues()` dit lesquels manquent. Restent à coder : les
       animations de duel proprement dites.*
-- [ ] **Version `fe_2d/`** : poursuivre le port 2D si la direction artistique évolue.
+- [x] **Direction artistique — passe « Awakening »** : `TacticsScenery` rassemble le
+      décor en un seul endroit (ciel procédural, brume, lumière rasante et
+      **ombres portées** — les pions sont en `ALPHA_CUT_OPAQUE_PREPASS`, leur
+      silhouette s'imprime au sol) et le grain du terrain, en bruit teinté
+      projeté en coordonnées *monde* : deux cases voisines ne montrent jamais le
+      même motif tout en partageant un seul matériau. Aucun asset à produire.
+      L'éditeur de cartes emprunte le même décor et les mêmes matériaux.
+      *Restent à faire : modèles ou sprites d'unités plus fins, et les décors
+      posés sur la carte (arbres, murs, bâtiments).*
+- [ ] **Version `fe_2d/`** : prototype isolé (grille isométrique dessinée en
+      `_draw`, unités et stats dupliquées) — **caduc** depuis le choix de garder
+      la 3D et d'en soigner le rendu. À supprimer ou à reprendre de zéro.
 - [x] **Aperçu des dégâts avant d'engager** : `BattleForecast` (logique pure) met en
       forme le calculateur — dégâts totaux, nombre de coups, précision, critique, PV
       restants, létalité (sûre ou « seulement si critique »), triangle/terrain/soutien/
@@ -470,7 +486,7 @@ Les passes du 2026-08-04 ont livré la reconnexion réseau, les deux objectifs d
 chapitre restés sans carte, le choix des cases de déploiement, le polissage UX,
 la préparation du système sonore, et l'éditeur de cartes — complété depuis par
 l'annulation et le redimensionnement.
-**Backlog : 43 items faits, 4 restants.** Ordre conseillé pour la reprise :
+**Backlog : 44 items faits, 4 restants.** Ordre conseillé pour la reprise :
 
 1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
    livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
@@ -566,6 +582,8 @@ bash scripts/test_net.sh                             # transport réseau, 2 proc
 | Système sonore prêt à recevoir ses fichiers | `sound_db.gd`, `audio_service.gd`, `assets/audio/README.md` |
 | Éditeur de cartes : dessiner, poser, enregistrer, jouer | `map_document.gd`, `map_library.gd`, `custom_battle.gd`, `map_editor_*.gd` |
 | Annuler / rétablir et redimensionner dans l'éditeur | `map_history.gd`, `map_document.gd`, `map_editor_level.gd`, `map_editor_ui.gd` |
+| Ciel, ombres portées et grain du terrain (bataille + éditeur) | `tactics_scenery.gd`, `tactics_config.gd`, `tactics_level.gd` |
+| Capture d'écran automatisée — juger le rendu sans jouer | `shot.gd` |
 
 Trois choix structurants de cette passe :
 

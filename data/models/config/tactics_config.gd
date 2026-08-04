@@ -47,15 +47,11 @@ const TERRAIN_WALL: int = 5
 const TERRAIN_PIT: int = 6
 
 ## Dictionary of terrain type materials.
-static var terrain_material: Dictionary = {
-	0: create_terrain_material("4a8c3f"),    # Green grass
-	1: create_terrain_material("2d5a1e"),   # Dark green forest
-	2: create_terrain_material("8b7355"),   # Rocky brown mountain
-	3: create_terrain_material("2a6e8f"),   # Deep blue water
-	4: create_terrain_material("c4a97d"),   # Sandy beige path
-	5: create_terrain_material("5a5a5a"),   # Dark grey wall
-	6: create_terrain_material("1a1a1a"),   # Near-black pit
-}
+##
+## Teintes, grain et réponse à la lumière vivent dans [TacticsScenery] : la
+## direction artistique se retouche à un seul endroit, et l'éditeur de cartes
+## montre exactement ce que la bataille affichera.
+static var terrain_material: Dictionary = TacticsScenery.terrain_materials()
 
 ## Dictionary of view-related configuration values.
 static var view: Dictionary = {
