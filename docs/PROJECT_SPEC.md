@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-03 (après la passe multijoueur — voir §6 pour la reprise)
+> Dernière mise à jour : 2026-08-04 (brief installeur Windows + mise à jour du §6)
 
 ---
 
@@ -268,7 +268,11 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       inclus.
 - [x] **Installateur Linux** : `install.sh` pose le jeu dans `~/.local` avec une
       entrée de menu.
-- [ ] **Installeur Windows** (Inno Setup) : raccourci menu Démarrer + désinstallation.
+- [x] **Installeur Windows** (Inno Setup) : `scripts/build/windows/setup.iss` — raccourcis
+      menu Démarrer/bureau, entrée de désinstallation, pont `ciel_game/` inclus, version
+      lue dans `project.godot`. `package.sh` compile le `.iss` si `ISCC.exe` est
+      disponible (natif ou via Wine) et se rabat sur le seul `.zip` sinon.
+      *Reste à faire : exécuter l'installeur sur une vraie machine Windows.*
 - [ ] **Signature & notarisation macOS** : sans elles, le premier lancement impose
       le détour « clic droit → Ouvrir » (documenté dans `INSTALL.md`). Demande un
       certificat Développeur Apple, puis `codesign/codesign=1` dans `export_presets.cfg`.
@@ -286,6 +290,99 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       `FECombatCalculator.calculate()` renvoie hit/crit/dégâts/double avant le jet),
       tooltips de stats, annulation d'un déplacement.
 - [ ] **Mods / éditeur de niveau intégré** (map_editor déjà présent) pour créer ses cartes.
+
+
+---
+
+## 4bis. Brief — Installeur Windows (Inno Setup)
+
+> **Ajouté le 2026-08-04.** À transmettre à Claude Code tel quel.
+> Objectif : produire un `.exe` d'installation Windows avec Inno Setup 6.
+
+### Contexte
+
+Le projet a déjà :
+- `export_presets.cfg` avec une cible `Windows Desktop` (`windows_desktop`)
+- `scripts/build/export.sh` qui lance l'export Godot pour Windows
+- `scripts/build/package.sh` qui produit un `ciel-emblem-windows.zip` contenant le `.exe` + `.pck` + le dossier `ciel_game/` (pont CielAI)
+
+Ce qu'il manque : transformer ce `.zip` en installeur `.exe` qui pose tout proprement avec un assistant graphique, un raccourci dans le menu Démarrer, et une entrée de désinstallation.
+
+### À faire
+
+Créer un script Inno Setup (`setup.iss`) dans `scripts/build/windows/` qui :
+
+1. **Prend en entrée** le contenu du `.zip` Windows (le dossier décompressé produit par `package.sh`).
+2. **Installe dans** `{autopf}\Ciel Emblem` (Program Files), avec fallback `{userpf}` si pas admin.
+3. **Crée** :
+   - Un raccourci dans le menu Démarrer (`Ciel Emblem` → `Ciel Emblem.lnk`)
+   - Un raccourci sur le bureau (case à cocher, cochée par défaut)
+   - Une entrée de désinstallation dans « Ajout/Suppression de programmes »
+4. **Inclut** tout le dossier `ciel_game/` à côté de l'exécutable (même structure que le `.zip`).
+5. **Nom du livrable** : `Ciel-Emblem-Setup-<version>.exe`
+
+### Fichiers à créer / modifier
+
+| Fichier | Action |
+|---|---|
+| `scripts/build/windows/setup.iss` | **Créer** — le script Inno Setup complet |
+| `scripts/build/package.sh` | **Modifier** — ajouter une étape qui, si Inno Setup est disponible (via Wine sur macOS, ou natif Windows), compile le `.iss` et produit le `.exe` final |
+| `docs/INSTALL.md` | **Modifier** — remplacer le TODO « Installeur Windows » par les instructions d'installation réelles |
+
+### Notes techniques
+
+- L'exécutable Godot exporté s'appellera `Ciel Emblem.exe` (tel que défini dans `export_presets.cfg` → `windows_desktop`).
+- **Icône :** vérifier dans `export_presets.cfg` si `application/icon` pointe vers un `.ico`. Si oui, le réutiliser pour l'installeur. Sinon, utiliser l'icône par défaut de l'exe (Inno Setup peut l'extraire).
+- **Inno Setup 6** est gratuit : `winget install JRSoftware.InnoSetup` ou téléchargement sur [jrsoftware.org](https://jrsoftware.org/isinfo.php).
+- **Version :** lire le numéro de version depuis `project.godot` (`config/version`, actuellement `0.1.0`) pour le passer au `.exe` de sortie.
+- **Sur macOS :** Wine peut exécuter le compilateur Inno (`ISCC.exe`). `package.sh` doit détecter la plateforme et utiliser Wine si besoin.
+- **Désinstallation propre :** tout ce qui est installé (dossier `Ciel Emblem`, raccourcis) doit être supprimé. Les saves (`user://`) restent dans `%APPDATA%\Ciel Emblem` et ne sont pas touchées.
+
+### Template de base pour `setup.iss`
+
+```iss
+#define MyAppName "Ciel Emblem"
+#define MyAppVersion "0.1.0"
+#define MyAppPublisher "CielAI"
+#define MyAppExeName "Ciel Emblem.exe"
+
+[Setup]
+AppId={{...GUID...}}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+OutputDir=..\..\..\build
+OutputBaseFilename=Ciel-Emblem-Setup-{#MyAppVersion}
+Compression=lzma
+SolidCompression=yes
+WizardStyle=modern
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+[Files]
+Source: "..\..\..\build\windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+```
+
+> ⚠️ **À faire par Claude :** générer un GUID unique pour `AppId` (commande PowerShell : `[guid]::NewGuid()`).
+
+### Vérification
+
+Après implémentation, lancer `scripts/build/package.sh` et vérifier que :
+- Un `Ciel-Emblem-Setup-0.1.0.exe` est produit dans `build/`.
+- L'installeur s'exécute (tester dans une VM Windows ou via Wine).
+- Le jeu se lance depuis le menu Démarrer.
+- La désinstallation nettoie tout.
 
 ---
 
@@ -312,25 +409,24 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 
 ## 6. Prochaines étapes immédiates
 
-Les deux passes du 2026-08-03 ont livré le §6 initial puis le multijoueur, les
-compétences, l'économie et le packaging — voir §7. **Backlog : 33 items faits, 11
-restants.** Ordre conseillé pour la reprise :
+Les passes du 2026-08-03 ont livré le multijoueur, les compétences, l'économie et
+le packaging. **Backlog : 33 items faits, 11 restants.** Ordre conseillé pour la
+reprise (mis à jour le 2026-08-04) :
 
-1. ⚠️ **Vérifier une partie en ligne sur deux machines.** C'est la seule brique
-   livrée sans preuve de bout en bout : le transport est testé (`scripts/test_net.sh`),
-   pas le déroulé d'une bataille. À faire en premier, parce qu'un défaut trouvé là
-   peut changer la suite du plan. *Nécessite une manipulation humaine : le mode
-   headless ne crée pas les collisions de tuiles.*
-2. **Aperçu des dégâts avant d'engager** (P3/UX). Le plus gros gain de confort pour
+1. 🔨 **Installeur Windows (Inno Setup).** C'est le blocage immédiat pour tester
+   le jeu sur le PC d'Aurèle et le distribuer aux amis qui veulent essayer.
+   Brief complet au §4bis — `setup.iss` + intégration dans `package.sh`.
+2. ⚠️ **Vérifier une partie en ligne sur deux machines.** La seule brique livrée
+   sans preuve de bout en bout. Une fois l'installeur Windows prêt, Aurèle pourra
+   lancer deux instances sur son PC ou avec un ami. *Le mode headless ne crée pas
+   les collisions de tuiles, donc le test doit se faire fenêtre ouverte.*
+3. **Aperçu des dégâts avant d'engager** (P3/UX). Le plus gros gain de confort pour
    le coût le plus faible : le calculateur renvoie déjà hit/crit/dégâts/double avant
    le jet, il ne manque que l'affichage au survol d'une cible.
-3. **M5 — Ciel contre un ami en réseau.** La promesse la plus singulière du projet :
-   un humain et l'IA externe dans la même bataille. Le chemin d'ordres est déjà
-   commun aux deux ; il faut surtout gérer trois camps.
-4. **Reconnexion réseau** et **contenu de campagne** (chapitres, objectif « prise de
+4. **M5 — Ciel contre un ami en réseau.** La promesse la plus singulière du projet :
+   un humain et l'IA externe dans la même bataille.
+5. **Reconnexion réseau** et **contenu de campagne** (chapitres, objectif « prise de
    point » jamais utilisé), selon l'envie du moment.
-5. **Distribution** : installeur Windows, signature macOS — utile seulement au
-   moment de diffuser une version à des joueurs extérieurs.
 6. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
    les règles ne bougeront plus.
 

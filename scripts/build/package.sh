@@ -119,10 +119,103 @@ package_windows() {
     cp -R "$PROJECT_DIR/scripts/ciel_game" "$staging/ciel_game"
     write_readme "$staging/LISEZ-MOI.txt"
 
+    make_windows_icon "$staging/ciel-emblem.ico"
+
     local archive="$DIST_DIR/CielEmblem-$VERSION-windows.zip"
     rm -f "$archive"
     (cd "$staging" && zip -qr "$archive" .) || return 1
     echo "✔ $archive"
+
+    # L'installeur est un bonus : son absence ne fait pas échouer le packaging,
+    # le .zip reste un livrable valable.
+    build_windows_installer "$staging" || true
+}
+
+# Convertit l'icône du projet en .ico pour l'installeur, si un convertisseur est
+# disponible. Sans icône, Inno Setup extrait celle de l'exécutable.
+make_windows_icon() {
+    local dest="$1"
+    local src="$PROJECT_DIR/assets/textures/ui/icons/icon.png"
+    [ -f "$src" ] || return 0
+
+    if command -v magick >/dev/null 2>&1; then
+        magick "$src" -define icon:auto-resize=256,128,64,48,32,16 "$dest" 2>/dev/null && return 0
+    elif command -v convert >/dev/null 2>&1; then
+        convert "$src" -define icon:auto-resize=256,128,64,48,32,16 "$dest" 2>/dev/null && return 0
+    elif command -v icotool >/dev/null 2>&1; then
+        icotool -c -o "$dest" "$src" 2>/dev/null && return 0
+    fi
+    rm -f "$dest"
+    return 0
+}
+
+# Localise le compilateur Inno Setup : natif sous Windows, via Wine ailleurs.
+# Renseigne ISCC_CMD (tableau) et ISCC_WINE (1 si les chemins doivent être
+# traduits en chemins Windows).
+find_iscc() {
+    ISCC_CMD=()
+    ISCC_WINE=0
+
+    if command -v ISCC.exe >/dev/null 2>&1; then
+        ISCC_CMD=("ISCC.exe")
+        return 0
+    fi
+    if command -v iscc >/dev/null 2>&1; then
+        ISCC_CMD=("iscc")
+        return 0
+    fi
+
+    command -v wine >/dev/null 2>&1 || return 1
+
+    # Chemins d'installation habituels d'Inno Setup 6 dans un préfixe Wine.
+    local prefix="${WINEPREFIX:-$HOME/.wine}"
+    local candidate
+    for candidate in \
+        "${ISCC_PATH:-}" \
+        "$prefix/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+        "$prefix/drive_c/Program Files/Inno Setup 6/ISCC.exe"
+    do
+        if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            ISCC_CMD=("wine" "$candidate")
+            ISCC_WINE=1
+            return 0
+        fi
+    done
+    return 1
+}
+
+build_windows_installer() {
+    local staging="$1"
+    local iss="$PROJECT_DIR/scripts/build/windows/setup.iss"
+
+    if ! find_iscc; then
+        echo "  ⓘ Inno Setup introuvable — installeur .exe non généré."
+        echo "    Windows : winget install JRSoftware.InnoSetup"
+        echo "    macOS/Linux : installer Inno Setup 6 dans un préfixe Wine"
+        echo "                  (ou définir ISCC_PATH=/chemin/vers/ISCC.exe)."
+        return 1
+    fi
+
+    local iss_arg="$iss" src_arg="$staging" out_arg="$DIST_DIR"
+    if [ "$ISCC_WINE" -eq 1 ]; then
+        iss_arg="$(winepath -w "$iss" 2>/dev/null || echo "$iss")"
+        src_arg="$(winepath -w "$staging" 2>/dev/null || echo "$staging")"
+        out_arg="$(winepath -w "$DIST_DIR" 2>/dev/null || echo "$DIST_DIR")"
+    fi
+
+    echo "▶ Compilation de l'installeur Windows (Inno Setup)…"
+    "${ISCC_CMD[@]}" \
+        "/DMyAppVersion=$VERSION" \
+        "/DSourceDir=$src_arg" \
+        "/DOutputDir=$out_arg" \
+        "$iss_arg" >/dev/null 2>&1
+
+    local setup="$DIST_DIR/Ciel-Emblem-Setup-$VERSION.exe"
+    if [ ! -f "$setup" ]; then
+        echo "  ✘ Inno Setup a échoué — voir docs/INSTALL.md." >&2
+        return 1
+    fi
+    echo "✔ $setup"
 }
 
 package_linux() {

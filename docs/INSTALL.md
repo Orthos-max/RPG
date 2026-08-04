@@ -15,9 +15,20 @@ Deux publics, deux chemins : **jouer** (aucune connaissance technique requise) e
    (macOS bloque les apps non signées au double-clic ; ce détour n'est nécessaire qu'une fois.)
 
 ### Windows
-1. Télécharger `CielEmblem.zip` et le décompresser où l'on veut.
+**Avec l'installeur (recommandé)**
+1. Télécharger `Ciel-Emblem-Setup-<version>.exe`.
+2. Double-cliquer dessus et suivre l'assistant.
+   Si Windows SmartScreen s'interpose : **Informations complémentaires** → **Exécuter quand même**
+   (la build n'est pas signée).
+3. Le jeu s'installe dans `Program Files\Ciel Emblem` (ou dans le dossier de
+   l'utilisateur si l'on n'a pas les droits administrateur) avec un raccourci
+   **menu Démarrer** et, au choix, un raccourci **bureau**.
+4. Désinstallation : *Paramètres → Applications → Ciel Emblem → Désinstaller*.
+   Les sauvegardes de campagne, elles, restent dans `%APPDATA%\Godot\app_userdata\Ciel Emblem\`.
+
+**Sans installeur (version portable)**
+1. Télécharger `CielEmblem-<version>-windows.zip` et le décompresser où l'on veut.
 2. Double-cliquer sur `CielEmblem.exe`.
-3. Si Windows SmartScreen s'interpose : **Informations complémentaires** → **Exécuter quand même**.
 
 ### Linux
 1. Télécharger `CielEmblem.x86_64`.
@@ -74,10 +85,46 @@ Résultats dans `build/dist/` :
 |---|---|---|
 | macOS | `CielEmblem-<version>-macos.dmg` | `Ciel Emblem.app`, notice, pont `ciel_game/` |
 | Windows | `CielEmblem-<version>-windows.zip` | `CielEmblem.exe`, notice, pont `ciel_game/` |
+| Windows | `Ciel-Emblem-Setup-<version>.exe` | installeur graphique (voir ci-dessous) |
 | Linux | `CielEmblem-<version>-linux.tar.gz` | binaire, `install.sh`, raccourci `.desktop`, pont |
 
 Le `.dmg` utilise `create-dmg` s'il est installé (`brew install create-dmg`), sinon
 `hdiutil`, fourni avec macOS — aucune dépendance obligatoire.
+
+#### Installeur Windows (Inno Setup)
+
+La recette est dans `scripts/build/windows/setup.iss` ; `package.sh` la compile
+automatiquement après avoir produit le `.zip`, **si** le compilateur Inno Setup 6
+est disponible. Sinon il le signale et se contente du `.zip` — le packaging
+n'échoue pas pour autant.
+
+| Plateforme de build | Installer le compilateur |
+|---|---|
+| Windows | `winget install JRSoftware.InnoSetup` (fournit `ISCC.exe`) |
+| macOS / Linux | Inno Setup 6 dans un préfixe Wine ([jrsoftware.org](https://jrsoftware.org/isinfo.php)), puis `brew install wine-stable` / paquet `wine` |
+
+Si `ISCC.exe` n'est pas à l'emplacement habituel du préfixe Wine, l'indiquer :
+
+```bash
+ISCC_PATH="$HOME/.wine/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+  bash scripts/build/package.sh --no-export windows
+```
+
+Compilation à la main, sans passer par `package.sh` (le dossier source est le
+staging produit par le packaging) :
+
+```bash
+ISCC.exe /DMyAppVersion=0.1.0 /DSourceDir=..\..\..\build\windows\staging \
+         scripts\build\windows\setup.iss
+```
+
+L'installeur pose l'exécutable, le `.pck`, la notice **et le pont `ciel_game/`**
+dans le dossier d'installation ; il crée les raccourcis menu Démarrer/bureau et
+une entrée de désinstallation. Il s'installe sans droits administrateur par
+défaut (`{userpf}`) et propose l'installation pour tous les utilisateurs
+(`Program Files`) si les privilèges peuvent être élevés. L'icône est reprise de
+`assets/textures/ui/icons/icon.png` quand ImageMagick (`magick`) ou `icotool` est
+installé pour la convertir en `.ico` ; sinon Inno Setup extrait celle de l'exe.
 
 Sur Linux, `install.sh` copie le jeu dans `~/.local/share/ciel-emblem` et pose une
 entrée dans le menu des applications :
@@ -177,6 +224,7 @@ bash scripts/test_net.sh
 |---|---|---|
 | `Godot introuvable` | binaire hors des chemins connus | `export GODOT_BIN=/chemin/vers/Godot` |
 | Export en échec immédiat | modèles d'exportation absents | Éditeur → Gérer les modèles d'exportation |
+| Pas de `Ciel-Emblem-Setup-*.exe` | compilateur Inno Setup introuvable | l'installer, ou `ISCC_PATH=/chemin/ISCC.exe` |
 | `Aucun état disponible` | le jeu ne tourne pas, ou autre dossier | `state.sh --path`, puis `CIEL_USERDATA` |
 | Ciel ne joue pas son tour | contrôle basculé sur l'IA locale | `command.sh toggle on` |
 | Commande sans effet | ordre rejeté | lire `ai_feedback.json` (ou `last_error` dans l'état) |
