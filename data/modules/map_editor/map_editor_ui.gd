@@ -16,8 +16,11 @@ signal test_requested(with_ciel: bool)
 ## Le joueur ouvre les réglages : le niveau répond par [method open_settings]
 ## avec les valeurs de la carte en cours (l'interface ne connaît pas le document).
 signal settings_requested()
-signal settings_changed(map_name: String, slots: int)
-signal objective_changed(objective: Dictionary)
+## Un seul signal pour tout le panneau de réglages : « Appliquer » est un seul
+## geste, qui doit se défaire d'un seul coup d'annulation.
+signal settings_changed(map_name: String, slots: int, size: Vector2i, objective: Dictionary)
+signal undo_requested()
+signal redo_requested()
 signal back_requested()
 
 const OBJ = preload("res://data/models/campaign/objective.gd")
@@ -64,6 +67,8 @@ var _unit_label: Label = null
 var _errors: RichTextLabel = null
 var _panel_host: Control = null
 var _tool_buttons: Dictionary = {}
+var _undo_button: Button = null
+var _redo_button: Button = null
 
 
 func _ready() -> void:
@@ -109,6 +114,16 @@ func show_errors(errors: Array) -> void:
 	_errors.text = "\n".join(lines)
 
 
+## Grise « annuler » / « rétablir » quand il n'y a rien à défaire ni à refaire.
+func show_history(can_undo: bool, can_redo: bool) -> void:
+	if _undo_button:
+		_undo_button.disabled = not can_undo
+		_undo_button.modulate = Color.WHITE if can_undo else Color(1, 1, 1, 0.4)
+	if _redo_button:
+		_redo_button.disabled = not can_redo
+		_redo_button.modulate = Color.WHITE if can_redo else Color(1, 1, 1, 0.4)
+
+
 static func tool_name(tool_id: int) -> String:
 	match tool_id:
 		Tool.RAISE: return "⬆ Élever le terrain"
@@ -145,13 +160,25 @@ func _build_top_bar() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	row.offset_left = -720
+	row.offset_left = -880
 	row.offset_right = -12
 	row.offset_top = 8
 	row.offset_bottom = 38
 	row.alignment = BoxContainer.ALIGNMENT_END
 	bar.add_child(row)
 
+	_undo_button = _action("↶ Annuler", Color("#3b3b52"),
+		func() -> void: undo_requested.emit(), 74.0)
+	_undo_button.tooltip_text = "Annuler le dernier changement (Ctrl+Z)"
+	row.add_child(_undo_button)
+
+	_redo_button = _action("↷ Rétablir", Color("#3b3b52"),
+		func() -> void: redo_requested.emit(), 78.0)
+	_redo_button.tooltip_text = "Rétablir le changement annulé (Ctrl+Maj+Z)"
+	row.add_child(_redo_button)
+	show_history(false, false)
+
+	row.add_child(VSeparator.new())
 	row.add_child(_action("🆕 Nouvelle", Color("#e67e22"), _open_new_panel))
 	row.add_child(_action("📂 Ouvrir", Color("#256eb8"), _open_library_panel))
 	row.add_child(_action("⚙ Réglages", Color("#5d4e8c"),
@@ -163,10 +190,10 @@ func _build_top_bar() -> void:
 		func() -> void: back_requested.emit()))
 
 
-func _action(text: String, color: Color, callback: Callable) -> Button:
+func _action(text: String, color: Color, callback: Callable, width: float = 108.0) -> Button:
 	var btn := Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(108, 30)
+	btn.custom_minimum_size = Vector2(width, 30)
 	btn.add_theme_font_size_override("font_size", 11)
 	btn.add_theme_color_override("font_color", Color.WHITE)
 	var style := StyleBoxFlat.new()
@@ -369,13 +396,29 @@ func _open_new_panel() -> void:
 
 
 func _open_settings_panel(current_name: String = "", slots: int = 4,
-		objective: Dictionary = {}) -> void:
+		objective: Dictionary = {}, size: Vector2i = Vector2i(16, 10)) -> void:
 	var box: VBoxContainer = _open_panel("Réglages de la carte")
 
 	var name_input := LineEdit.new()
 	name_input.text = current_name
 	name_input.placeholder_text = "Nom de la carte"
 	box.add_child(_labelled("Nom", name_input))
+
+	var cols := SpinBox.new()
+	cols.min_value = MapDocument.MIN_SIZE.x
+	cols.max_value = MapDocument.MAX_SIZE.x
+	cols.value = size.x
+	box.add_child(_labelled("Colonnes", cols))
+
+	var rows := SpinBox.new()
+	rows.min_value = MapDocument.MIN_SIZE.y
+	rows.max_value = MapDocument.MAX_SIZE.y
+	rows.value = size.y
+	box.add_child(_labelled("Lignes", rows))
+
+	box.add_child(_note("Agrandir ajoute de l'herbe sur les bords. Rétrécir oublie "
+		+ "ce qui sort de la grille — unités, cases de départ, point de "
+		+ "commandement. Ça s'annule (Ctrl+Z)."))
 
 	var slots_input := SpinBox.new()
 	slots_input.min_value = 1
@@ -409,20 +452,21 @@ func _open_settings_panel(current_name: String = "", slots: int = 4,
 		+ "choisir « prendre le point » ici sans le poser laisse la carte injouable."))
 
 	box.add_child(_confirm("Appliquer", func() -> void:
-		settings_changed.emit(name_input.text, int(slots_input.value))
-		objective_changed.emit({
-			"kind": kind_ids[kinds.get_selected_id()],
-			"turns": int(turns.value),
-			"target": target.text.strip_edges(),
-			"col": int(objective.get("col", 0)),
-			"row": int(objective.get("row", 0)),
-		})
+		settings_changed.emit(name_input.text, int(slots_input.value),
+			Vector2i(int(cols.value), int(rows.value)), {
+				"kind": kind_ids[kinds.get_selected_id()],
+				"turns": int(turns.value),
+				"target": target.text.strip_edges(),
+				"col": int(objective.get("col", 0)),
+				"row": int(objective.get("row", 0)),
+			})
 		close_panel()))
 
 
 ## Ouvre les réglages avec les valeurs de la carte en cours.
-func open_settings(current_name: String, slots: int, objective: Dictionary) -> void:
-	_open_settings_panel(current_name, slots, objective)
+func open_settings(current_name: String, slots: int, objective: Dictionary,
+		size: Vector2i = Vector2i(16, 10)) -> void:
+	_open_settings_panel(current_name, slots, objective, size)
 
 
 func _open_library_panel() -> void:

@@ -60,7 +60,13 @@ static func create_empty(map_name: String = "Carte sans nom",
 
 #region Terrain
 ## Redimensionne la grille en gardant ce qui tient dans les nouvelles bornes.
-func resize(size: Vector2i) -> void:
+##
+## Rétrécir jette forcément quelque chose : le document dit quoi, pour que
+## l'éditeur puisse l'annoncer au lieu de laisser disparaître une armée en
+## silence.
+## [returns] {size: Vector2i, units_removed: int, deploy_removed: int,
+## objective_reset: bool}
+func resize(size: Vector2i) -> Dictionary:
 	var new_size := Vector2i(
 		clampi(size.x, MIN_SIZE.x, MAX_SIZE.x), clampi(size.y, MIN_SIZE.y, MAX_SIZE.y)
 	)
@@ -84,8 +90,24 @@ func resize(size: Vector2i) -> void:
 			heights[index] = old_heights[old_index] if inside else 0.0
 
 	# Ce qui sort de la nouvelle grille n'a plus lieu d'être.
+	var units_before: int = units.size()
+	var deploy_before: int = deploy_tiles.size()
 	units = units.filter(func(u: Dictionary) -> bool: return in_bounds(_pos_of(u)))
 	deploy_tiles = deploy_tiles.filter(func(t: Variant) -> bool: return in_bounds(_to_vec(t)))
+
+	# Un point de commandement hors grille rendrait la carte injouable sans que
+	# rien ne le montre : l'objectif retombe sur « vaincre tous les ennemis ».
+	var objective_reset: bool = false
+	if int(objective.get("kind", OBJ.Kind.ROUT)) == OBJ.Kind.SEIZE and not in_bounds(seize_point()):
+		set_objective({"kind": OBJ.Kind.ROUT})
+		objective_reset = true
+
+	return {
+		"size": grid_size,
+		"units_removed": units_before - units.size(),
+		"deploy_removed": deploy_before - deploy_tiles.size(),
+		"objective_reset": objective_reset,
+	}
 
 
 ## La case est-elle dans la grille ?
@@ -457,6 +479,30 @@ static func from_dict(data: Dictionary) -> MapDocument:
 
 	doc.set_objective(data.get("objective", {"kind": OBJ.Kind.ROUT}))
 	return doc
+
+
+## Recharge ce document depuis un instantané, sans en créer un autre.
+##
+## L'annulation remet une carte dans un état passé : elle doit le faire *sur ce
+## document-là*, que l'éditeur, la bibliothèque et l'essai en cours tiennent
+## déjà par référence. Remplacer l'objet les laisserait sur l'ancien.
+## [returns] faux si l'instantané est illisible — le document reste intact.
+func apply_dict(data: Dictionary) -> bool:
+	var other: MapDocument = from_dict(data)
+	if not other:
+		return false
+	format_version = other.format_version
+	name = other.name
+	author = other.author
+	grid_size = other.grid_size
+	tile_size = other.tile_size
+	terrain = other.terrain
+	heights = other.heights
+	units = other.units
+	deploy_tiles = other.deploy_tiles
+	objective = other.objective
+	deploy_slots = other.deploy_slots
+	return true
 #endregion
 
 

@@ -155,11 +155,13 @@ automatiquement par OS, surchargeable via `CIEL_USERDATA`).
 - **`test_features.gd`** — validation des ordres, IA locale, croissances,
   promotions, efficacité, objets, compétences, objectifs (dont la prise de point),
   sauvegarde, économie, difficulté, session, codes réseau, reconnexion,
-  déploiement, annulation de déplacement, fiche d'unité. *(258 assertions)*
+  déploiement, annulation de déplacement, fiche d'unité, cartes du joueur,
+  annulation dans l'éditeur. *(361 assertions)*
 - **`test_battle.gd`** — intégration : titre → campagne → chapitre chargé →
   placement des unités → état exporté → ordre rejeté → sauvegarde → chapitre à
-  prise de point. *(30 assertions en headless, 36 fenêtre ouverte — le placement
-  demande des collisions de tuiles)*
+  prise de point, carte du joueur dessinée puis jouée. *(54 assertions en
+  headless, davantage fenêtre ouverte — le placement demande des collisions de
+  tuiles)*
 - **`test_net.gd`** + `scripts/test_net.sh` — transport réseau à deux processus,
   coupure réelle et reconnexion comprises.
 
@@ -335,6 +337,16 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       unités des deux camps, cases de départ, point de commandement, réglages
       d'objectif, bibliothèque, essai immédiat contre l'IA locale ou contre Ciel.
       Une carte d'essai ne touche jamais à la campagne.
+- [x] **Annulation et redimensionnement dans l'éditeur** : `MapHistory` (pile
+      d'instantanés du document — annuler défait *un geste*, y compris ceux qui
+      en entraînent d'autres, comme noyer une case de départ occupée), boutons
+      ↶/↷ et raccourcis Ctrl+Z / Ctrl+Maj+Z, et la grille se redimensionne depuis
+      les réglages — `MapDocument.resize()` dit ce qu'il a fallu jeter (unités,
+      cases de départ, point de commandement hors grille) au lieu de le laisser
+      disparaître en silence.
+      *Restent ouverts sur l'éditeur : un roster figé de 9 unités sans réglage de
+      niveau, aucun import/export dans l'interface (le JSON se copie à la main),
+      et rien n'est encore prouvé fenêtre ouverte — toute la preuve est headless.*
 
 
 ---
@@ -456,8 +468,9 @@ Après implémentation, lancer `scripts/build/package.sh` et vérifier que :
 
 Les passes du 2026-08-04 ont livré la reconnexion réseau, les deux objectifs de
 chapitre restés sans carte, le choix des cases de déploiement, le polissage UX,
-la préparation du système sonore et l'éditeur de cartes.
-**Backlog : 42 items faits, 4 restants.** Ordre conseillé pour la reprise :
+la préparation du système sonore, et l'éditeur de cartes — complété depuis par
+l'annulation et le redimensionnement.
+**Backlog : 43 items faits, 4 restants.** Ordre conseillé pour la reprise :
 
 1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
    livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
@@ -525,10 +538,10 @@ Deux choix structurants de cette passe :
 **Tests** (tous verts) :
 
 ```bash
-godot --headless --path . --script test_combat.gd    # 23 OK — combat FE
+godot --headless --path . --script test_combat.gd    # 31 OK — combat FE
 godot --headless --path . --script test_map.gd       # ALL TESTS PASSED
-godot --headless --path . --script test_features.gd  # 151 OK — logique des features
-godot --headless --path . --script test_battle.gd    # 21 OK — intégration campagne + pont
+godot --headless --path . --script test_features.gd  # 361 OK — logique des features
+godot --headless --path . --script test_battle.gd    # 54 OK — intégration campagne + pont
 bash scripts/test_net.sh                             # transport réseau, 2 processus
 ```
 
@@ -552,6 +565,7 @@ bash scripts/test_net.sh                             # transport réseau, 2 proc
 | Objectif « protéger » + unités imposées au déploiement | `objective.gd`, `campaign_state.gd`, `prep_screen.gd`, `campaign_db.gd` |
 | Système sonore prêt à recevoir ses fichiers | `sound_db.gd`, `audio_service.gd`, `assets/audio/README.md` |
 | Éditeur de cartes : dessiner, poser, enregistrer, jouer | `map_document.gd`, `map_library.gd`, `custom_battle.gd`, `map_editor_*.gd` |
+| Annuler / rétablir et redimensionner dans l'éditeur | `map_history.gd`, `map_document.gd`, `map_editor_level.gd`, `map_editor_ui.gd` |
 
 Trois choix structurants de cette passe :
 

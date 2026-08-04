@@ -260,6 +260,45 @@ func _run_custom_map(main: Node, campaign: Node) -> void:
 	_check(not editor.doc.is_deploy_tile(Vector2i(3, 2)),
 		"noyer une case de départ la referme")
 
+	# --- Annuler / rétablir : le coup de pinceau malheureux se défait ---
+	_check(editor._history != null and editor._history.can_undo(),
+		"les gestes de l'éditeur sont annulables")
+	editor._on_undo()
+	_check(editor.doc.is_deploy_tile(Vector2i(3, 2))
+			and editor.doc.terrain_at(Vector2i(3, 2)) != MapData.TerrainType.WATER,
+		"annuler rend la case de départ noyée")
+	editor._on_redo()
+	_check(not editor.doc.is_deploy_tile(Vector2i(3, 2)),
+		"rétablir remet le lac et referme la case")
+
+	# Un clic sans effet ne consomme pas un cran d'annulation.
+	var steps_before: int = editor._history.undo_steps()
+	editor._tool = MapEditorUI.Tool.ERASE
+	editor._use_tool(Vector2i(9, 9))  # aucune unité ici
+	_check(editor._history.undo_steps() == steps_before,
+		"un clic sans effet n'entre pas dans l'historique")
+
+	# --- Redimensionner depuis les réglages ---
+	editor._tool = MapEditorUI.Tool.UNIT_PLAYER
+	editor._use_tool(Vector2i(14, 8))
+	var far_unit: int = editor.doc.units.size()
+	editor._on_settings("Carte de test", 4, Vector2i(14, 10), editor.doc.objective)
+	_check(editor.doc.grid_size == Vector2i(14, 10),
+		"la grille suit les réglages %s" % str(editor.doc.grid_size))
+	var tiles_after: int = 0
+	for child in editor.get_children():
+		if String(child.name).begins_with("Tile_") and is_instance_valid(child) \
+				and not child.is_queued_for_deletion():
+			tiles_after += 1
+	_check(tiles_after == 140, "la vue 3D est rebâtie à la nouvelle taille (%d tuiles)" % tiles_after)
+	_check(editor.doc.units.size() == far_unit - 1, "l'unité hors grille est retirée")
+
+	editor._on_undo()
+	_check(editor.doc.grid_size == Vector2i(16, 10) and editor.doc.units.size() == far_unit,
+		"annuler le redimensionnement rend la grille et l'unité")
+	editor._tool = MapEditorUI.Tool.ERASE
+	editor._use_tool(Vector2i(14, 8))
+
 	editor.doc.name = "Carte de test"
 	_check(editor.doc.validate().is_empty(), "carte d'essai jugée jouable",
 		str(editor.doc.validate()))

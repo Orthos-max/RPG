@@ -27,6 +27,8 @@ const HEIGHT_STEP: float = 0.25
 ## Carte en cours d'édition
 var doc: MapDocument = null
 
+## États successifs de la carte : tout geste qui la modifie s'annule
+var _history: MapHistory = null
 var _ui: MapEditorUI = null
 var _tiles: Dictionary = {}       ## "col,row" → StaticBody3D
 var _markers: Node3D = null
@@ -48,6 +50,7 @@ func _ready() -> void:
 		doc = MapDocument.create_empty("Ma carte", Vector2i(16, 10))
 	_unit_paths["player"] = str(UI.roster_of("player")[0]["path"])
 	_unit_paths["opponent"] = str(UI.roster_of("opponent")[0]["path"])
+	_history = MapHistory.started_on(doc.to_dict())
 
 	_build_environment()
 	_build_camera()
@@ -102,9 +105,10 @@ func _build_ui() -> void:
 	_ui.new_requested.connect(_on_new)
 	_ui.test_requested.connect(_on_test)
 	_ui.settings_requested.connect(func() -> void:
-		_ui.open_settings(doc.name, doc.deploy_slots, doc.objective))
+		_ui.open_settings(doc.name, doc.deploy_slots, doc.objective, doc.grid_size))
 	_ui.settings_changed.connect(_on_settings)
-	_ui.objective_changed.connect(_on_objective)
+	_ui.undo_requested.connect(_on_undo)
+	_ui.redo_requested.connect(_on_redo)
 	_ui.back_requested.connect(func() -> void: back_to_menu.emit())
 #endregion
 
@@ -115,6 +119,11 @@ func _rebuild_all() -> void:
 	for key: String in _tiles:
 		var body: Node = _tiles[key]
 		if is_instance_valid(body):
+			# Sortir de l'arbre avant de libérer : un nœud seulement `queue_free`
+			# garde son nom jusqu'à la fin de la frame, et les nouvelles tuiles
+			# hériteraient d'un nom maquillé (« @Tile_4_4@31 ») — or c'est le nom
+			# qui dit quelle case a été cliquée ([method _pos_of_body]).
+			remove_child(body)
 			body.queue_free()
 	_tiles.clear()
 
@@ -170,6 +179,7 @@ func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
 ## Redessine les repères posés sur la carte : unités, zone de départ, point à prendre.
 func _rebuild_markers() -> void:
 	for child in _markers.get_children():
+		_markers.remove_child(child)
 		child.queue_free()
 
 	for tile: Variant in doc.deploy_tiles:
@@ -262,8 +272,18 @@ func _on_unit_picked(path: String) -> void:
 	_refresh_feedback("Unité choisie : %s" % MapDocument.unit_display_name(path))
 
 
-## Applique l'outil courant à une case.
+## Applique l'outil courant à une case, et retient le coup s'il a changé la carte.
+##
+## Un clic sans effet (unité posée dans un lac, case déjà fermée) n'entre pas
+## dans l'historique : annuler doit défaire un vrai geste, pas un clic raté.
 func _use_tool(pos: Vector2i) -> void:
+	var message: String = _apply_tool(pos)
+	_remember()
+	_refresh_feedback(message)
+
+
+## Le geste de l'outil courant. [returns] le message à afficher ("" = état par défaut).
+func _apply_tool(pos: Vector2i) -> String:
 	match _tool:
 		UI.Tool.RAISE:
 			doc.set_height_at(pos, doc.height_at(pos) + HEIGHT_STEP)
@@ -277,43 +297,43 @@ func _use_tool(pos: Vector2i) -> void:
 				else MapDocument.TEAM_OPPONENT
 			var result: Dictionary = doc.place_unit(str(_unit_paths[team]), pos, team)
 			if not bool(result["ok"]):
-				_refresh_feedback("⛔ %s" % str(result["error"]))
-				return
+				return "⛔ %s" % str(result["error"])
 			_rebuild_markers()
 
 		UI.Tool.ERASE:
 			if not doc.remove_unit(pos):
-				_refresh_feedback("Aucune unité sur cette case.")
-				return
+				return "Aucune unité sur cette case."
 			_rebuild_markers()
 
 		UI.Tool.DEPLOY:
+			var was_open: bool = doc.is_deploy_tile(pos)
 			var opened: bool = doc.toggle_deploy_tile(pos)
+			# Refermer est toujours permis ; ouvrir exige un terrain franchissable.
+			if not opened and not was_open:
+				return "⛔ Case de départ impossible sur ce terrain."
 			_rebuild_markers()
-			_refresh_feedback("Case de départ %s (%d, %d)"
-				% ["ouverte" if opened else "fermée", pos.x, pos.y])
-			return
+			return "Case de départ %s (%d, %d)" % [
+				"ouverte" if opened else "fermée", pos.x, pos.y]
 
 		UI.Tool.SEIZE:
 			if not doc.set_seize_point(pos):
-				_refresh_feedback("⛔ Point de commandement impossible sur ce terrain.")
-				return
+				return "⛔ Point de commandement impossible sur ce terrain."
 			_rebuild_markers()
-			_refresh_feedback("Objectif : prendre la case (%d, %d)." % [pos.x, pos.y])
-			return
+			return "Objectif : prendre la case (%d, %d)." % [pos.x, pos.y]
 
 		_:
 			doc.set_terrain_at(pos, _tool)
 			_refresh_tile(pos)
 			# Un terrain devenu infranchissable ne peut plus porter ce qui s'y trouve.
 			if not MapDataClass.is_walkable(_tool):
-				_clear_blocked(pos)
+				return _clear_blocked(pos)
 
-	_refresh_feedback()
+	return ""
 
 
 ## Retire ce qu'une case infranchissable ne peut plus accueillir.
-func _clear_blocked(pos: Vector2i) -> void:
+func _clear_blocked(pos: Vector2i) -> String:
+	var message: String = ""
 	var changed: bool = doc.remove_unit(pos)
 	if doc.is_deploy_tile(pos):
 		doc.toggle_deploy_tile(pos)  # La case redevient fermée.
@@ -321,9 +341,10 @@ func _clear_blocked(pos: Vector2i) -> void:
 	if doc.seize_point() == pos:
 		doc.set_objective({"kind": MapDocument.OBJ.Kind.ROUT})
 		changed = true
-		_refresh_feedback("Le point de commandement était ici : objectif remis à « vaincre tous les ennemis ».")
+		message = "Le point de commandement était ici : objectif remis à « vaincre tous les ennemis »."
 	if changed:
 		_rebuild_markers()
+	return message
 
 
 func _refresh_tile(pos: Vector2i) -> void:
@@ -346,6 +367,8 @@ func _refresh_feedback(message: String = "") -> void:
 
 	_ui.show_tool(_tool, unit_name)
 	_ui.show_errors(doc.validate())
+	_ui.show_history(_history != null and _history.can_undo(),
+		_history != null and _history.can_redo())
 	if not message.is_empty():
 		_ui.show_status(message)
 	else:
@@ -353,6 +376,40 @@ func _refresh_feedback(message: String = "") -> void:
 			doc.name, doc.grid_size.x, doc.grid_size.y, doc.units.size(),
 			MapDocument.OBJ.describe(doc.objective),
 		])
+#endregion
+
+
+#region Annulation
+## Retient l'état de la carte après un geste, s'il l'a vraiment changée.
+func _remember() -> void:
+	if _history:
+		_history.record(doc.to_dict())
+
+
+## Repart d'une carte neuve : annuler ne doit pas ramener la précédente.
+func _forget_history() -> void:
+	if _history:
+		_history.reset(doc.to_dict())
+
+
+func _on_undo() -> void:
+	_restore(_history.undo() if _history else {}, "↶ Changement annulé.", "Rien à annuler.")
+
+
+func _on_redo() -> void:
+	_restore(_history.redo() if _history else {}, "↷ Changement rétabli.", "Rien à rétablir.")
+
+
+## Remet la carte dans un état retenu, et redessine tout.
+##
+## La grille a pu changer de taille entre deux états : on reconstruit au lieu de
+## rafraîchir case par case.
+func _restore(snapshot: Dictionary, done_message: String, empty_message: String) -> void:
+	if snapshot.is_empty() or not doc.apply_dict(snapshot):
+		_refresh_feedback(empty_message)
+		return
+	_rebuild_all()
+	_refresh_feedback(done_message)
 #endregion
 
 
@@ -371,6 +428,7 @@ func _on_load(path: String) -> void:
 		_refresh_feedback("⛔ Carte illisible : %s" % path)
 		return
 	doc = loaded
+	_forget_history()
 	_rebuild_all()
 	_refresh_feedback("📂 Carte « %s » chargée." % doc.name)
 
@@ -384,21 +442,49 @@ func _on_delete(path: String) -> void:
 
 func _on_new(map_name: String, size: Vector2i) -> void:
 	doc = MapDocument.create_empty(map_name, size)
+	_forget_history()
 	_rebuild_all()
 	_refresh_feedback("Nouvelle carte « %s » (%dx%d)." % [doc.name, size.x, size.y])
 
 
-func _on_settings(map_name: String, slots: int) -> void:
+## Tout le panneau de réglages d'un coup : nom, places, taille de grille, objectif.
+func _on_settings(map_name: String, slots: int, size: Vector2i,
+		objective: Dictionary) -> void:
 	if not map_name.strip_edges().is_empty():
 		doc.name = map_name.strip_edges()
 	doc.deploy_slots = maxi(1, slots)
-	_refresh_feedback("Réglages appliqués.")
-
-
-func _on_objective(objective: Dictionary) -> void:
 	doc.set_objective(objective)
-	_rebuild_markers()
-	_refresh_feedback("Objectif : %s" % MapDocument.OBJ.describe(doc.objective))
+
+	var message: String = "Objectif : %s" % MapDocument.OBJ.describe(doc.objective)
+	if size != doc.grid_size:
+		# Redimensionner peut faire sortir le point de commandement de la grille :
+		# l'objectif se pose avant, pour que le document arbitre les deux ensemble.
+		var report: Dictionary = doc.resize(size)
+		message = "Carte redimensionnée en %dx%d.%s" % [
+			doc.grid_size.x, doc.grid_size.y, _resize_losses(report)]
+		_rebuild_all()
+	else:
+		_rebuild_markers()
+
+	_remember()
+	_refresh_feedback(message)
+
+
+## Ce que le redimensionnement a fait disparaître, dit en clair.
+func _resize_losses(report: Dictionary) -> String:
+	var losses: Array[String] = []
+	var units_removed: int = int(report.get("units_removed", 0))
+	var deploy_removed: int = int(report.get("deploy_removed", 0))
+	if units_removed > 0:
+		losses.append("%d unité(s)" % units_removed)
+	if deploy_removed > 0:
+		losses.append("%d case(s) de départ" % deploy_removed)
+	if bool(report.get("objective_reset", false)):
+		losses.append("le point de commandement")
+	if losses.is_empty():
+		return ""
+	return " Hors grille, donc perdu%s : %s (Ctrl+Z pour revenir)." % [
+		"s" if losses.size() > 1 else "", " et ".join(losses)]
 
 
 func _on_test(with_ciel: bool) -> void:
@@ -467,6 +553,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		_ui.close_panel()
 		back_to_menu.emit()
 		return
+
+	# Ctrl+Z / Ctrl+Maj+Z (Cmd sur macOS) : les raccourcis attendus d'un outil de
+	# dessin. Un champ de saisie a le focus ? Il consomme la touche avant nous.
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.is_command_or_control_pressed():
+		match event.keycode:
+			KEY_Z:
+				if event.shift_pressed:
+					_on_redo()
+				else:
+					_on_undo()
+				return
+			KEY_Y:
+				_on_redo()
+				return
 
 	if event is InputEventMouseButton:
 		match event.button_index:

@@ -51,6 +51,7 @@ func _init() -> void:
 	_test_ux_polish()
 	_test_audio()
 	_test_map_editor()
+	_test_map_history()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1317,10 +1318,32 @@ func _test_map_editor() -> void:
 	var shrink := MapDocument.create_empty("Rétrécie", Vector2i(16, 12))
 	shrink.place_unit(LORD, Vector2i(14, 10), MapDocument.TEAM_PLAYER)
 	shrink.toggle_deploy_tile(Vector2i(15, 11))
-	shrink.resize(Vector2i(8, 8))
+	shrink.set_seize_point(Vector2i(12, 9))
+	var report: Dictionary = shrink.resize(Vector2i(8, 8))
 	_check(shrink.units.is_empty() and shrink.deploy_tiles.is_empty(),
 		"les unités et cases hors de la nouvelle grille disparaissent")
 	_check(shrink.terrain.size() == 64, "la grille est bien redimensionnée")
+	_check(int(report["units_removed"]) == 1 and int(report["deploy_removed"]) == 1,
+		"le redimensionnement dit ce qu'il a fallu jeter : %s" % str(report))
+	_check(bool(report["objective_reset"])
+			and int(shrink.objective["kind"]) == OBJ.Kind.ROUT,
+		"un point de commandement hors grille ne laisse pas une carte injouable")
+
+	# Agrandir ne détruit rien et complète en herbe.
+	var grown := MapDocument.create_empty("Agrandie", Vector2i(8, 8))
+	grown.set_terrain_at(Vector2i(1, 1), MapData.TerrainType.MOUNTAIN)
+	grown.place_unit(LORD, Vector2i(2, 2), MapDocument.TEAM_PLAYER)
+	var grow_report: Dictionary = grown.resize(Vector2i(20, 14))
+	_check(grown.terrain.size() == 280 and grown.units.size() == 1
+			and grown.terrain_at(Vector2i(1, 1)) == MapData.TerrainType.MOUNTAIN,
+		"agrandir garde le terrain peint et les unités posées")
+	_check(grown.terrain_at(Vector2i(19, 13)) == MapData.TerrainType.GRASS,
+		"les bords ajoutés sont en herbe")
+	_check(int(grow_report["units_removed"]) == 0, "agrandir ne perd rien")
+
+	_check(MapDocument.create_empty("Démesurée", Vector2i(99, 99)).grid_size
+			== MapDocument.MAX_SIZE,
+		"une taille trop grande est ramenée au maximum")
 
 	# --- Chapitre jouable ---
 	var chapter: ChapterData = doc.to_chapter()
@@ -1372,4 +1395,85 @@ func _test_map_editor() -> void:
 	_check(MapLibrary.delete(str(saved["path"])), "carte de test supprimée")
 	_check(MapLibrary.load_map(str(saved["path"])) == null, "le fichier a bien disparu")
 	_check(doc.slug() == "col_de_laube", "nom de fichier lisible : %s" % doc.slug())
+
+
+## Annuler / rétablir : la pile d'instantanés de l'éditeur.
+func _test_map_history() -> void:
+	print("\n↶ Test 20: annulation dans l'éditeur")
+
+	const LORD: String = "res://data/models/world/stats/hero/lord.tres"
+
+	var doc := MapDocument.create_empty("Brouillon", Vector2i(10, 8))
+	var history := MapHistory.started_on(doc.to_dict())
+	_check(not history.can_undo() and not history.can_redo(),
+		"une carte neuve n'a rien à annuler")
+
+	# Un coup de pinceau, puis un autre.
+	doc.set_terrain_at(Vector2i(2, 2), MapData.TerrainType.FOREST)
+	_check(history.record(doc.to_dict()), "premier coup retenu")
+	doc.set_terrain_at(Vector2i(3, 3), MapData.TerrainType.WATER)
+	_check(history.record(doc.to_dict()), "deuxième coup retenu")
+	_check(history.undo_steps() == 2, "deux coups annulables")
+
+	# Un clic sans effet n'encombre pas la pile.
+	_check(not history.record(doc.to_dict()), "un état identique n'est pas retenu")
+	_check(history.undo_steps() == 2, "la pile n'a pas bougé")
+
+	# Annuler ramène l'état précédent — sur le même document.
+	_check(doc.apply_dict(history.undo()), "annulation appliquée")
+	_check(doc.terrain_at(Vector2i(3, 3)) == MapData.TerrainType.GRASS,
+		"le dernier coup de pinceau est défait")
+	_check(doc.terrain_at(Vector2i(2, 2)) == MapData.TerrainType.FOREST,
+		"l'avant-dernier tient toujours")
+
+	# Rétablir le remet.
+	_check(history.can_redo() and doc.apply_dict(history.redo()), "rétablissement appliqué")
+	_check(doc.terrain_at(Vector2i(3, 3)) == MapData.TerrainType.WATER,
+		"le coup rétabli est de retour")
+
+	# Repartir dans une autre direction rend le futur caduc.
+	doc.apply_dict(history.undo())
+	doc.set_terrain_at(Vector2i(4, 4), MapData.TerrainType.WALL)
+	history.record(doc.to_dict())
+	_check(not history.can_redo(), "un nouveau coup efface ce qu'on pouvait rétablir")
+
+	# Tout l'état revient, pas seulement le terrain.
+	doc.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	doc.toggle_deploy_tile(Vector2i(1, 1))
+	doc.set_seize_point(Vector2i(5, 5))
+	doc.deploy_slots = 7
+	doc.name = "Brouillon abouti"
+	history.record(doc.to_dict())
+	doc.apply_dict(history.undo())
+	_check(doc.units.is_empty() and doc.deploy_tiles.is_empty()
+			and doc.deploy_slots == 4 and doc.name == "Brouillon"
+			and int(doc.objective["kind"]) == OBJ.Kind.ROUT,
+		"unités, zone de départ, places, nom et objectif reviennent ensemble")
+
+	# Un redimensionnement s'annule comme le reste.
+	var resized := MapDocument.create_empty("Taille", Vector2i(16, 12))
+	resized.place_unit(LORD, Vector2i(14, 10), MapDocument.TEAM_PLAYER)
+	var sizes := MapHistory.started_on(resized.to_dict())
+	resized.resize(Vector2i(8, 8))
+	sizes.record(resized.to_dict())
+	resized.apply_dict(sizes.undo())
+	_check(resized.grid_size == Vector2i(16, 12) and resized.units.size() == 1,
+		"annuler un rétrécissement rend la grille et l'unité qu'elle portait")
+
+	# Rien à annuler : la pile le dit au lieu de rendre un état bancal.
+	var empty := MapHistory.started_on(MapDocument.create_empty("Vide").to_dict())
+	_check(empty.undo().is_empty() and empty.redo().is_empty(),
+		"annuler sans historique ne rend rien")
+
+	# La profondeur borne la mémoire : les coups les plus vieux tombent.
+	var deep := MapHistory.started_on(MapDocument.create_empty("Profonde").to_dict(), 3)
+	var counted := MapDocument.create_empty("Profonde")
+	for i: int in 10:
+		counted.set_height_at(Vector2i(i % 6, 0), 0.25 * float(i + 1))
+		deep.record(counted.to_dict())
+	_check(deep.undo_steps() == 3, "la pile est bornée à sa profondeur (%d)" % deep.undo_steps())
+	for _i in 5:
+		deep.undo()
+	_check(not deep.can_undo() and deep.redo_steps() == 3,
+		"annuler jusqu'au bout laisse tout à rétablir")
 #endregion
