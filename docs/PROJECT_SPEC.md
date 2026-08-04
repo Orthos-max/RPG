@@ -225,13 +225,17 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       complète — +100 or chacun.
 - [x] **Difficulty** : facile/normal/brutal, module l'IA locale (agressivité, prise de
       risque, focus sur les blessés) et le handicap adverse.
-- [x] **Étoffer le contenu** : 5 chapitres, et l'objectif « prise de point » est
-      enfin joué. `ObjectiveDB.is_seized` (règle pure, preneur nommable),
-      `ChapterRunner` reporte la case de chaque unité et colore le point à prendre,
-      `ai_state.json` gagne `objective_point` pour que Ciel sache quoi défendre.
-      Chapitres 4 et 5 écrits dans l'univers de [`LORE.md`](LORE.md).
-      *Reste à faire : l'objectif PROTECT n'a toujours aucune carte — il exige une
-      unité nommée toujours déployée, ce que l'écran de préparation ne garantit pas.*
+- [x] **Étoffer le contenu** : 6 chapitres, et les deux objectifs restés sans carte
+      sont joués. « Prise de point » : `ObjectiveDB.is_seized` (règle pure, preneur
+      nommable), `ChapterRunner` reporte la case de chaque unité et colore le point,
+      `ai_state.json` gagne `objective_point` pour que Ciel sache quoi défendre
+      (chapitres 4 et 5). « Protéger » : voir ci-dessous (chapitre 6).
+- [x] **Objectif « protéger » et unités imposées** : un chapitre déclare ses
+      `required_units` — déployées quoi qu'il arrive, verrouillées à l'écran de
+      préparation, remises en place si la sélection les oublie, et cessant d'être
+      exigées si l'unité tombe en mort permanente. Deux corrections de sémantique :
+      un camp vide ne vaut pas une protégée perdue (au premier frame, personne n'est
+      encore en scène), et disparaître vaut tomber (le pion mort quitte la scène).
 - [x] **Choix des cases de déploiement** : `DeploymentPlan` (règle pure — cases
       ouvertes, occupation, échange de deux unités) + `DeploymentPhase` (tuiles
       surlignées, clic unité puis case, bataille suspendue jusqu'à confirmation).
@@ -305,6 +309,13 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 
 ### 🏅 P3 — Vision long terme (hors modes de jeu ci-dessus)
 - [ ] **Sons & animations de combat** (sprites en croisade, caméra de duel).
+      ⚠️ *Le côté logiciel est prêt : `SoundDB` (catalogue + traduction
+      « événement de bataille → son ») et l'autoload `Audio` (bus SFX/Music/UI,
+      8 voix, musiques bouclées, volumes dans `user://settings.json`) écoutent déjà
+      `BattleRecorder`. **Il ne manque que les fichiers** — liste, format et
+      intention de chaque son dans [`assets/audio/README.md`](../assets/audio/README.md),
+      et `Audio.missing_cues()` dit lesquels manquent. Restent à coder : les
+      animations de duel proprement dites.*
 - [ ] **Version `fe_2d/`** : poursuivre le port 2D si la direction artistique évolue.
 - [x] **Aperçu des dégâts avant d'engager** : `BattleForecast` (logique pure) met en
       forme le calculateur — dégâts totaux, nombre de coups, précision, critique, PV
@@ -316,7 +327,14 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       `UnitSheet` + `UnitSheetPanel` (fiche au survol : esquive, critique, vitesse
       d'attaque, arme, portée, et le bonus du terrain occupé — jusque-là calculé en
       combat sans jamais s'afficher avant d'engager).
-- [ ] **Mods / éditeur de niveau intégré** (map_editor déjà présent) pour créer ses cartes.
+- [x] **Mods / éditeur de niveau intégré** : `MapDocument` (terrain, hauteurs, armées,
+      zone de déploiement, objectif + validation « pourquoi cette carte n'est pas
+      jouable »), `MapLibrary` (`user://maps/*.json`, lisible et échangeable),
+      `CustomBattle` (la carte devient un chapitre et emprunte toute la machinerie
+      existante), et l'éditeur réécrit autour du document : pinceaux, élévation,
+      unités des deux camps, cases de départ, point de commandement, réglages
+      d'objectif, bibliothèque, essai immédiat contre l'IA locale ou contre Ciel.
+      Une carte d'essai ne touche jamais à la campagne.
 
 
 ---
@@ -436,9 +454,10 @@ Après implémentation, lancer `scripts/build/package.sh` et vérifier que :
 
 ## 6. Prochaines étapes immédiates
 
-La passe du 2026-08-04 a livré la reconnexion réseau, l'objectif « prise de point »
-avec deux chapitres, le choix des cases de déploiement et le polissage UX.
-**Backlog : 40 items faits, 5 restants.** Ordre conseillé pour la reprise :
+Les passes du 2026-08-04 ont livré la reconnexion réseau, les deux objectifs de
+chapitre restés sans carte, le choix des cases de déploiement, le polissage UX,
+la préparation du système sonore et l'éditeur de cartes.
+**Backlog : 42 items faits, 4 restants.** Ordre conseillé pour la reprise :
 
 1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
    livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
@@ -446,15 +465,15 @@ avec deux chapitres, le choix des cases de déploiement et le polissage UX.
    doit se faire fenêtre ouverte, deux instances.*
 2. 🔨 **Exécuter l'installeur Windows sur une vraie machine.** Le `.iss` existe et
    `package.sh` le compile ; personne ne l'a encore lancé sous Windows.
-3. **Aligner les noms sur le lore** — *à ne pas entamer avant que le lore soit posé
+3. 🔊 **Fournir les fichiers audio.** Tout le reste est branché et attend :
+   [`assets/audio/README.md`](../assets/audio/README.md) donne la liste, le format
+   et l'intention de chaque son. Ensuite seulement, les **animations de duel**.
+4. **Aligner les noms sur le lore** — *à ne pas entamer avant que le lore soit posé
    (document en cours d'écriture par Aurèle et sa compagne).* Les héros s'appellent
    encore Chrom, Lissa, Frederick. Ce ne sera pas qu'un renommage : les identifiants
-   de sauvegarde et la cible du chapitre 2 en dépendent.
-4. **Objectif PROTECT** : il n'a aucune carte parce qu'il exige une unité toujours
-   déployée. Le débloquer demande des unités obligatoires à la préparation.
-5. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
-   les règles ne bougeront plus. Demande des assets sonores.
-6. **Éditeur de niveau intégré** (`map_editor` déjà présent) pour créer ses cartes.
+   de sauvegarde, la cible du chapitre 2 et les `required_units` du chapitre 6 en
+   dépendent.
+5. **Signature macOS** (certificat Apple) et **port 2D** (`fe_2d/`), selon l'envie.
 
 ---
 
@@ -530,6 +549,9 @@ bash scripts/test_net.sh                             # transport réseau, 2 proc
 | Chapitres 4 et 5, écrits dans l'univers de `LORE.md` | `campaign_db.gd` |
 | Choix des cases de déploiement avant la bataille | `deployment_plan.gd`, `deployment_phase.gd` |
 | Annulation d'un déplacement + fiche d'unité au survol | `move_memory.gd`, `unit_sheet.gd`, `unit_sheet_panel.gd`, `selection.gd` |
+| Objectif « protéger » + unités imposées au déploiement | `objective.gd`, `campaign_state.gd`, `prep_screen.gd`, `campaign_db.gd` |
+| Système sonore prêt à recevoir ses fichiers | `sound_db.gd`, `audio_service.gd`, `assets/audio/README.md` |
+| Éditeur de cartes : dessiner, poser, enregistrer, jouer | `map_document.gd`, `map_library.gd`, `custom_battle.gd`, `map_editor_*.gd` |
 
 Trois choix structurants de cette passe :
 
