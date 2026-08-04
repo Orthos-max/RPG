@@ -30,6 +30,9 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 ## Cases ouvertes au déploiement ([[col, row], …]).
 ## Vide : le voisinage de la ligne de départ de la carte fait office de zone.
 @export var deploy_tiles: Array = []
+## Unités que le chapitre impose au déploiement (identifiants de roster).
+## Indispensable à un objectif « protéger » : la protégée doit être en scène.
+@export var required_units: Array[String] = []
 ## Unités recrutables à la fin du chapitre (chemins .tres)
 @export var recruits: Array[String] = []
 ## Or gagné à la victoire
@@ -72,4 +75,9 @@ static func from_dict(data: Dictionary) -> ChapterData:
 	for r in data.get("recruits", []):
 		rec.append(str(r))
 	c.recruits = rec
+
+	var required: Array[String] = []
+	for r in data.get("required_units", []):
+		required.append(str(r))
+	c.required_units = required
 	return c

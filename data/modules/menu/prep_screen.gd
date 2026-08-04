@@ -32,6 +32,11 @@ func _ready() -> void:
 	var campaign: Node = get_node_or_null("/root/Campaign")
 	if campaign:
 		_selected = campaign.deployment.duplicate()
+		# Le déploiement peut venir du chapitre précédent : les unités imposées
+		# ici doivent apparaître cochées dès l'ouverture de l'écran.
+		for id: String in campaign.required_deployment():
+			if not id in _selected:
+				_selected.push_front(id)
 	_build()
 
 
@@ -151,9 +156,15 @@ func _refresh() -> void:
 
 func _make_unit_row(unit: Dictionary, campaign: Node) -> Control:
 	var id: String = str(unit.get("id", ""))
+	# Une unité imposée par le chapitre (la protégée, le seigneur) est cochée et
+	# verrouillée : la décocher rendrait l'objectif intenable.
+	var required: bool = id in chapter.required_units
 	var row := Button.new()
 	row.toggle_mode = true
-	row.button_pressed = id in _selected
+	row.button_pressed = id in _selected or required
+	row.disabled = required
+	if required:
+		row.tooltip_text = "Cette unité est imposée par le chapitre."
 	row.custom_minimum_size = Vector2(0, 42)
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	var skills: Array = []
@@ -161,7 +172,7 @@ func _make_unit_row(unit: Dictionary, campaign: Node) -> Control:
 		skills.append(SKILLS.get_skill_name(str(skill_id)))
 
 	row.text = "%s  %-14s Lv.%-3d %-14s PV %d/%d  MOV %d  %s" % [
-		"✔" if row.button_pressed else "  ",
+		"🔒" if required else ("✔" if row.button_pressed else "  "),
 		str(unit.get("name", "?")),
 		int(unit.get("level", 1)),
 		campaign.unit_class_name(unit),

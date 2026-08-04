@@ -148,14 +148,41 @@ func get_unit(id: String) -> Dictionary:
 	return {}
 
 
+## Unités que le chapitre courant impose au déploiement.
+##
+## Filtrées sur celles encore vivantes : une protégée déjà tombée en mort
+## permanente ne peut plus être exigée, sinon le chapitre serait injouable.
+func required_deployment() -> Array:
+	var chapter: ChapterData = current_chapter()
+	if not chapter:
+		return []
+	var out: Array = []
+	for id: String in chapter.required_units:
+		var unit: Dictionary = get_unit(id)
+		if not unit.is_empty() and bool(unit.get("alive", true)):
+			out.append(id)
+	return out
+
+
 ## Définit les unités déployées, dans la limite des places du chapitre.
+##
+## Les unités imposées par le chapitre passent d'abord et ne peuvent pas être
+## écartées : c'est ce qui rend un objectif « protéger » tenable.
 func set_deployment(ids: Array) -> void:
 	var chapter: ChapterData = current_chapter()
 	var slots: int = chapter.deploy_slots if chapter else 3
 	deployment = []
+
+	for id: String in required_deployment():
+		if deployment.size() >= slots:
+			break
+		deployment.append(id)
+
 	for id in ids:
 		if deployment.size() >= slots:
 			break
+		if str(id) in deployment:
+			continue
 		if not get_unit(str(id)).is_empty():
 			deployment.append(str(id))
 
@@ -454,10 +481,12 @@ func _normalize_unit(raw: Dictionary) -> Dictionary:
 func _default_deployment() -> Array:
 	var chapter: ChapterData = current_chapter()
 	var slots: int = chapter.deploy_slots if chapter else 3
-	var ids: Array = []
+	var ids: Array = required_deployment()
 	for u: Dictionary in available_units():
 		if ids.size() >= slots:
 			break
-		ids.append(str(u.get("id", "")))
+		var id: String = str(u.get("id", ""))
+		if not id in ids:
+			ids.append(id)
 	return ids
 #endregion

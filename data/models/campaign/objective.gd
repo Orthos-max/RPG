@@ -92,6 +92,11 @@ static func evaluate(objective: Dictionary, snapshot: Dictionary) -> Dictionary:
 				return {"status": Status.VICTORY, "reason": "Ennemis anéantis avant la fin"}
 
 		Kind.PROTECT:
+			# Tant qu'aucune unité n'est listée, il n'y a rien à juger : au premier
+			# frame d'une bataille, le camp n'est pas encore peuplé et la protégée
+			# serait déclarée perdue avant même d'entrer en scène.
+			if players.is_empty():
+				return {"status": Status.IN_PROGRESS, "reason": describe(objective)}
 			if not _is_alive_named(players, target):
 				return {"status": Status.DEFEAT, "reason": "%s est tombé" % target}
 			if _alive_count(enemies) == 0:
@@ -133,6 +138,18 @@ static func evaluate_bonuses(bonuses: Array, snapshot: Dictionary) -> Array:
 				label = "Tous les ennemis éliminés"
 		results.append({"kind": kind, "achieved": achieved, "label": label})
 	return results
+
+
+## Unité que le chapitre demande de garder en vie ("" si l'objectif est autre).
+##
+## Un objectif PROTECT n'a de sens que si la protégée est réellement sur le
+## champ de bataille : le chapitre doit l'imposer au déploiement
+## ([member ChapterData.required_units]), sinon le joueur pourrait la laisser
+## au camp et perdre à la première évaluation.
+static func protected_target(objective: Dictionary) -> String:
+	if int(objective.get("kind", Kind.ROUT)) != Kind.PROTECT:
+		return ""
+	return str(objective.get("target", ""))
 
 
 ## Case à prendre d'un objectif « prise de point » — (-1, -1) si sans objet.

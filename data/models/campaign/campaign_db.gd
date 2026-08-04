@@ -148,6 +148,38 @@ const CHAPTERS: Array[Dictionary] = [
 		"reward_gold": 900,
 		"recommended_level": 13,
 	},
+	{
+		"id": "ch06",
+		"index": 5,
+		"title": "Chapitre 6 — L'escorte",
+		"subtitle": "Route basse, sous la pluie",
+		"intro_lines": [
+			"Les relevés du relais ne valent rien sans quelqu'un pour les lire.",
+			"Votre clerc est la seule à savoir déchiffrer une signature de mana.",
+			"— Ils le savent aussi. Ils viendront pour elle.",
+			"Tenez jusqu'à ce que l'escorte atteigne la crête.",
+		],
+		"outro_lines": [
+			"La crête est franchie, les relevés sont saufs.",
+			"— Ces courbes… ce n'est pas une réserve qu'on vide. C'est un cœur qui s'emballe.",
+			"Personne n'ose demander ce qui arrive quand il s'arrête.",
+		],
+		"scene_path": "res://assets/maps/level/map_level.tscn",
+		# Protéger : la cible doit correspondre au nom affiché d'un pion du joueur.
+		# `required_units` l'impose au déploiement — sans quoi le joueur pourrait
+		# la laisser au camp et perdre au premier tour.
+		"objective": {"kind": OBJ.Kind.PROTECT, "target": "Lissa", "turns": 10},
+		# Identifiants de roster : à renommer en même temps que les héros le jour
+		# où les noms suivront le lore.
+		"required_units": ["lissa", "chrom"],
+		"bonus_objectives": [
+			{"kind": OBJ.Bonus.NO_LOSSES},
+			{"kind": OBJ.Bonus.FULL_ROUT},
+		],
+		"deploy_slots": 5,
+		"reward_gold": 1000,
+		"recommended_level": 15,
+	},
 ]
 
 

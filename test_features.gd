@@ -395,6 +395,27 @@ func _test_objectives() -> void:
 		"enemy_units": alive_enemies})
 	_check(int(protect_lost["status"]) == OBJ.Status.DEFEAT, "PROTECT : défaite si la cible tombe")
 
+	# Le pion mort est retiré de la scène : disparaître vaut tomber.
+	var protect_gone: Dictionary = OBJ.evaluate({"kind": OBJ.Kind.PROTECT, "target": "Cleric"},
+		{"turn": 2, "player_units": [{"name": "Lord", "hp": 10}], "enemy_units": alive_enemies})
+	_check(int(protect_gone["status"]) == OBJ.Status.DEFEAT,
+		"PROTECT : défaite si la cible a quitté le champ de bataille")
+
+	# Au premier frame, le camp n'est pas encore peuplé : ne rien conclure.
+	var protect_early: Dictionary = OBJ.evaluate({"kind": OBJ.Kind.PROTECT, "target": "Cleric"},
+		{"turn": 1, "player_units": [], "enemy_units": alive_enemies})
+	_check(int(protect_early["status"]) == OBJ.Status.IN_PROGRESS,
+		"PROTECT : rien à juger tant que personne n'est en scène")
+
+	var protect_held: Dictionary = OBJ.evaluate(
+		{"kind": OBJ.Kind.PROTECT, "target": "Cleric", "turns": 3},
+		{"turn": 4, "player_units": alive_players, "enemy_units": alive_enemies})
+	_check(int(protect_held["status"]) == OBJ.Status.VICTORY,
+		"PROTECT : victoire quand la cible a tenu le nombre de tours")
+	_check(OBJ.protected_target({"kind": OBJ.Kind.PROTECT, "target": "Cleric"}) == "Cleric"
+			and OBJ.protected_target({"kind": OBJ.Kind.ROUT}).is_empty(),
+		"la protégée d'un chapitre est exposée")
+
 	var bonuses: Array = OBJ.evaluate_bonuses(
 		[{"kind": OBJ.Bonus.NO_LOSSES}, {"kind": OBJ.Bonus.SPEED_RUN, "turns": 5}],
 		{"turn": 4, "player_units": alive_players, "enemy_units": dead_enemies})
@@ -513,6 +534,64 @@ func _test_campaign_save() -> void:
 
 	campaign.delete_save(SLOT)
 	_check(not campaign.has_save(SLOT), "sauvegarde de test supprimée")
+
+	_test_required_units(campaign)
+
+
+## Unités imposées par un chapitre : elles doivent survivre à toute sélection.
+func _test_required_units(campaign: Node) -> void:
+	var index: int = CAMPAIGN_DB.index_of("ch06")
+	if index < 0:
+		_ko("Chapitre à protection", "aucun chapitre PROTECT dans CampaignDB")
+		return
+
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	campaign.chapter_index = index
+	var chapter = campaign.current_chapter()
+	_check(not chapter.required_units.is_empty(),
+		"le chapitre %s impose des unités (%s)" % [chapter.id, str(chapter.required_units)])
+
+	var protected_name: String = OBJ.protected_target(chapter.objective)
+	var protected_id: String = protected_name.to_lower().replace(" ", "_")
+	_check(protected_id in chapter.required_units,
+		"la protégée (%s) fait partie des unités imposées" % protected_name)
+
+	# Sélection qui l'oublie volontairement : elle doit revenir d'elle-même.
+	var others: Array = []
+	for u: Dictionary in campaign.available_units():
+		if not str(u["id"]) in chapter.required_units:
+			others.append(str(u["id"]))
+	campaign.set_deployment(others)
+	_check(protected_id in campaign.deployment,
+		"une sélection qui oublie la protégée la remet en place", str(campaign.deployment))
+	for id: String in chapter.required_units:
+		_check(id in campaign.deployment, "unité imposée déployée : %s" % id)
+	_check(campaign.deployment.size() <= chapter.deploy_slots,
+		"les unités imposées comptent dans les places (%d/%d)" % [
+			campaign.deployment.size(), chapter.deploy_slots])
+
+	# Aucun doublon, même si la sélection la nomme aussi.
+	campaign.set_deployment([protected_id, protected_id] + others)
+	var seen: Array = []
+	var duplicated: bool = false
+	for id: String in campaign.deployment:
+		if id in seen:
+			duplicated = true
+		seen.append(id)
+	_check(not duplicated, "aucun doublon dans le déploiement", str(campaign.deployment))
+
+	# Déploiement par défaut : la protégée y est aussi.
+	campaign.set_deployment([])
+	_check(protected_id in campaign.deployment,
+		"même une sélection vide déploie les unités imposées")
+
+	# Tombée en mort permanente, elle ne peut plus être exigée : le chapitre
+	# resterait sinon bloqué sur une unité qui n'existe plus.
+	campaign.permadeath = true
+	campaign.apply_battle_result({"id": protected_id, "hp": 0})
+	_check(not protected_id in campaign.required_deployment(),
+		"une unité imposée mais tombée n'est plus exigée")
+	campaign.new_game(DIFF.Level.NORMAL, true)
 #endregion
 
 

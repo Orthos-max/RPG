@@ -184,6 +184,24 @@ func _apply_roster() -> void:
 	print_rich("[color=cyan]📋 Déploiement : %s[/color]" % (
 		", ".join(_deployed_names) if not _deployed_names.is_empty() else "roster par défaut du niveau"
 	))
+	_check_protected_present()
+
+
+## Vérifie que la protégée d'un objectif « protéger » est bien entrée en scène.
+##
+## Le déploiement l'impose ([member ChapterData.required_units]) ; si elle
+## manque quand même, le chapitre serait perdu au premier tour sans que rien ne
+## l'explique. Mieux vaut le dire fort dans le journal.
+func _check_protected_present() -> void:
+	var target: String = OBJ.protected_target(chapter.objective) if chapter else ""
+	if target.is_empty() or _deployed_names.is_empty():
+		return
+	if target in _deployed_names:
+		print_rich("[color=yellow]🛡 À protéger : %s[/color]" % target)
+		return
+	push_warning("[ChapterRunner] %s doit être protégée mais n'est pas déployée — "
+		% target + "ajoute son identifiant à `required_units` du chapitre %s."
+		% (chapter.id if chapter else "?"))
 
 
 ## Ouvre le placement des unités avant le premier tour.
