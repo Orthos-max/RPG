@@ -8,6 +8,7 @@ const CombatCalc = preload("res://data/services/combat/fe_combat.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const MapDataRef = preload("res://data/models/world/map/map_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
+const ForecastRef = preload("res://data/services/combat/battle_forecast.gd")
 
 var _victory_checked: bool = false  ## Prevents duplicate victory/defeat triggers
 
@@ -64,11 +65,8 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 	var support_bonuses := _get_support_bonuses(pawn, target_pawn)
 	
 	# --- Terrain defense bonus ---
-	var terrain_def: int = 0
-	var target_tile = target_pawn.get_tile()
-	if target_tile and target_tile.get("terrain_type") != null:
-		terrain_def = MapDataRef.get_defense_bonus(target_tile.terrain_type)
-	
+	var terrain_def: int = terrain_defense_of(target_pawn)
+
 	# --- Run combat calculation ---
 	var preview: CombatCalc.CombatResult = CombatCalc.calculate(pawn.stats, target_pawn.stats, support_bonuses, terrain_def)
 	var outcome: Dictionary = CombatCalc.roll_combat(preview)
@@ -251,20 +249,34 @@ func _show_victory_screen(tree: SceneTree) -> void:
 
 ## Get support bonuses for the attacker from nearby allies
 func _get_support_bonuses(attacker: TacticsPawn, _defender: TacticsPawn) -> Dictionary:
+	return collect_support_bonuses(attacker)
+
+
+## Bonus de soutien apportés à `attacker` par ses alliés proches.
+## Statique : la prévision d'avant-combat s'en sert sans instancier le service.
+static func collect_support_bonuses(attacker: TacticsPawn) -> Dictionary:
 	var tracker := SupportTracker.instance
-	if not tracker:
+	if not tracker or not attacker:
 		return {}
-	
-	var attacker_name := _get_name(attacker)
-	
+
 	# Find all allies on the same team within support range
 	var all_allies: Array = []
 	var parent_node = attacker.get_parent()
 	if parent_node:
 		all_allies = parent_node.get_children()
-	
+
 	var nearby := tracker.get_nearby_support_allies(attacker, all_allies)
-	return tracker.get_combined_bonuses(attacker_name, nearby)
+	return tracker.get_combined_bonuses(attacker.display_name(), nearby)
+
+
+## Bonus de DÉF/RÉS apporté par la tuile qu'occupe `pawn`.
+static func terrain_defense_of(pawn: TacticsPawn) -> int:
+	if not pawn:
+		return 0
+	var tile = pawn.get_tile()
+	if tile and tile.get("terrain_type") != null:
+		return MapDataRef.get_defense_bonus(tile.terrain_type)
+	return 0
 
 
 ## Award support points to nearby allies after combat
@@ -337,3 +349,28 @@ func _get_name(p: TacticsPawn) -> String:
 ## @return: FECombatCalculator.CombatResult with hit/dmg/crit/double info
 static func preview_combat(attacker: Stats, defender: Stats, support_bonuses: Dictionary = {}, terrain_defense: int = 0) -> CombatCalc.CombatResult:
 	return CombatCalc.calculate(attacker, defender, support_bonuses, terrain_defense)
+
+
+## Prévision affichable de l'action de `attacker` sur `target`, telle qu'elle
+## sera réellement résolue : mêmes bonus de soutien, même terrain, même
+## distinction soin/attaque que `_resolve_combat`.
+##
+## @return: dictionnaire [BattleForecast] ; vide si l'action est impossible.
+static func build_forecast(attacker: TacticsPawn, target: TacticsPawn) -> Dictionary:
+	if not attacker or not target or not attacker.stats or not target.stats:
+		return {}
+	if not target.is_alive():
+		return {}
+
+	var same_team: bool = attacker.get_parent() == target.get_parent()
+	var is_healer: bool = WT.is_magical(attacker.stats.weapon_type)
+	# Un soigneur ne vise que ses alliés, un combattant que ses ennemis :
+	# hors de ces cas, il n'y a rien à prévoir.
+	if same_team != is_healer:
+		return {}
+
+	return ForecastRef.build(attacker.stats, target.stats, {
+		"support": collect_support_bonuses(attacker),
+		"terrain_defense": terrain_defense_of(target),
+		"is_heal": same_team and is_healer,
+	})

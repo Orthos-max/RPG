@@ -1,0 +1,75 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/modules/ui/forecast/battle_forecast_panel.gd" id="1_frcst"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frcst"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.0705882, 0.0784314, 0.109804, 0.870588)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.545098, 0.588235, 0.72549, 0.941176)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="BattleForecast" type="PanelContainer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -348.0
+offset_top = 16.0
+offset_right = -16.0
+grow_horizontal = 0
+custom_minimum_size = Vector2(332, 0)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frcst")
+script = ExtResource("1_frcst")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+text = "Prévision"
+theme_override_colors/font_color = Color(0.803922, 0.831373, 0.929412, 1)
+theme_override_font_sizes/font_size = 15
+
+[node name="Damage" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 21
+
+[node name="Rates" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 15
+
+[node name="Health" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 15
+
+[node name="Bonuses" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 13

@@ -28,6 +28,7 @@ func _init(_participant: TacticsParticipantResource, _arena: TacticsArenaResourc
 ## Handles the selection of a pawn.
 func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	arena.reset_all_tile_markers()
+	controls.set_battle_forecast({})
 	if ctrl.curr_pawn:
 		controls.set_actions_menu_visibility(false, participant.curr_pawn)
 		ctrl.curr_pawn.show_pawn_stats(false)
@@ -101,13 +102,29 @@ func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 	if participant.attackable_pawn:
 		controls.set_actions_menu_visibility(true, participant.attackable_pawn)
 		participant.attackable_pawn.show_pawn_stats(true)
+	# Prévision de combat : n'a de sens que sur une case réellement à portée,
+	# sinon le joueur lirait des dégâts qu'il ne peut pas infliger.
+	_update_forecast(tile, target)
 	if Input.is_action_just_pressed("ui_accept") and tile and tile.attackable and participant.attackable_pawn:
 		t_cam.target = participant.attackable_pawn
 		participant.stage = 7
+		controls.set_battle_forecast({})
+
+
+## Met à jour l'encart de prévision pour la cible survolée.
+## Masqué dès que la cible sort de portée, disparaît ou n'existe pas.
+func _update_forecast(tile: TacticsTile, target: TacticsPawn) -> void:
+	if not target or not tile or not tile.attackable or not participant.curr_pawn:
+		controls.set_battle_forecast({})
+		return
+	controls.set_battle_forecast(
+		TacticsPawnCombatService.build_forecast(participant.curr_pawn, target)
+	)
 
 
 ## Handles the player's intention to move.
 func player_wants_to_move() -> void:
+	controls.set_battle_forecast({})
 	if participant.display_opponent_stats:
 		participant.display_opponent_stats = false
 	participant.stage = 2
@@ -115,6 +132,7 @@ func player_wants_to_move() -> void:
 
 ## Handles the player's intention to cancel.
 func player_wants_to_cancel() -> void:
+	controls.set_battle_forecast({})
 	if participant.display_opponent_stats:
 		participant.display_opponent_stats = false
 	participant.stage = 1 if participant.stage > 1 else 0
@@ -122,6 +140,7 @@ func player_wants_to_cancel() -> void:
 
 ## Handles the player's intention to wait.
 func player_wants_to_wait() -> void:
+	controls.set_battle_forecast({})
 	if participant.display_opponent_stats:
 		participant.display_opponent_stats = false
 	participant.curr_pawn.end_pawn_turn()
@@ -130,6 +149,7 @@ func player_wants_to_wait() -> void:
 
 ## Handles the player's intention to skip turn.
 func player_wants_to_skip_turn() -> void:
+	controls.set_battle_forecast({})
 	if participant.display_opponent_stats:
 		participant.display_opponent_stats = false
 	participant.skip_turn()

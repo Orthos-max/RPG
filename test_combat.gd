@@ -7,6 +7,7 @@ const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
 const Calc = preload("res://data/services/combat/fe_combat.gd")
 const SupportDB = preload("res://data/models/world/stats/support.gd")
+const Forecast = preload("res://data/services/combat/battle_forecast.gd")
 
 ## Wrap a StatsResource template into a live Stats combat instance
 func _live(res: StatsRes) -> CharStats:
@@ -32,7 +33,8 @@ func _init() -> void:
 	_test_victory()
 	_test_support()
 	_test_triangle()
-	
+	_test_forecast()
+
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
 	print("========================================\n")
@@ -247,3 +249,79 @@ func _test_triangle() -> void:
 		_ok("Staff neutre")
 	else:
 		_ko("Staff neutre", "%d" % bonus)
+
+
+func _test_forecast() -> void:
+	print("\n🔮 Test 8: Prévision de combat (avant le jet)")
+
+	var chrom: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	var brig: CharStats = _live(load("res://data/models/world/stats/mob/skeleton.tres"))
+
+	var f: Dictionary = Forecast.build(chrom, brig)
+	var direct: Calc.CombatResult = Calc.calculate(chrom, brig)
+
+	# La prévision ne doit rien inventer : elle reprend le calculateur tel quel.
+	if f["hit"] == direct.hit_rate and f["crit"] == direct.crit_rate \
+			and f["damage"] == direct.damage:
+		_ok("Prévision fidèle au calculateur (%d%% / %d dmg)" % [f["hit"], f["damage"]])
+	else:
+		_ko("Prévision fidèle", "%d/%d/%d vs %d/%d/%d" % [
+			f["hit"], f["crit"], f["damage"],
+			direct.hit_rate, direct.crit_rate, direct.damage])
+
+	var expected_hits: int = 2 if direct.can_double else 1
+	if f["hits"] == expected_hits and f["total"] == direct.damage * expected_hits:
+		_ok("Total = dégâts × %d coup(s)" % expected_hits)
+	else:
+		_ko("Total des coups", "hits=%d total=%d" % [f["hits"], f["total"]])
+
+	if f["target_hp_after"] == max(0, brig.hp - int(f["total"])):
+		_ok("PV restants prévus : %d → %d" % [f["target_hp"], f["target_hp_after"]])
+	else:
+		_ko("PV restants", str(f["target_hp_after"]))
+
+	# Létalité : une cible à 1 PV tombe forcément si les dégâts sont non nuls.
+	if f["damage"] > 0:
+		brig.hp = 1
+		var lethal: Dictionary = Forecast.build(chrom, brig)
+		if lethal["lethal"] and lethal["target_hp_after"] == 0:
+			_ok("Létalité détectée sur cible à 1 PV")
+		else:
+			_ko("Létalité", str(lethal["lethal"]))
+	else:
+		_ko("Létalité", "dégâts nuls, cas non testable")
+
+	# Un critique seul peut suffire : cible à (total + 1) PV, sous le total crit.
+	brig.hp = int(f["total"]) + 1
+	if int(f["crit_total"]) >= brig.hp:
+		var edge: Dictionary = Forecast.build(chrom, brig)
+		if not edge["lethal"] and edge["crit_lethal"]:
+			_ok("« Létal seulement si critique » distingué du létal sûr")
+		else:
+			_ko("Létal si crit", "lethal=%s crit_lethal=%s" % [edge["lethal"], edge["crit_lethal"]])
+	else:
+		_ok("Létal si crit : cas non applicable ici (crit trop faible)")
+
+	# Le terrain défensif doit réduire les dégâts annoncés.
+	brig.hp = brig.max_hp
+	var sheltered: Dictionary = Forecast.build(chrom, brig, {"terrain_defense": 3})
+	if sheltered["terrain"] == 3 and sheltered["damage"] <= f["damage"]:
+		_ok("Terrain +3 pris en compte (%d → %d dmg)" % [f["damage"], sheltered["damage"]])
+	else:
+		_ko("Terrain dans la prévision", str(sheltered["damage"]))
+
+	# Soin : montant plafonné par les PV manquants, jamais de dégâts.
+	var lissa: CharStats = _live(load("res://data/models/world/stats/hero/cleric.tres"))
+	var wounded: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	wounded.hp = wounded.max_hp - 3
+	var heal: Dictionary = Forecast.build(lissa, wounded, {"is_heal": true})
+	if heal["kind"] == "heal" and heal["heal"] == 3 and heal["target_hp_after"] == wounded.max_hp:
+		_ok("Soin plafonné aux PV manquants (+3)")
+	else:
+		_ko("Soin prévu", "%d → %d" % [heal["heal"], heal["target_hp_after"]])
+
+	# Un résumé lisible, et rien du tout quand il n'y a rien à prévoir.
+	if not Forecast.summary(f).is_empty() and Forecast.summary({}).is_empty():
+		_ok("Résumé sur une ligne : %s" % Forecast.summary(f))
+	else:
+		_ko("Résumé", Forecast.summary(f))

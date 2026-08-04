@@ -80,6 +80,17 @@ func set_actions_menu_visibility(v: bool, p: Variant) -> void:
 	serv.set_actions_menu_visibility(v, p, self)
 
 
+## Met à jour l'encart de prévision de combat (survol d'une cible)
+func set_battle_forecast(forecast: Dictionary) -> void:
+	var panel: Node = get_node_or_null("%BattleForecast")
+	if not panel or not panel.has_method("show_forecast"):
+		return
+	if forecast.is_empty():
+		panel.clear_forecast()
+	else:
+		panel.show_forecast(forecast)
+
+
 ## Gets the 3D position of the mouse in the game world
 func get_3d_canvas_mouse_position(collision_mask: int) -> Object:
 	return serv.get_3d_canvas_mouse_position(collision_mask, self)

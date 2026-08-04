@@ -285,10 +285,12 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 ### 🏅 P3 — Vision long terme (hors modes de jeu ci-dessus)
 - [ ] **Sons & animations de combat** (sprites en croisade, caméra de duel).
 - [ ] **Version `fe_2d/`** : poursuivre le port 2D si la direction artistique évolue.
-- [ ] **Polissage UX** : **aperçu des dégâts avant d'engager** (le manque le plus
-      criant pour un joueur de Fire Emblem — toutes les données sont déjà là,
-      `FECombatCalculator.calculate()` renvoie hit/crit/dégâts/double avant le jet),
-      tooltips de stats, annulation d'un déplacement.
+- [x] **Aperçu des dégâts avant d'engager** : `BattleForecast` (logique pure) met en
+      forme le calculateur — dégâts totaux, nombre de coups, précision, critique, PV
+      restants, létalité (sûre ou « seulement si critique »), triangle/terrain/soutien/
+      efficacité/procs. Affiché par `BattleForecastPanel` au survol d'une cible à portée.
+      *Le moteur ne gérant pas la riposte, la prévision n'affiche qu'un camp.*
+- [ ] **Polissage UX** (suite) : tooltips de stats, annulation d'un déplacement.
 - [ ] **Mods / éditeur de niveau intégré** (map_editor déjà présent) pour créer ses cartes.
 
 

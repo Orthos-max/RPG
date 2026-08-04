@@ -16,6 +16,8 @@ signal called_select_new_location
 signal called_set_cursor_shape_to_move
 ## Signal emitted when the cursor shape needs to be set to "arrow".
 signal called_set_cursor_shape_to_arrow
+## Émis quand l'encart de prévision de combat doit être mis à jour.
+signal called_set_battle_forecast
 
 ## Indicates whether the current input device is a joystick.
 @export var is_joystick: bool
@@ -65,3 +67,8 @@ func set_cursor_shape_to_move() -> void:
 ## Sets the cursor shape to "arrow".
 func set_cursor_shape_to_arrow() -> void:
 	called_set_cursor_shape_to_arrow.emit()
+
+
+## Met à jour l'encart de prévision ; un dictionnaire vide le masque.
+func set_battle_forecast(forecast: Dictionary) -> void:
+	called_set_battle_forecast.emit(forecast)

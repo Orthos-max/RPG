@@ -49,6 +49,12 @@ dépenser l'or : potions, objets à gain permanent, soins des blessés et recrut
 Commandes de bataille : souris (clic pour sélectionner/déplacer), manette et clavier
 supportés (`ZQSD`/`WASD` pour la caméra, `A`/`E` pour pivoter).
 
+Après avoir choisi **Attack** (ou **Heal**), survoler une cible à portée affiche la
+**prévision de combat** en haut à droite : dégâts totaux, nombre de coups, précision,
+critique et PV restants — en rouge si le coup tue, en ambre s'il ne tue qu'en cas de
+critique. Les bonus en jeu (triangle des armes, terrain, soutien, arme efficace,
+compétences à déclenchement) sont rappelés en dessous.
+
 ---
 
 ## 2. Construire depuis les sources

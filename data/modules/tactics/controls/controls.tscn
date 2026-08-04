@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://bky8ul2628kxw"]
+[gd_scene load_steps=9 format=3 uid="uid://bky8ul2628kxw"]
 
 [ext_resource type="Script" path="res://data/modules/tactics/controls/controls.gd" id="1_w0r3x"]
 [ext_resource type="Texture2D" uid="uid://crwcj7eegnn36" path="res://assets/textures/ui/labels/controls-ui-xbox.png" id="2_f67pw"]
@@ -7,6 +7,7 @@
 [ext_resource type="Resource" uid="uid://3bycamg76443" path="res://data/models/view/control/input/capture/capture.tres" id="5_4uppb"]
 [ext_resource type="Script" path="res://data/modules/ui/hints/input_hints.gd" id="5_hgdl1"]
 [ext_resource type="Resource" uid="uid://c2mvnq00bfcw5" path="res://data/models/view/camera/tactics/camera.tres" id="5_xo7di"]
+[ext_resource type="PackedScene" path="res://data/modules/ui/forecast/battle_forecast_panel.tscn" id="6_frcst"]
 
 [node name="TacticsControls" type="Control"]
 layout_mode = 3
@@ -40,6 +41,9 @@ mouse_filter = 0
 mouse_default_cursor_shape = 7
 texture = ExtResource("2_f67pw")
 stretch_mode = 5
+
+[node name="BattleForecast" parent="." instance=ExtResource("6_frcst")]
+unique_name_in_owner = true
 
 [node name="HBox" type="HBoxContainer" parent="."]
 layout_mode = 1

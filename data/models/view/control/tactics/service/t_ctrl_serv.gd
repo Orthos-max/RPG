@@ -46,6 +46,7 @@ func setup(ctrl: TacticsControls) -> void:
 		controls.connect("called_select_pawn", ctrl.select_pawn)
 		controls.connect("called_select_pawn_to_attack", ctrl.select_pawn_to_attack)
 		controls.connect("called_select_new_location", ctrl.select_new_location)
+		controls.connect("called_set_battle_forecast", ctrl.set_battle_forecast)
 	if not t_cam:
 		push_error("TacticsCamera needs a CameraResource (T Cam) from /data/models/view/camera/tactics/")
 	if not arena:
