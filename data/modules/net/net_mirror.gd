@@ -9,6 +9,7 @@ extends Node
 ##      et les envoie à l'hôte, qui les valide comme celles de Ciel.
 
 const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
+const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 ## Niveau local, simple reflet de celui de l'hôte
 var level: TacticsLevel = null
@@ -41,6 +42,16 @@ func _exit_tree() -> void:
 		net.command_feedback.disconnect(_on_feedback)
 
 
+## Nœud de camp correspondant à une étiquette d'équipe de `ai_state.json`.
+func _camp_for_team(team: String) -> Node:
+	for camp in level.camps:
+		if is_instance_valid(camp) and TeamDataClass.state_team_name(
+				TeamDataClass.side_for_camp_node(camp)) == team:
+			return camp
+	# Repli sur l'ancien découpage à deux camps.
+	return level.player if team == "player" else level.opponent
+
+
 #region Réception de l'état
 func _on_state(state: Dictionary) -> void:
 	if not level or not is_instance_valid(level):
@@ -60,7 +71,11 @@ func _on_state(state: Dictionary) -> void:
 
 
 func _apply_pawn(entry: Dictionary) -> void:
-	var team_node: Node = level.player if str(entry.get("team", "")) == "player" else level.opponent
+	# Le camp est retrouvé par son étiquette d'équipe : à trois camps (M5), il
+	# faut savoir distinguer « guest » de « opponent ».
+	var team_node: Node = _camp_for_team(str(entry.get("team", "")))
+	if not team_node:
+		return
 	var pawn: Node = EXECUTOR.find_pawn_by_name(team_node, str(entry.get("name", "")))
 	if not pawn:
 		return

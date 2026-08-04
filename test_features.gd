@@ -18,6 +18,7 @@ const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
 const Calc = preload("res://data/services/combat/fe_combat.gd")
+const SPLIT = preload("res://data/models/world/combat/team/army_split.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -44,6 +45,7 @@ func _init() -> void:
 	_test_skills()
 	_test_economy()
 	_test_network_codes()
+	_test_three_way()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -741,4 +743,103 @@ func _test_network_codes() -> void:
 	_check(not net.is_online() and net.is_authority(),
 		"hors ligne : cette instance fait autorité par défaut")
 	_check(net.local_side() == TeamData.Side.PLAYER, "camp local par défaut : joueur 1")
+#endregion
+
+
+#region 14. Trois camps (M5)
+func _test_three_way() -> void:
+	print("\n⚑ Test 14: trois camps dans une même bataille (M5)")
+
+	# --- Partage d'armée : déterministe, sinon les deux machines divergent ---
+	var half: Array[int] = SPLIT.guest_indices(6)
+	_check(half == [1, 3, 5], "6 pions → moitié alternée %s" % str(half))
+	_check(SPLIT.guest_indices(6) == half, "partage reproductible d'un appel à l'autre")
+	_check(SPLIT.guest_indices(1).is_empty(), "armée d'un seul pion : pas de partage")
+	_check(SPLIT.guest_indices(0).is_empty(), "armée vide : pas de partage")
+
+	var lopsided: Array[int] = SPLIT.guest_indices(5, 1.0)
+	_check(lopsided.size() == 4, "part de 100 %% : le camp d'origine garde un pion (%s)" % str(lopsided))
+	_check(SPLIT.guest_indices(4, 0.0).is_empty(), "part nulle : aucun pion cédé")
+	for count: int in [2, 3, 5, 8, 13]:
+		var picked: Array[int] = SPLIT.guest_indices(count)
+		var valid: bool = picked.size() < count
+		for i: int in picked:
+			if i < 0 or i >= count:
+				valid = false
+		_check(valid, "%d pions → indices valides et camp d'origine non vidé" % count)
+
+	# --- Camps et étiquettes ---
+	var guest_node: Node = _named_node("TacticsGuest")
+	var stray_node: Node = _named_node("Autre")
+	_check(TeamData.side_for_camp_node(guest_node) == TeamData.Side.GUEST,
+		"nœud TacticsGuest → camp invité")
+	_check(TeamData.camp_node_name(TeamData.Side.GUEST) == "TacticsGuest",
+		"camp invité → nœud TacticsGuest")
+	_check(TeamData.state_team_name(TeamData.Side.GUEST) == "guest",
+		"étiquette d'équipe exportée à Ciel")
+	_check(TeamData.side_for_camp_node(stray_node) == -1,
+		"nœud inconnu → aucun camp")
+	guest_node.free()
+	stray_node.free()
+
+	# --- Session à trois camps ---
+	var session: Node = root.get_node_or_null("GameSession")
+	if not session:
+		_ko("Autoload GameSession", "introuvable")
+		return
+
+	session.set_mode(session.Mode.NETWORK)
+	session.set_three_way(true)
+	_check(session.battle_sides() == [TeamData.Side.PLAYER, TeamData.Side.GUEST, TeamData.Side.OPPONENT],
+		"ordre de jeu : joueur, invité, Ciel")
+	_check(session.controller_for(TeamData.Side.OPPONENT) == TeamData.Controller.CIEL_AI,
+		"le camp rouge revient à Ciel")
+	_check(session.controller_for(TeamData.Side.GUEST) == TeamData.Controller.REMOTE_PLAYER,
+		"le troisième camp revient à l'invité distant")
+	_check(session.hostiles_of(TeamData.Side.PLAYER).size() == 2,
+		"chacun pour soi : le joueur a deux camps ennemis")
+	_check(session.hostiles_of(TeamData.Side.GUEST).has(TeamData.Side.OPPONENT)
+		and session.hostiles_of(TeamData.Side.GUEST).has(TeamData.Side.PLAYER),
+		"l'invité affronte Ciel et le joueur")
+	_check(not session.hostiles_of(TeamData.Side.GUEST).has(TeamData.Side.GUEST),
+		"personne n'est son propre ennemi")
+
+	var net: Node = root.get_node_or_null("Network")
+	if net:
+		net.three_way = true
+		_check(net.guest_side() == TeamData.Side.GUEST, "réseau : l'invité prend le troisième camp")
+		net.three_way = false
+		_check(net.guest_side() == TeamData.Side.OPPONENT, "à deux camps, l'invité garde le camp rouge")
+
+	# --- Validation des ordres : le pont sert le camp qui joue ---
+	var guest_ctx: Dictionary = {"stage": 0, "turn": "guest", "acting_team": "guest"}
+	var ok_cmd: Dictionary = CMD.validate({"action": "select_pawn", "name": "Brigand"}, guest_ctx)
+	_check(bool(ok_cmd["ok"]), "ordre de l'invité accepté pendant son tour",
+		str(ok_cmd.get("error", "")))
+
+	var wrong_turn: Dictionary = CMD.validate({"action": "select_pawn", "name": "Brigand"},
+		{"stage": 0, "turn": "opponent", "acting_team": "guest"})
+	_check(not bool(wrong_turn["ok"]) and int(wrong_turn["code"]) == CMD.Err.OUT_OF_TURN,
+		"ordre de l'invité refusé pendant le tour de Ciel")
+
+	var ciel_default: Dictionary = CMD.validate({"action": "select_pawn", "name": "Brigand"},
+		{"stage": 0, "turn": "guest"})
+	_check(not bool(ciel_default["ok"]) and int(ciel_default["code"]) == CMD.Err.OUT_OF_TURN,
+		"sans camp précisé, le contrat reste celui de Ciel (« opponent »)")
+
+	# --- Retour à deux camps : rien ne doit rester du troisième ---
+	session.set_three_way(false)
+	_check(session.battle_sides() == [TeamData.Side.PLAYER, TeamData.Side.OPPONENT],
+		"retour à deux camps")
+	_check(session.get_team(TeamData.Side.GUEST) == null, "le camp invité a bien disparu")
+	_check(session.hostiles_of(TeamData.Side.PLAYER) == [TeamData.Side.OPPONENT],
+		"à deux camps, un seul ennemi")
+	session.set_mode(session.Mode.SOLO)
+
+
+## Petit nœud nommé, pour tester la correspondance nom ↔ camp sans scène.
+func _named_node(node_name: String) -> Node:
+	var n := Node.new()
+	n.name = node_name
+	return n
 #endregion

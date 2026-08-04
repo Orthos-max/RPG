@@ -103,10 +103,23 @@ func _physics_process(_delta: float) -> void:
 func is_active() -> bool:
 	var session: Node = _session()
 	if session:
-		var controller: int = session.controller_for(TeamData.Side.OPPONENT)
+		var controller: int = session.controller_for(acting_side())
 		enabled = controller == TeamData.Controller.CIEL_AI \
 			or controller == TeamData.Controller.REMOTE_PLAYER
 	return enabled
+
+
+## Camp dont le pont joue le tour en ce moment.
+##
+## À deux camps c'est toujours le camp rouge ; à trois (M5), le pont sert aussi
+## le troisième camp quand il est tenu par l'invité distant, et il ne doit alors
+## pas lire les droits du camp de Ciel.
+func acting_side() -> int:
+	if _opponent and is_instance_valid(_opponent):
+		var side: int = TeamData.side_for_camp_node(_opponent)
+		if side != -1:
+			return side
+	return TeamData.Side.OPPONENT
 
 
 ## Ordre poussé par une source externe autre que le fichier (réseau).
@@ -118,6 +131,7 @@ func push_command(cmd: Dictionary) -> Dictionary:
 	var ctx: Dictionary = {
 		"stage": pr.stage if pr else CMD.STAGE_SELECT_PAWN,
 		"turn": _whose_turn(level),
+		"acting_team": TeamData.state_team_name(acting_side()),
 		"grid_size": TacticsGrid.grid_size(level.arena if level else null),
 	}
 
@@ -555,9 +569,11 @@ func _next_command(pr: TacticsParticipantResource) -> Dictionary:
 		return {}
 
 	var level: TacticsLevel = _resolve_level()
+	var acting: String = TeamData.state_team_name(acting_side())
 	var ctx: Dictionary = {
 		"stage": pr.stage,
-		"turn": "opponent",
+		"turn": acting,
+		"acting_team": acting,
 		"grid_size": TacticsGrid.grid_size(level.arena if level else null),
 	}
 
@@ -598,11 +614,24 @@ func _drain_out_of_turn_command(level: TacticsLevel) -> void:
 func _whose_turn(level: TacticsLevel) -> String:
 	if not level or not level.participant or not is_instance_valid(level.participant):
 		return "unknown"
-	if level.player and is_instance_valid(level.player) and level.participant.can_act(level.player):
-		return "player"
-	if level.opponent and is_instance_valid(level.opponent) and level.participant.can_act(level.opponent):
-		return "opponent"
+	# On suit l'ordre de jeu réel : à trois camps (M5), l'invité s'intercale
+	# entre le joueur et Ciel.
+	for camp in _camps_in_order(level):
+		if is_instance_valid(camp) and level.participant.can_act(camp):
+			return TeamData.state_team_name(TeamData.side_for_camp_node(camp))
 	return "unknown"
+
+
+## Camps de la bataille, dans l'ordre où ils jouent.
+func _camps_in_order(level: TacticsLevel) -> Array:
+	if level and not level.camps.is_empty():
+		return level.camps
+	var fallback: Array = []
+	if level and level.player:
+		fallback.append(level.player)
+	if level and level.opponent:
+		fallback.append(level.opponent)
+	return fallback
 
 
 ## Commandes globales (toggle) — acceptées à tout moment, y compris hors tour.
@@ -731,6 +760,7 @@ func _export_state(level: TacticsLevel) -> void:
 		"mode": _mode_name(),
 		"difficulty": _difficulty_name(),
 		"opponent_controller": _controller_name(),
+		"controllers": _controllers_map(),
 		"last_error": _last_error,
 		"last_error_code": _last_error_code,
 		"pawns": [],
@@ -740,14 +770,15 @@ func _export_state(level: TacticsLevel) -> void:
 	if cp and is_instance_valid(cp):
 		state["current_pawn"] = EXECUTOR.display_name(cp)
 
-	if level.player and is_instance_valid(level.player):
-		for p in level.player.get_children():
+	# Tous les camps sont exportés, chacun sous son étiquette d'équipe : à trois
+	# camps (M5), Ciel voit apparaître une troisième valeur, « guest ».
+	for camp in _camps_in_order(level):
+		if not is_instance_valid(camp):
+			continue
+		var team: String = TeamData.state_team_name(TeamData.side_for_camp_node(camp))
+		for p in camp.get_children():
 			if p is TacticsPawn and is_instance_valid(p):
-				state["pawns"].append(_pawn_dict(arena, p, "player", cp))
-
-	for p in opponent.get_children():
-		if p is TacticsPawn and is_instance_valid(p):
-			state["pawns"].append(_pawn_dict(arena, p, "opponent", cp))
+				state["pawns"].append(_pawn_dict(arena, p, team, cp))
 
 	if arena and is_instance_valid(arena):
 		var gs: Vector2i = TacticsGrid.grid_size(arena)
@@ -958,6 +989,18 @@ func _controller_name() -> String:
 	if not session:
 		return "CielAI"
 	return TeamData.controller_name(session.controller_for(TeamData.Side.OPPONENT))
+
+
+## Contrôleur de chaque camp en jeu, indexé par son étiquette d'équipe.
+## Permet à Ciel de savoir qui tient quoi quand la bataille compte trois camps.
+func _controllers_map() -> Dictionary:
+	var session: Node = _session()
+	if not session:
+		return {}
+	var out: Dictionary = {}
+	for side: int in session.battle_sides():
+		out[TeamData.state_team_name(side)] = TeamData.controller_name(session.controller_for(side))
+	return out
 
 
 func _resolve_level() -> TacticsLevel:

@@ -9,6 +9,7 @@ extends Resource
 enum Side {
 	PLAYER = 0,   ## Camp bleu, joueur 1
 	OPPONENT = 1, ## Camp rouge
+	GUEST = 2,    ## Camp vert — troisième armée (M5 : Ciel et un ami dans la même bataille)
 }
 
 enum Controller {
@@ -28,6 +29,56 @@ enum Controller {
 @export var color: Color = Color(0.35, 0.55, 1.0)
 ## Identifiant du pair réseau (0 = local/hôte). Réservé à M3.
 @export var peer_id: int = 0
+
+
+## Nom lisible d'un camp
+static func side_name(side_id: int) -> String:
+	match side_id:
+		Side.PLAYER: return "Joueur"
+		Side.OPPONENT: return "Adversaire"
+		Side.GUEST: return "Troisième camp"
+		_: return "Inconnu"
+
+
+## Couleur d'un camp (UI, marqueurs de tuiles)
+static func side_color(side_id: int) -> Color:
+	match side_id:
+		Side.PLAYER: return Color(0.35, 0.55, 1.0)
+		Side.OPPONENT: return Color(0.9, 0.35, 0.35)
+		Side.GUEST: return Color(0.4, 0.85, 0.45)
+		_: return Color(0.7, 0.7, 0.7)
+
+
+## Nom du nœud de camp dans la scène de bataille.
+##
+## C'est le seul endroit qui fait le lien entre un [enum Side] et l'arbre :
+## la boucle de tour et le pont CielAI passent tous les deux par ici.
+static func camp_node_name(side_id: int) -> String:
+	match side_id:
+		Side.PLAYER: return "TacticsPlayer"
+		Side.OPPONENT: return "TacticsOpponent"
+		Side.GUEST: return "TacticsGuest"
+		_: return ""
+
+
+## Camp correspondant à un nœud de la scène (−1 si inconnu).
+static func side_for_camp_node(node: Node) -> int:
+	if not node:
+		return -1
+	match String(node.name):
+		"TacticsPlayer": return Side.PLAYER
+		"TacticsOpponent": return Side.OPPONENT
+		"TacticsGuest": return Side.GUEST
+		_: return -1
+
+
+## Étiquette d'équipe utilisée dans `ai_state.json` (contrat CielAI).
+static func state_team_name(side_id: int) -> String:
+	match side_id:
+		Side.PLAYER: return "player"
+		Side.OPPONENT: return "opponent"
+		Side.GUEST: return "guest"
+		_: return "unknown"
 
 
 ## Nom lisible d'un contrôleur
@@ -60,8 +111,6 @@ static func create(side_id: int, ctrl: int, label: String = "") -> TeamData:
 	var t := TeamData.new()
 	t.side = side_id
 	t.controller = ctrl
-	t.display_name = label if not label.is_empty() else (
-		"Joueur" if side_id == Side.PLAYER else "Adversaire"
-	)
-	t.color = Color(0.35, 0.55, 1.0) if side_id == Side.PLAYER else Color(0.9, 0.35, 0.35)
+	t.display_name = label if not label.is_empty() else side_name(side_id)
+	t.color = side_color(side_id)
 	return t

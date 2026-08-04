@@ -26,6 +26,7 @@ var _code_label: Label
 var _code_input: LineEdit
 var _players_label: Label
 var _map_picker: OptionButton
+var _ciel_toggle: CheckBox
 var _start_button: Button
 
 
@@ -99,6 +100,16 @@ func _build() -> void:
 			_map_picker.set_item_metadata(_map_picker.item_count - 1, str(entry["path"]))
 		_map_picker.select(0)
 		box.add_child(_map_picker)
+
+		# M5 — trois camps : l'hôte et son invité, plus Ciel qui tient le camp
+		# rouge. L'armée adverse de la carte est scindée pour armer l'invité.
+		_ciel_toggle = CheckBox.new()
+		_ciel_toggle.text = "⚡  Inviter Ciel comme troisième camp"
+		_ciel_toggle.tooltip_text = "L'armée adverse est partagée : l'invité en prend la moitié, Ciel garde le reste."
+		_ciel_toggle.add_theme_font_size_override("font_size", 15)
+		_ciel_toggle.add_theme_color_override("font_color", C_TEXT)
+		_ciel_toggle.toggled.connect(_on_ciel_toggled)
+		box.add_child(_ciel_toggle)
 	else:
 		_code_input = LineEdit.new()
 		_code_input.placeholder_text = "Code à 7 caractères"
@@ -164,6 +175,14 @@ func _start_hosting() -> void:
 	_refresh()
 
 
+## L'hôte invite (ou renvoie) Ciel dans la partie.
+func _on_ciel_toggled(pressed: bool) -> void:
+	var net: Node = _net()
+	if net:
+		net.set_three_way(pressed)
+	_refresh()
+
+
 func _try_join() -> void:
 	var net: Node = _net()
 	if not net or not _code_input:
@@ -204,7 +223,11 @@ func _refresh() -> void:
 	var net: Node = _net()
 	if not net or not _players_label:
 		return
-	_players_label.text = "Joueurs connectés : %d / 2" % maxi(1, net.players.size())
+	var humans: int = maxi(1, net.players.size())
+	if bool(net.three_way):
+		_players_label.text = "Joueurs connectés : %d / 2  —  + Ciel (3 camps)" % humans
+	else:
+		_players_label.text = "Joueurs connectés : %d / 2" % humans
 	if _start_button:
 		_start_button.disabled = net.players.size() < 2
 #endregion

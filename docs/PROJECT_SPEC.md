@@ -243,9 +243,14 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       diffusé par l'hôte et reflété par l'invité (`NetMirror`).
 - [x] **M4 — Gestion de partie simple** : écrans Créer/Rejoindre avec choix de
       carte, salon d'attente et répartition automatique des camps.
-- [ ] **M5 — CielIA vs un ami en réseau** : le pont et le réseau partagent déjà le
-      même chemin d'ordres validés côté hôte ; reste à permettre trois camps
-      (joueur local, invité distant, Ciel) dans une même partie.
+- [x] **M5 — CielIA vs un ami en réseau** : trois camps dans une même bataille
+      (joueur local, invité distant, Ciel). `TeamData.Side.GUEST`, ordre de jeu et
+      camps hostiles fournis par `GameSession` ; la boucle de tour itère sur les camps
+      au lieu de tester « joueur ou adversaire ». Aucune carte n'ayant de troisième
+      armée, `ArmySplit` cède la moitié des pions adverses à l'invité — un pion sur
+      deux, de façon déterministe, donc identique sur les deux machines sans échange.
+      Chacun pour soi. Case à cocher dans « Créer une partie ».
+      *Reste à faire : le vérifier sur deux vraies machines (même limite que ci-dessous).*
 - [x] **Règles réseau** : autorité de l'hôte (il seul simule), validation de chaque
       ordre reçu, reprise par l'IA locale si l'invité part.
 - [ ] **Vérifier une partie en ligne sur deux vraies machines** ⚠️ *(la seule brique

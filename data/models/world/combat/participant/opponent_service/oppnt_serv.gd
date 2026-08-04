@@ -68,7 +68,9 @@ func chase_nearest_enemy(opponent: TacticsOpponent, player_node: Node) -> void:
 		push_error("Tried to make a pawn that cannot move chase nearest enemy: ", res.curr_pawn)
 		return
 
-	var plan: Dictionary = EXECUTOR.plan(arena, res.curr_pawn, opponent, player_node, _difficulty())
+	# À trois camps (M5), l'heuristique doit voir les deux armées ennemies.
+	var enemies: Array = res.hostile_camps if not res.hostile_camps.is_empty() else [player_node]
+	var plan: Dictionary = EXECUTOR.plan_multi(arena, res.curr_pawn, opponent, enemies, _difficulty())
 	_planned_target = str(plan.get("decision", {}).get("target", ""))
 
 	var to: TacticsTile = plan.get("tile") as TacticsTile
@@ -105,7 +107,7 @@ func choose_pawn_to_attack() -> void:
 	# On honore d'abord la cible choisie par l'heuristique, si elle est à portée.
 	res.attackable_pawn = _resolve_planned_target()
 	if not res.attackable_pawn:
-		res.attackable_pawn = arena.get_weakest_attackable_pawn(res.targets.get_children())
+		res.attackable_pawn = arena.get_weakest_attackable_pawn(_hostile_pawns())
 	if res.attackable_pawn:
 		if DebugLog.debug_enabled:
 			print_rich("[color=orange]Weakest target detected:", res.attackable_pawn, "[/color]")
@@ -119,11 +121,26 @@ func choose_pawn_to_attack() -> void:
 	res.stage = res.STAGE_MOVE_PAWN
 
 
+## Tous les pions des camps hostiles, tous camps confondus.
+func _hostile_pawns() -> Array:
+	var camps: Array = res.hostile_camps if not res.hostile_camps.is_empty() else (
+		[res.targets] if res.targets else []
+	)
+	var pawns: Array = []
+	for camp in camps:
+		if camp and is_instance_valid(camp):
+			pawns.append_array(camp.get_children())
+	return pawns
+
+
 ## Retrouve la cible planifiée si elle est encore vivante et à portée d'attaque.
 func _resolve_planned_target() -> TacticsPawn:
-	if _planned_target.is_empty() or not res.targets:
+	if _planned_target.is_empty():
 		return null
-	var pawn: Node = EXECUTOR.find_pawn_by_name(res.targets, _planned_target)
+	var camps: Array = res.hostile_camps if not res.hostile_camps.is_empty() else (
+		[res.targets] if res.targets else []
+	)
+	var pawn: Node = EXECUTOR.find_pawn_in_camps(camps, _planned_target)
 	if not pawn:
 		return null
 	var tile: TacticsTile = pawn.get_tile()

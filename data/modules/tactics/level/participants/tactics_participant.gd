@@ -18,11 +18,28 @@ var serv: TacticsParticipantService
 ## joués par un humain, donc les deux ont besoin de ces actions.
 var player_serv: TacticsPlayerService
 ## Reference to the TacticsArena node
-@onready var arena: TacticsArena = %TacticsArena
+@onready var arena: TacticsArena = _find_in_level("TacticsArena") as TacticsArena
 ## Reference to the TacticsPlayer node
-@onready var player: TacticsPlayer = %TacticsPlayer
+@onready var player: TacticsPlayer = _find_in_level("TacticsPlayer") as TacticsPlayer
 ## Reference to the TacticsOpponent node
-@onready var opponent: TacticsOpponent = %TacticsOpponent
+@onready var opponent: TacticsOpponent = _find_in_level("TacticsOpponent") as TacticsOpponent
+
+
+## Retrouve un nœud du niveau par son nom.
+##
+## Les camps posés dans la scène passent par le nom unique (`%Nom`) ; le
+## troisième camp de M5 est créé à l'exécution et n'appartient à aucune scène,
+## d'où le repli par recherche depuis la racine du niveau.
+func _find_in_level(node_name: String) -> Node:
+	var unique: Node = get_node_or_null("%" + node_name)
+	if unique:
+		return unique
+	var level: Node = get_parent()
+	while level and not (level is TacticsLevel):
+		level = level.get_parent()
+	if not level:
+		return null
+	return level.find_child(node_name, true, false)
 
 
 ## Initializes the TacticsParticipant node

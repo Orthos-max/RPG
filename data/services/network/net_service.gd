@@ -39,6 +39,8 @@ var players: Dictionary = {}
 var last_state: Dictionary = {}
 ## Carte choisie par l'hôte
 var scene_path: String = "res://assets/maps/level/map_level.tscn"
+## Ciel s'invite comme troisième camp (M5) — décidé par l'hôte, propagé à l'invité
+var three_way: bool = false
 
 var _peer: ENetMultiplayerPeer = null
 
@@ -177,6 +179,7 @@ func leave() -> void:
 	players.clear()
 	last_state.clear()
 	join_code = ""
+	three_way = false
 
 
 ## Sommes-nous connectés à une partie (hôte ou invité) ?
@@ -190,8 +193,27 @@ func is_authority() -> bool:
 
 
 ## Le camp jouable par cette instance.
+##
+## À trois camps (M5), l'invité prend le troisième camp : le camp rouge revient
+## à Ciel, qui joue contre les deux humains.
 func local_side() -> int:
-	return TeamDataClass.Side.OPPONENT if role == Role.CLIENT else TeamDataClass.Side.PLAYER
+	if role != Role.CLIENT:
+		return TeamDataClass.Side.PLAYER
+	return TeamDataClass.Side.GUEST if three_way else TeamDataClass.Side.OPPONENT
+
+
+## Camp confié à l'invité distant.
+func guest_side() -> int:
+	return TeamDataClass.Side.GUEST if three_way else TeamDataClass.Side.OPPONENT
+
+
+## L'hôte choisit d'inviter Ciel dans la partie (M5).
+func set_three_way(enabled: bool) -> void:
+	if role == Role.CLIENT:
+		return
+	three_way = enabled
+	_apply_session_roles()
+	lobby_updated.emit()
 #endregion
 
 
@@ -202,8 +224,8 @@ func start_battle(map_path: String = "") -> void:
 		return
 	if not map_path.is_empty():
 		scene_path = map_path
-	_rpc_start_battle.rpc(scene_path)
-	_rpc_start_battle(scene_path)
+	_rpc_start_battle.rpc(scene_path, three_way)
+	_rpc_start_battle(scene_path, three_way)
 
 
 ## Client → hôte : proposer un ordre (même vocabulaire que CielAI).
@@ -254,8 +276,10 @@ func _rpc_push_state(state: Dictionary) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _rpc_start_battle(map_path: String) -> void:
+func _rpc_start_battle(map_path: String, with_ciel: bool = false) -> void:
 	scene_path = map_path
+	three_way = with_ciel
+	_apply_session_roles()
 	battle_started.emit(map_path)
 #endregion
 
@@ -298,15 +322,21 @@ func _on_server_disconnected() -> void:
 	connection_failed.emit("l'hôte a quitté la partie")
 
 
-## Aligne GameSession sur la répartition réseau : l'invité tient le camp rouge.
+## Aligne GameSession sur la répartition réseau.
+##
+## À deux camps : l'hôte tient le bleu, l'invité le rouge.
+## À trois camps (M5) : l'hôte le bleu, l'invité le vert, Ciel le rouge.
 func _apply_session_roles() -> void:
 	var session: Node = get_node_or_null("/root/GameSession")
 	if not session:
 		return
 	session.set_mode(session.Mode.NETWORK)
 	session.join_code = join_code
+	session.set_three_way(three_way)
 	session.set_controller(TeamDataClass.Side.PLAYER, TeamDataClass.Controller.LOCAL_PLAYER,
 		"Hôte" if role == Role.HOST else "Adversaire distant")
-	session.set_controller(TeamDataClass.Side.OPPONENT, TeamDataClass.Controller.REMOTE_PLAYER,
+	session.set_controller(guest_side(), TeamDataClass.Controller.REMOTE_PLAYER,
 		"Invité" if role == Role.HOST else "Vous")
+	if three_way:
+		session.set_controller(TeamDataClass.Side.OPPONENT, TeamDataClass.Controller.CIEL_AI)
 #endregion

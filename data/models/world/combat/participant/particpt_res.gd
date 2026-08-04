@@ -35,8 +35,10 @@ var curr_pawn: TacticsPawn = null:
 		DebugLog.debug_nospam("pawn", val)
 ## The pawn that can be attacked
 var attackable_pawn: TacticsPawn = null
-## The node containing the target pawns
+## The node containing the target pawns (premier camp hostile)
 var targets: Node = null
+## Tous les camps hostiles à celui qui joue — à trois camps (M5), il y en a deux.
+var hostile_camps: Array[Node] = []
 ## Camp actuellement en train de jouer (utile en hotseat, où les deux camps
 ## peuvent être humains : « passer le tour » doit viser le bon camp).
 var acting_camp: Node3D = null

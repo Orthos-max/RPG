@@ -46,7 +46,7 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
   "protocol_version": 1,
   "seq": 42,                    // Incrémenté à chaque écriture ; curseur de fraîcheur
   "timestamp": 1785312000.0,    // Epoch Unix (secondes)
-  "turn": "opponent",           // "player" | "opponent" | "unknown"
+  "turn": "opponent",           // "player" | "opponent" | "guest" | "unknown"
   "turn_number": 3,             // Tour de jeu complet (joueur + adversaire)
   "stage": 1,                   // Étape de la machine à états du tour
   "stage_name": "show_actions",
@@ -55,6 +55,7 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
   "mode": "ciel",               // solo | ciel | hotseat | network
   "difficulty": "Normal",
   "opponent_controller": "CielAI",
+  "controllers": {"player": "Joueur local", "opponent": "CielAI"},  // Un par camp en jeu
   "objective": "Vaincre tous les ennemis",   // Absent hors campagne
   "last_error": "",             // Motif du dernier rejet ("" si tout va bien)
   "last_error_code": 0,
@@ -75,7 +76,7 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
 ```jsonc
 {
   "name": "Skeleton",           // Identifiant utilisé dans les commandes
-  "team": "opponent",           // "player" | "opponent"
+  "team": "opponent",           // "player" | "opponent" | "guest"
   "grid_col": 5, "grid_row": 3,
   "hp": 14, "max_hp": 20,
   "level": 3, "exp": 40,
@@ -246,11 +247,44 @@ Règles de bonne conduite :
 
 ---
 
+## 7bis. Batailles à trois camps (M5)
+
+Une partie en ligne peut compter **trois camps** : l'hôte (`player`), l'invité
+distant (`guest`) et Ciel (`opponent`). C'est l'hôte qui décide, depuis l'écran
+« Créer une partie ». Comme aucune carte n'embarque de troisième armée, la
+moitié de l'armée adverse est cédée à l'invité au chargement — un pion sur deux,
+de façon **déterministe**, pour que les deux machines tombent sur la même
+répartition sans échanger un seul message.
+
+Ce que cela change pour Ciel :
+
+| Champ | À deux camps | À trois camps |
+|---|---|---|
+| `turn` | `player` \| `opponent` | + `guest` |
+| `pawn.team` | `player` \| `opponent` | + `guest` |
+| `controllers` | 2 entrées | 3 entrées |
+
+Rien d'autre ne bouge : Ciel continue de ne commander que ses propres pions,
+pendant son seul tour (`turn == "opponent"`), avec les mêmes actions et les mêmes
+rejets. **Chacun pour soi** : les deux autres camps lui sont hostiles, et ils le
+sont aussi entre eux.
+
+> ⚠️ Les noms de pions ne sont uniques **qu'au sein d'un camp**. À trois camps,
+> deux armées peuvent héberger un « Brigand » : en cas d'homonymie sur une cible,
+> le moteur retient le premier camp dans l'ordre de jeu. Le champ `team` de
+> chaque pion lève l'ambiguïté à la lecture.
+
+---
+
 ## 8. Compatibilité & versionnage
 
 `protocol_version` figure dans l'état et le feedback. Une évolution **cassante**
 (argument obligatoire ajouté, action renommée) incrémente ce numéro. Les ajouts de
 champs facultatifs ne l'incrémentent pas : Ciel doit ignorer les champs inconnus.
+
+Le troisième camp (§7bis) est un **ajout compatible** : `protocol_version` reste
+à `1`. Une partie à deux camps produit exactement le même état qu'avant, à la
+clé `controllers` près.
 
 Implémentation de référence :
 * validation — `data/models/world/ai/ciel_command.gd`

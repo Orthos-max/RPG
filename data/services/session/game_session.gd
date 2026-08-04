@@ -6,6 +6,7 @@ extends Node
 ## ce qui prépare le hotseat (M2) et le réseau (M3) sans redéfaire le gameplay.
 
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
+const ArmySplitClass = preload("res://data/models/world/combat/team/army_split.gd")
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 
 signal mode_changed(mode: int)
@@ -26,6 +27,10 @@ var difficulty: int = DIFF.Level.NORMAL
 var chapter_index: int = 0
 ## Code d'accès de la partie en réseau (M3/M4) — vide hors réseau
 var join_code: String = ""
+## Trois camps en jeu (M5) : joueur local, invité distant et Ciel.
+var three_way: bool = false
+## Part de l'armée adverse cédée au troisième camp quand [member three_way] est actif.
+var guest_share: float = ArmySplitClass.DEFAULT_SHARE
 
 ## Camps de la bataille, indexés par TeamData.Side
 var teams: Dictionary = {}
@@ -48,7 +53,48 @@ func reset_teams() -> void:
 	teams[TeamDataClass.Side.OPPONENT].display_name = TeamDataClass.controller_name(
 		teams[TeamDataClass.Side.OPPONENT].controller
 	)
+	if three_way:
+		teams[TeamDataClass.Side.GUEST] = TeamDataClass.create(
+			TeamDataClass.Side.GUEST, _default_guest_controller()
+		)
+		teams[TeamDataClass.Side.GUEST].display_name = TeamDataClass.controller_name(
+			teams[TeamDataClass.Side.GUEST].controller
+		)
 	teams_changed.emit()
+
+
+## Active ou désactive la troisième armée (M5).
+##
+## Les contrôleurs par défaut deviennent : joueur local, invité distant, Ciel —
+## le trio que décrit le backlog. L'appelant reste libre de les surcharger
+## ensuite avec [method set_controller].
+func set_three_way(enabled: bool) -> void:
+	if three_way == enabled:
+		return
+	three_way = enabled
+	reset_teams()
+
+
+## Camps effectivement en jeu, dans l'ordre où ils jouent leur tour.
+func battle_sides() -> Array[int]:
+	var sides: Array[int] = [TeamDataClass.Side.PLAYER]
+	if teams.has(TeamDataClass.Side.GUEST):
+		sides.append(TeamDataClass.Side.GUEST)
+	sides.append(TeamDataClass.Side.OPPONENT)
+	return sides
+
+
+## Camps hostiles à `side`.
+##
+## Règle volontairement simple : chacun pour soi. Deux camps différents sont
+## toujours ennemis, ce qui laisse la règle « même parent = allié » du combat
+## valable telle quelle, sans notion d'alliance à maintenir.
+func hostiles_of(side: int) -> Array[int]:
+	var out: Array[int] = []
+	for other: int in battle_sides():
+		if other != side:
+			out.append(other)
+	return out
 
 
 ## Change de mode et réaligne les contrôleurs.
@@ -122,8 +168,19 @@ static func generate_join_code(length: int = 6) -> String:
 
 
 func _default_opponent_controller() -> int:
+	# À trois camps, le camp rouge revient à Ciel : c'est la promesse de M5,
+	# l'invité distant prend le troisième camp.
+	if three_way:
+		return TeamDataClass.Controller.CIEL_AI
 	match mode:
 		Mode.CIEL: return TeamDataClass.Controller.CIEL_AI
 		Mode.HOTSEAT: return TeamDataClass.Controller.LOCAL_PLAYER
 		Mode.NETWORK: return TeamDataClass.Controller.REMOTE_PLAYER
+		_: return TeamDataClass.Controller.LOCAL_AI
+
+
+func _default_guest_controller() -> int:
+	match mode:
+		Mode.NETWORK: return TeamDataClass.Controller.REMOTE_PLAYER
+		Mode.HOTSEAT: return TeamDataClass.Controller.LOCAL_PLAYER
 		_: return TeamDataClass.Controller.LOCAL_AI

@@ -42,6 +42,14 @@ static func collect_units(arena: Node, team_node: Node, team: String) -> Array:
 	return units
 
 
+## Toutes les unités vivantes de plusieurs camps (M5 — deux armées ennemies).
+static func collect_units_multi(arena: Node, team_nodes: Array, team: String) -> Array:
+	var units: Array = []
+	for node in team_nodes:
+		units.append_array(collect_units(arena, node as Node, team))
+	return units
+
+
 ## Nom affiché d'un pion — unique au sein de son camp (voir [method TacticsPawn.display_name]).
 static func display_name(pawn: Node) -> String:
 	if pawn and pawn.has_method("display_name"):
@@ -57,6 +65,14 @@ static func display_name(pawn: Node) -> String:
 ## }
 static func plan(arena: Node, pawn: Node, allies_node: Node, enemies_node: Node,
 		difficulty: int) -> Dictionary:
+	return plan_multi(arena, pawn, allies_node, [enemies_node], difficulty)
+
+
+## Même chose, mais avec plusieurs camps ennemis (M5 — trois camps en jeu).
+## Toutes les armées hostiles sont fondues en un seul lot de cibles : pour
+## l'heuristique, un ennemi est un ennemi, d'où qu'il vienne.
+static func plan_multi(arena: Node, pawn: Node, allies_node: Node, enemies_nodes: Array,
+		difficulty: int) -> Dictionary:
 	var empty: Dictionary = {"action": "wait", "decision": {}, "target": null,
 		"tile": null, "needs_move": false}
 	if not arena or not pawn or not is_instance_valid(pawn) or not pawn.is_alive():
@@ -64,7 +80,7 @@ static func plan(arena: Node, pawn: Node, allies_node: Node, enemies_node: Node,
 
 	var actor: Dictionary = pawn_to_unit(arena, pawn, "opponent")
 	var allies: Array = collect_units(arena, allies_node, "opponent")
-	var enemies: Array = collect_units(arena, enemies_node, "player")
+	var enemies: Array = collect_units_multi(arena, enemies_nodes, "player")
 	if enemies.is_empty():
 		return empty
 
@@ -89,7 +105,7 @@ static func plan(arena: Node, pawn: Node, allies_node: Node, enemies_node: Node,
 
 	var target: Node = null
 	if str(decision.get("action", "")) == "attack":
-		target = find_pawn_by_name(enemies_node, str(decision.get("target", "")))
+		target = find_pawn_in_camps(enemies_nodes, str(decision.get("target", "")))
 
 	return {
 		"action": str(decision.get("action", "wait")),
@@ -108,6 +124,17 @@ static func find_pawn_by_name(team_node: Node, pawn_name: String) -> Node:
 		if p is TacticsPawn and is_instance_valid(p) and p.is_alive():
 			if display_name(p) == pawn_name:
 				return p
+	return null
+
+
+## Retrouve un pion vivant par son nom affiché, en fouillant plusieurs camps.
+## Les noms ne sont uniques qu'au sein d'un camp : à égalité, le premier camp
+## de la liste l'emporte, ce qui garde la résolution déterministe.
+static func find_pawn_in_camps(team_nodes: Array, pawn_name: String) -> Node:
+	for node in team_nodes:
+		var found: Node = find_pawn_by_name(node as Node, pawn_name)
+		if found:
+			return found
 	return null
 
 

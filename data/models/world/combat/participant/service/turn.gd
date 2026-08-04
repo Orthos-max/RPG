@@ -39,8 +39,8 @@ func handle_player_turn(delta: float, camp: TacticsParticipant, participant: Tac
 		camera.target = camp.get_children().front()
 		res.turn_just_started = false
 
-	# Les cibles sont toujours le camp d'en face.
-	res.targets = _opposing_camp(camp, participant)
+	# Les cibles sont tous les autres camps (à trois camps, chacun pour soi).
+	_aim_at_hostiles(camp, participant)
 
 	controls.move_camera(delta)
 	controls.set_actions_menu_visibility(res.stage in [res.STAGE_SHOW_ACTIONS, res.STAGE_SHOW_MOVEMENTS, res.STAGE_SELECT_LOCATION, res.STAGE_DISPLAY_TARGETS, res.STAGE_SELECT_ATTACK_TARGET], res.curr_pawn if is_instance_valid(res.curr_pawn) else null)
@@ -56,11 +56,28 @@ func handle_player_turn(delta: float, camp: TacticsParticipant, participant: Tac
 		res.STAGE_ATTACK: participant.serv.combat_service.attack_pawn(delta, true)
 
 
-## Camp opposé à celui qui joue.
-func _opposing_camp(camp: TacticsParticipant, participant: TacticsParticipant) -> Node:
-	var player_camp: Node = participant.get_node_or_null("%TacticsPlayer")
-	var opponent_camp: Node = participant.get_node_or_null("%TacticsOpponent")
-	return opponent_camp if camp == player_camp else player_camp
+## Renseigne les camps ennemis de celui qui joue.
+##
+## À deux camps, cela revient exactement à « l'autre » ; à trois (M5), l'IA et le
+## ciblage doivent considérer les deux autres armées.
+func _aim_at_hostiles(camp: Node, participant: TacticsParticipant) -> void:
+	var hostiles: Array[Node] = _hostile_camps(camp, participant)
+	res.hostile_camps = hostiles
+	res.targets = hostiles[0] if not hostiles.is_empty() else null
+
+
+## Tous les camps de la scène sauf celui qui joue.
+func _hostile_camps(camp: Node, participant: TacticsParticipant) -> Array[Node]:
+	var out: Array[Node] = []
+	if not participant:
+		return out
+	for child in participant.get_children():
+		if child == camp:
+			continue
+		if TeamDataClass.side_for_camp_node(child) == -1:
+			continue
+		out.append(child)
+	return out
 
 
 ## Handles the opponent's turn
@@ -69,13 +86,13 @@ func _opposing_camp(camp: TacticsParticipant, participant: TacticsParticipant) -
 ## @param opponent: The TacticsOpponent node
 ## @param participant: The TacticsParticipant node
 func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: TacticsParticipant) -> void:
-	res.targets = participant.get_node("%TacticsPlayer")
+	_aim_at_hostiles(opponent, participant)
 	controls.set_actions_menu_visibility(false, null)
 
 	# Qui pilote ce camp ? La réponse vient de GameSession (M1), pas d'un test en dur.
 	# REMOTE_PLAYER retombe volontairement sur l'IA locale tant que le réseau (M3)
 	# n'est pas branché : mieux vaut un tour joué qu'une partie figée.
-	match _opponent_controller():
+	match _controller_for_camp(opponent):
 		TeamDataClass.Controller.CIEL_AI:
 			var ciel: Node = _autoload("CielAI")
 			if ciel:
@@ -105,12 +122,17 @@ func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: 
 		res.STAGE_MOVE_PAWN: participant.serv.combat_service.attack_pawn(delta, false)
 
 
-## Contrôleur du camp adverse, d'après GameSession (IA locale par défaut).
-func _opponent_controller() -> int:
+## Contrôleur d'un camp donné, d'après GameSession (IA locale par défaut).
+## Le camp est identifié par son nœud : c'est ce qui permet à un troisième camp
+## d'être piloté autrement que le camp rouge (M5).
+func _controller_for_camp(camp: Node) -> int:
 	var session: Node = _autoload("GameSession")
 	if not session:
 		return TeamDataClass.Controller.LOCAL_AI
-	return int(session.controller_for(TeamDataClass.Side.OPPONENT))
+	var side: int = TeamDataClass.side_for_camp_node(camp)
+	if side == -1:
+		side = TeamDataClass.Side.OPPONENT
+	return int(session.controller_for(side))
 
 
 ## Récupère un autoload par son nom, sans dépendre de l'identifiant global.

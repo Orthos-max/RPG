@@ -5,6 +5,10 @@ extends Node3D
 ## This is the Tactics Level's topmost script.[br][br]
 ## Dependencies: [TacticsArena], [TacticsTile], [TacticsCamera], [TacticsControls], [TacticsParticipant], [TacticsOpponent], [TacticsPlayer], [TacticsPawn]
 
+const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
+const ArmySplitClass = preload("res://data/models/world/combat/team/army_split.gd")
+const GuestCampScript = preload("res://data/modules/tactics/level/participants/opponent/tactics_opponent.gd")
+
 #region: --- Props ---
 ## Camera resource for the tactics system
 @export var camera: TacticsCameraResource = load("res://data/models/view/camera/tactics/camera.tres")
@@ -18,6 +22,10 @@ var participant: TacticsParticipant
 var player: TacticsPlayer = null
 ## Reference to the TacticsOpponent node
 var opponent: TacticsOpponent
+## Troisième camp, créé seulement quand la session le demande (M5)
+var guest: TacticsParticipant = null
+## Camps en jeu, dans l'ordre où ils prennent leur tour
+var camps: Array[Node3D] = []
 ## Reference to the TacticsArena node
 var arena: TacticsArena
 ## Current turn stage (0: init, 1: handle)
@@ -30,16 +38,17 @@ func _ready() -> void:
 		push_error("TacticsControls needs a ControlResource from /data/models/view/control/tactics/")
 	if not camera:
 		push_error("TacticsCamera needs a CameraResource from /data/models/view/camera/tactics/")
-	
+
 	# Initialize node references
 	participant = $TacticsParticipant
 	player = $TacticsParticipant/TacticsPlayer
 	opponent = $TacticsParticipant/TacticsOpponent
 	arena = $TacticsArena
-	
+
 	arena.configure_tiles() # Configure arena tiles
+	_setup_camps() # Trois camps si la session le demande (M5), deux sinon
 	participant.configure(camera, ui_control) # Configure participant with camera and UI control
-	
+
 	# Update camera boundary radius if necessary
 	if camera.boundary_radius != camera_boundary_radius:
 		camera.boundary_radius = camera_boundary_radius
@@ -50,31 +59,94 @@ func _physics_process(delta: float) -> void:
 		1: _handle_turn(delta) # Handle ongoing turn
 #endregion
 
+#region: --- Camps ---
+## Établit la liste des camps en jeu et crée le troisième si besoin.
+func _setup_camps() -> void:
+	var session: Node = get_node_or_null("/root/GameSession")
+	if session and bool(session.three_way):
+		_spawn_guest_camp(float(session.guest_share))
+
+	camps = []
+	var sides: Array = session.battle_sides() if session else [
+		TeamDataClass.Side.PLAYER, TeamDataClass.Side.OPPONENT
+	]
+	for side: int in sides:
+		var camp: Node3D = participant.get_node_or_null(TeamDataClass.camp_node_name(side)) as Node3D
+		if camp:
+			camps.append(camp)
+	# Repli : une carte sans camp reconnu resterait bloquée au tour 0.
+	if camps.is_empty():
+		camps = [player, opponent]
+
+
+## Crée le troisième camp en scindant l'armée adverse (M5).
+##
+## Aucune carte n'a de troisième armée : plutôt que d'en ajouter une à chaque
+## scène, on confie la moitié des pions adverses au nouveau camp. Le partage est
+## déterministe ([ArmySplit]), donc identique sur les deux machines d'une partie
+## en réseau sans le moindre échange.
+func _spawn_guest_camp(share: float) -> void:
+	if participant.get_node_or_null("TacticsGuest"):
+		return
+
+	var pawns: Array[Node] = []
+	for p in opponent.get_children():
+		if p is TacticsPawn:
+			pawns.append(p)
+
+	var indices: Array[int] = ArmySplitClass.guest_indices(pawns.size(), share)
+	if indices.is_empty():
+		push_warning("Trois camps demandés mais l'armée adverse (%d pion(s)) ne peut pas être scindée." % pawns.size())
+		return
+
+	var camp := Node3D.new()
+	camp.set_script(GuestCampScript)
+	camp.name = "TacticsGuest"
+	participant.add_child(camp)
+	camp.owner = self
+
+	for i: int in indices:
+		pawns[i].reparent(camp, true)
+
+	guest = camp as TacticsParticipant
+	print_rich("[color=green]⚑ Troisième camp : %d pion(s) confiés à %s[/color]" % [
+		indices.size(), _guest_label()
+	])
+
+
+## Nom du contrôleur du troisième camp, pour le journal.
+func _guest_label() -> String:
+	var session: Node = get_node_or_null("/root/GameSession")
+	if not session:
+		return TeamDataClass.side_name(TeamDataClass.Side.GUEST)
+	return TeamDataClass.controller_name(session.controller_for(TeamDataClass.Side.GUEST))
+#endregion
+
 #region: --- Methods ---
 ## Checks requirements to begin the first turn.[br]Used by [TacticsPlayer], [TacticsOpponent]
 func _init_turn() -> void:
-	if participant.is_configured(player) and participant.is_configured(opponent):
-		turn_stage = 1 # Move to turn handling stage if both player and opponent are configured
+	for camp: Node3D in camps:
+		if not participant.is_configured(camp):
+			return
+	turn_stage = 1 # Tous les camps sont en place
 
 ## Turn state management.[br]Used by [TacticsPlayer], [TacticsOpponent]
 func _handle_turn(delta: float) -> void:
 	DebugLog.debug_nospam("player_can_act", participant.can_act(player))
-	
-	if participant.can_act(player):
-		if not participant.is_configured(player):
-			participant.configure(camera, ui_control) # Configure player if not already done
-		participant.act(delta, true, player) # Player's turn to act
-		
-	elif participant.can_act(opponent):
-		if not participant.is_configured(opponent):
-			participant.configure(camera, ui_control) # Configure opponent if not already done
-		participant.act(delta, false, opponent) # Opponent's turn to act
-		
-	else:
-		if DebugLog.debug_enabled:
-			print_rich("[color=green]0Oo◦° O-----------------------------------O °◦oO0[/color]")
-			print_rich("[color=green]0Oo◦°[/color][color=red] >}=----->> [/color][color=yellow][ Turn reset! ][/color][color=red] <<-----={< [/color][color=green]°◦oO0[/color]")
-			print_rich("[color=green]0Oo◦° O-----------------------------------O °◦oO0[/color]")
-		player.reset_turn(player) # Reset player's turn
-		opponent.reset_turn(opponent) # Reset opponent's turn
+
+	# Les camps jouent dans l'ordre établi par la session : joueur, invité, Ciel.
+	for camp: Node3D in camps:
+		if not participant.can_act(camp):
+			continue
+		if not participant.is_configured(camp):
+			participant.configure(camera, ui_control)
+		participant.act(delta, camp == player, camp)
+		return
+
+	if DebugLog.debug_enabled:
+		print_rich("[color=green]0Oo◦° O-----------------------------------O °◦oO0[/color]")
+		print_rich("[color=green]0Oo◦°[/color][color=red] >}=----->> [/color][color=yellow][ Turn reset! ][/color][color=red] <<-----={< [/color][color=green]°◦oO0[/color]")
+		print_rich("[color=green]0Oo◦° O-----------------------------------O °◦oO0[/color]")
+	for camp: Node3D in camps:
+		camp.reset_turn(camp)
 #endregion

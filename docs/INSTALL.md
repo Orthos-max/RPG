@@ -198,6 +198,13 @@ chacun son tour ; le bandeau en haut de l'écran rappelle à qui de jouer.
 2. L'invité : **Rejoindre avec un code** → il saisit le code.
 3. L'hôte lance la bataille ; les deux machines chargent la même carte.
 
+**Ciel comme troisième camp** — sur l'écran « Créer une partie », l'hôte peut
+cocher *Inviter Ciel comme troisième camp*. La bataille compte alors trois
+armées : l'hôte (bleu), l'invité (vert) et Ciel (rouge), **chacun pour soi**.
+Comme les cartes n'ont que deux armées, l'armée adverse est partagée en deux au
+chargement : un pion sur deux pour l'invité, le reste pour Ciel. Le partage est
+déterministe, les deux machines obtiennent donc la même répartition.
+
 L'hôte joue le camp bleu, l'invité le camp rouge. **L'hôte fait autorité** : il
 simule la bataille et valide chaque ordre reçu (mêmes règles que pour Ciel). Si
 l'invité se déconnecte, l'IA locale reprend son camp — la partie ne se fige pas.

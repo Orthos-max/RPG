@@ -179,8 +179,13 @@ static func validate(data: Variant, ctx: Dictionary = {}) -> Dictionary:
 		return _reject(Err.MISSING_ARG, "Argument \"name\" vide")
 
 	# --- Contrôle du tour ---
-	if not is_global and ctx.has("turn") and str(ctx["turn"]) != "opponent":
-		return _reject(Err.OUT_OF_TURN, "Ce n'est pas le tour de Ciel (turn=%s)" % str(ctx["turn"]))
+	# Le camp attendu est « opponent » par défaut ; à trois camps (M5), le pont
+	# sert aussi le camp « guest » quand c'est l'invité distant qui commande.
+	var acting_team: String = str(ctx.get("acting_team", "opponent"))
+	if not is_global and ctx.has("turn") and str(ctx["turn"]) != acting_team:
+		return _reject(Err.OUT_OF_TURN, "Ce n'est pas le tour de %s (turn=%s)" % [
+			acting_team, str(ctx["turn"])
+		])
 
 	# --- Contrôle de l'étape ---
 	var stages: Array = spec["stages"]

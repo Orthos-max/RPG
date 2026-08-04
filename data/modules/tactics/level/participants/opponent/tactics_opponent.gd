@@ -4,6 +4,8 @@ extends TacticsParticipant
 ## 
 ## Service: [TacticsOpponentService]
 
+const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
+
 ## Service handling opponent-specific logic and operations
 var opponent_serv: TacticsOpponentService
 
@@ -20,6 +22,11 @@ func _ready() -> void:
 func _apply_difficulty_handicap() -> void:
 	var session: Node = get_node_or_null("/root/GameSession")
 	if not session:
+		return
+	# Le handicap est un réglage d'IA : une armée tenue par un humain (hotseat,
+	# invité distant, troisième camp de M5) n'a pas à en hériter.
+	var team = session.get_team(TeamDataClass.side_for_camp_node(self))
+	if team and team.is_human():
 		return
 	var campaign: Node = get_node_or_null("/root/Campaign")
 	var chapter_index: int = int(campaign.chapter_index) if campaign else 0
@@ -50,7 +57,9 @@ func choose_pawn() -> void:
 
 ## Initiates the action of chasing the nearest enemy
 func chase_nearest_enemy() -> void:
-	opponent_serv.chase_nearest_enemy(self, get_node("../TacticsPlayer")) # Delegate to the service
+	# Le camp visé vient de la boucle de tour (res.hostile_camps) : à trois camps,
+	# ce n'est plus forcément celui du joueur 1.
+	opponent_serv.chase_nearest_enemy(self, get_node_or_null("../TacticsPlayer"))
 
 
 ## Checks if the opponent's pawn has finished moving
