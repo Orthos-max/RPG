@@ -147,6 +147,7 @@ func _run() -> void:
 	campaign.delete_save(99)
 
 	await _run_seize_chapter(main, campaign, session)
+	await _run_custom_map(main, campaign)
 
 	main.queue_free()
 	await physics_frame
@@ -203,6 +204,102 @@ func _run_seize_chapter(main: Node, campaign: Node, session: Node) -> void:
 		"Ciel reçoit la case à défendre", str(point))
 
 
+## Éditeur de cartes : dessiner, poser, jouer — puis vérifier que la campagne
+## est restée intacte.
+func _run_custom_map(main: Node, campaign: Node) -> void:
+	const LORD: String = "res://data/models/world/stats/hero/lord.tres"
+	const SKELETON: String = "res://data/models/world/stats/mob/skeleton.tres"
+
+	var gold_before: int = campaign.gold
+	var chapter_before: int = campaign.chapter_index
+
+	# --- L'éditeur s'ouvre et dessine ce qu'on lui demande ---
+	main.show_editor()
+	for _i in 20:
+		await physics_frame
+
+	var editor: Node = _find_class_named(main, "MapEditorLevel")
+	_check(editor != null, "éditeur de cartes ouvert")
+	if not editor:
+		return
+	_check(editor.doc != null, "l'éditeur démarre sur une carte vierge")
+
+	var tiles_built: int = 0
+	for child in editor.get_children():
+		if String(child.name).begins_with("Tile_"):
+			tiles_built += 1
+	_check(tiles_built == editor.doc.grid_size.x * editor.doc.grid_size.y,
+		"grille dessinée : %d tuiles" % tiles_built)
+
+	# Peindre, élever, poser : les outils passent bien par le document.
+	editor._tool = MapEditorUI.Tool.FOREST
+	editor._use_tool(Vector2i(4, 4))
+	_check(editor.doc.terrain_at(Vector2i(4, 4)) == MapData.TerrainType.FOREST,
+		"outil pinceau : le terrain change")
+
+	editor._tool = MapEditorUI.Tool.RAISE
+	editor._use_tool(Vector2i(4, 4))
+	_check(editor.doc.height_at(Vector2i(4, 4)) > 0.0, "outil élévation")
+
+	editor._tool = MapEditorUI.Tool.UNIT_PLAYER
+	editor._unit_paths["player"] = LORD
+	editor._use_tool(Vector2i(2, 2))
+	editor._tool = MapEditorUI.Tool.UNIT_OPPONENT
+	editor._unit_paths["opponent"] = SKELETON
+	editor._use_tool(Vector2i(12, 7))
+	_check(editor.doc.units.size() == 2, "deux unités posées à la souris")
+
+	editor._tool = MapEditorUI.Tool.DEPLOY
+	editor._use_tool(Vector2i(2, 2))
+	editor._use_tool(Vector2i(3, 2))
+	_check(editor.doc.deploy_tiles.size() == 2, "zone de déploiement dessinée")
+
+	# Un terrain devenu infranchissable ne peut plus porter ce qu'on y avait mis.
+	editor._tool = MapEditorUI.Tool.WATER
+	editor._use_tool(Vector2i(3, 2))
+	_check(not editor.doc.is_deploy_tile(Vector2i(3, 2)),
+		"noyer une case de départ la referme")
+
+	editor.doc.name = "Carte de test"
+	_check(editor.doc.validate().is_empty(), "carte d'essai jugée jouable",
+		str(editor.doc.validate()))
+
+	# --- Jouer la carte ---
+	var document = editor.doc
+	main._on_play_custom_map(document, false)
+	for _i in 60:
+		await physics_frame
+
+	var level: Node = _find_class(main, "TacticsLevel")
+	_check(level != null, "la carte du joueur devient un niveau jouable")
+	if not level:
+		return
+
+	_check(_count_pawns(level.player) == 1 and _count_pawns(level.opponent) == 1,
+		"les unités de la carte sont en scène (%d joueur, %d adverse)" % [
+			_count_pawns(level.player), _count_pawns(level.opponent)])
+	_check(TacticsGrid.grid_size(level.arena) == document.grid_size,
+		"l'arène adopte la grille de la carte %s" % str(TacticsGrid.grid_size(level.arena)))
+
+	var runner: Node = level.get_node_or_null("ChapterRunner")
+	_check(runner != null, "la carte est pilotée comme un chapitre")
+	await _settle_deployment(runner)
+
+	# Le roster de campagne ne doit pas s'inviter sur une carte du joueur.
+	var names: Array = []
+	for p in level.player.get_children():
+		if p is TacticsPawn and is_instance_valid(p):
+			names.append(p.display_name())
+	_check(names.size() == 1 and str(names[0]) == MapDocument.unit_display_name(LORD),
+		"le roster de campagne ne remplace pas les unités de la carte : %s" % str(names))
+
+	_check(campaign.gold == gold_before and campaign.chapter_index == chapter_before,
+		"jouer une carte d'essai ne touche pas à la campagne")
+
+	main.show_title()
+	await physics_frame
+
+
 ## Traverse la phase de placement quand elle existe.
 ##
 ## Elle ne s'ouvre que fenêtre ouverte : sans rendu, les tuiles n'ont pas de
@@ -252,6 +349,18 @@ func _count_pawns(team: Node) -> int:
 		if c is TacticsPawn and is_instance_valid(c):
 			n += 1
 	return n
+
+
+## Retrouve un nœud d'après le nom de sa classe de script (class_name).
+func _find_class_named(node: Node, script_class: String) -> Node:
+	var script: Script = node.get_script() as Script
+	if script and script.get_global_name() == script_class:
+		return node
+	for c in node.get_children():
+		var found: Node = _find_class_named(c, script_class)
+		if found:
+			return found
+	return null
 
 
 func _find_class(node: Node, class_str: String) -> Node:

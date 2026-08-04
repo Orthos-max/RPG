@@ -50,6 +50,7 @@ func _init() -> void:
 	_test_deployment()
 	_test_ux_polish()
 	_test_audio()
+	_test_map_editor()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1227,4 +1228,148 @@ func _test_audio() -> void:
 	_check(is_equal_approx(audio.get_volume(SoundDB.BUS_MUSIC), 1.0), "volume borné à 1.0")
 	audio.set_volume(SoundDB.BUS_MUSIC, before)
 	audio.save_settings()
+#endregion
+
+
+#region 19. Éditeur de cartes — document, validation, bibliothèque
+func _test_map_editor() -> void:
+	print("\n🗺 Test 19: cartes du joueur")
+
+	const LORD: String = "res://data/models/world/stats/hero/lord.tres"
+	const CLERIC: String = "res://data/models/world/stats/hero/cleric.tres"
+	const SKELETON: String = "res://data/models/world/stats/mob/skeleton.tres"
+
+	# --- Création et terrain ---
+	var doc := MapDocument.create_empty("Col de l'aube", Vector2i(12, 8))
+	_check(doc.grid_size == Vector2i(12, 8) and doc.terrain.size() == 96,
+		"carte vierge : grille cohérente (%d cases)" % doc.terrain.size())
+	_check(doc.terrain_at(Vector2i(0, 0)) == MapData.TerrainType.GRASS, "tout en herbe au départ")
+	_check(MapDocument.create_empty("Minuscule", Vector2i(2, 2)).grid_size == MapDocument.MIN_SIZE,
+		"une taille trop petite est ramenée au minimum")
+
+	doc.set_terrain_at(Vector2i(3, 3), MapData.TerrainType.FOREST)
+	_check(doc.terrain_at(Vector2i(3, 3)) == MapData.TerrainType.FOREST, "terrain peint")
+	doc.set_height_at(Vector2i(3, 3), 0.5)
+	_check(is_equal_approx(doc.height_at(Vector2i(3, 3)), 0.5), "hauteur appliquée")
+	doc.set_height_at(Vector2i(3, 3), 99.0)
+	_check(doc.height_at(Vector2i(3, 3)) <= 3.0, "hauteur bornée (%.2f)" % doc.height_at(Vector2i(3, 3)))
+	_check(doc.terrain_at(Vector2i(99, 99)) == MapData.TerrainType.GRASS,
+		"une case hors carte ne fait pas planter la lecture")
+
+	# --- Unités ---
+	_check(bool(doc.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)["ok"]),
+		"unité du joueur posée")
+	_check(bool(doc.place_unit(SKELETON, Vector2i(9, 6), MapDocument.TEAM_OPPONENT)["ok"]),
+		"adversaire posé")
+	_check(doc.units.size() == 2 and doc.units_of(MapDocument.TEAM_PLAYER).size() == 1,
+		"les camps sont distingués")
+
+	doc.set_terrain_at(Vector2i(5, 5), MapData.TerrainType.WATER)
+	var on_water: Dictionary = doc.place_unit(LORD, Vector2i(5, 5), MapDocument.TEAM_PLAYER)
+	_check(not bool(on_water["ok"]), "pas d'unité sur un terrain infranchissable")
+
+	# Poser sur une case occupée remplace : deux unités ne peuvent pas se superposer.
+	doc.place_unit(CLERIC, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	_check(doc.units.size() == 2, "poser sur une case occupée remplace l'occupante")
+	_check(str(doc.unit_at(Vector2i(1, 1))["path"]) == CLERIC, "la nouvelle unité est en place")
+	_check(doc.remove_unit(Vector2i(1, 1)) and doc.unit_at(Vector2i(1, 1)).is_empty(),
+		"unité effacée")
+	doc.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+
+	# --- Zone de déploiement et objectif ---
+	_check(doc.toggle_deploy_tile(Vector2i(2, 2)) and doc.is_deploy_tile(Vector2i(2, 2)),
+		"case de départ ouverte")
+	_check(not doc.toggle_deploy_tile(Vector2i(2, 2)) and not doc.is_deploy_tile(Vector2i(2, 2)),
+		"un second clic la referme")
+	_check(not doc.toggle_deploy_tile(Vector2i(5, 5)), "pas de case de départ dans l'eau")
+
+	_check(doc.set_seize_point(Vector2i(8, 4)) and doc.seize_point() == Vector2i(8, 4),
+		"point de commandement posé")
+	_check(not doc.set_seize_point(Vector2i(5, 5)), "pas de point de commandement dans l'eau")
+
+	# --- Validation : c'est elle qui empêche de livrer une carte injouable ---
+	_check(doc.validate().is_empty(), "carte complète jugée jouable", str(doc.validate()))
+
+	var no_enemy := MapDocument.create_empty("Sans adversaire")
+	no_enemy.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	_check(no_enemy.validate().size() >= 1, "carte sans adversaire refusée")
+
+	var bad_boss := MapDocument.create_empty("Commandant fantôme")
+	bad_boss.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	bad_boss.place_unit(SKELETON, Vector2i(5, 5), MapDocument.TEAM_OPPONENT)
+	bad_boss.set_objective({"kind": OBJ.Kind.DEFEAT_BOSS, "target": "Personne"})
+	_check(not bad_boss.validate().is_empty(),
+		"objectif visant un commandant absent : carte refusée")
+	bad_boss.set_objective({"kind": OBJ.Kind.DEFEAT_BOSS,
+		"target": MapDocument.unit_display_name(SKELETON)})
+	_check(bad_boss.validate().is_empty(), "le nom d'un adversaire réel est accepté",
+		str(bad_boss.validate()))
+
+	var bad_protect := MapDocument.create_empty("Protection impossible")
+	bad_protect.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	bad_protect.place_unit(SKELETON, Vector2i(5, 5), MapDocument.TEAM_OPPONENT)
+	bad_protect.set_objective({"kind": OBJ.Kind.PROTECT,
+		"target": MapDocument.unit_display_name(CLERIC), "turns": 5})
+	_check(not bad_protect.validate().is_empty(),
+		"protéger une unité absente de la carte : refusé")
+
+	# --- Redimensionnement : ce qui sort de la grille est oublié ---
+	var shrink := MapDocument.create_empty("Rétrécie", Vector2i(16, 12))
+	shrink.place_unit(LORD, Vector2i(14, 10), MapDocument.TEAM_PLAYER)
+	shrink.toggle_deploy_tile(Vector2i(15, 11))
+	shrink.resize(Vector2i(8, 8))
+	_check(shrink.units.is_empty() and shrink.deploy_tiles.is_empty(),
+		"les unités et cases hors de la nouvelle grille disparaissent")
+	_check(shrink.terrain.size() == 64, "la grille est bien redimensionnée")
+
+	# --- Chapitre jouable ---
+	var chapter: ChapterData = doc.to_chapter()
+	_check(chapter.title == doc.name and not chapter.use_roster,
+		"la carte devient un chapitre qui n'emprunte pas le roster")
+	_check(int(chapter.objective.get("kind", -1)) == OBJ.Kind.SEIZE,
+		"l'objectif suit la carte")
+	_check(chapter.deploy_tiles.size() == doc.deploy_tiles.size(),
+		"la zone de déploiement suit la carte")
+
+	# --- Aller-retour disque ---
+	var restored: MapDocument = MapDocument.from_dict(doc.to_dict())
+	_check(restored != null and restored.name == doc.name
+			and restored.units.size() == doc.units.size()
+			and restored.seize_point() == doc.seize_point(),
+		"sérialisation fidèle")
+	_check(restored.terrain_at(Vector2i(3, 3)) == MapData.TerrainType.FOREST,
+		"le terrain survit à l'aller-retour")
+
+	var truncated: Dictionary = doc.to_dict()
+	truncated["terrain"] = [0, 0, 0]
+	var repaired: MapDocument = MapDocument.from_dict(truncated)
+	_check(repaired != null and repaired.terrain.size() == 96,
+		"un fichier tronqué est complété plutôt que refusé")
+
+	var future: Dictionary = doc.to_dict()
+	future["format_version"] = MapDocument.FORMAT_VERSION + 1
+	_check(MapDocument.from_dict(future) == null,
+		"une carte d'une version plus récente est refusée")
+
+	# --- Bibliothèque sur disque ---
+	var saved: Dictionary = MapLibrary.save(doc)
+	_check(bool(saved["ok"]), "carte enregistrée dans user://maps", str(saved.get("error", "")))
+	var reread: MapDocument = MapLibrary.load_map(str(saved["path"]))
+	_check(reread != null and reread.units.size() == doc.units.size(), "carte relue du disque")
+
+	var listed: Array = MapLibrary.list_maps()
+	var found: bool = false
+	for entry: Dictionary in listed:
+		if str(entry["name"]) == doc.name:
+			found = true
+			_check(bool(entry["playable"]), "la bibliothèque annonce la carte comme jouable")
+	_check(found, "la carte apparaît dans la bibliothèque")
+
+	var broken := MapDocument.create_empty("Injouable")
+	_check(not bool(MapLibrary.save(broken)["ok"]),
+		"une carte injouable n'est pas enregistrée")
+
+	_check(MapLibrary.delete(str(saved["path"])), "carte de test supprimée")
+	_check(MapLibrary.load_map(str(saved["path"])) == null, "le fichier a bien disparu")
+	_check(doc.slug() == "col_de_laube", "nom de fichier lisible : %s" % doc.slug())
 #endregion

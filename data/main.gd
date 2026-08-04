@@ -14,6 +14,9 @@ const LobbyScreen = preload("res://data/modules/menu/lobby_screen.gd")
 const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
+const MapEditorScene = preload("res://assets/maps/level/map_editor_level.tscn")
+const CustomBattleClass = preload("res://data/modules/campaign/custom_battle.gd")
+
 const SKIRMISH_SCENE: String = "res://assets/maps/level/map_level.tscn"
 const FE2D_SCENE: String = "res://fe_2d/fe_level.tscn"
 const FE2D_EDITOR_SCENE: String = "res://fe_2d/editor/map_editor.tscn"
@@ -27,6 +30,8 @@ var _level: Node = null
 var _runner: ChapterRunner = null
 ## Chapitre en cours de jeu
 var _chapter: ChapterData = null
+## Carte du joueur en cours d'essai (null hors éditeur) — sert au retour
+var _custom_map: MapDocument = null
 
 
 func _ready() -> void:
@@ -68,7 +73,7 @@ func show_title() -> void:
 	screen.hotseat_requested.connect(_on_hotseat)
 	screen.host_requested.connect(func() -> void: show_lobby(true))
 	screen.join_requested.connect(func() -> void: show_lobby(false))
-	screen.editor_requested.connect(func() -> void: _load_2d_scene(FE2D_EDITOR_SCENE))
+	screen.editor_requested.connect(func() -> void: show_editor())
 	screen.fe2d_requested.connect(func() -> void: _load_2d_scene(FE2D_SCENE))
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
 	_mount_ui(screen)
@@ -122,6 +127,46 @@ func show_lobby(as_host: bool) -> void:
 func _on_network_battle(map_path: String) -> void:
 	_chapter = null
 	_load_level(map_path)
+
+
+## Éditeur de cartes. [param document] reprend une carte en cours d'édition.
+func show_editor(document: MapDocument = null) -> void:
+	unload_level()
+	_clear_ui()
+	_leave_network()
+	_chapter = null
+	_custom_map = null
+	_play_music("music_prep")
+
+	# La caméra tactique céderait la vue à l'éditeur, qui a la sienne.
+	_enable_3d_camera(false)
+
+	var editor: Node = MapEditorScene.instantiate()
+	editor.doc = document
+	editor.back_to_menu.connect(show_title)
+	editor.play_requested.connect(_on_play_custom_map)
+
+	var world: Node = get_node_or_null("World")
+	if world:
+		world.add_child(editor)
+	else:
+		add_child(editor)
+	_level = editor
+
+
+## Essai d'une carte du joueur : elle se joue comme un chapitre.
+##
+## Rien n'est reporté dans la campagne — ni or, ni XP, ni progression : une
+## carte d'essai ne doit pas pouvoir faire avancer une partie en cours.
+func _on_play_custom_map(document: MapDocument, with_ciel: bool) -> void:
+	var session: Node = _session()
+	if session:
+		session.set_mode(session.Mode.CIEL if with_ciel else session.Mode.SOLO)
+		session.chapter_index = 0
+
+	_custom_map = document
+	_chapter = document.to_chapter()
+	_load_level("", CustomBattleClass.build(document))
 
 
 ## Écran de fin de bataille (victoire, défaite, fin de campagne).
@@ -239,6 +284,16 @@ func _on_battle_requested() -> void:
 
 
 func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void:
+	# Une carte d'essai ne touche pas à la campagne : ni XP, ni or, ni progression.
+	if _custom_map:
+		var document: MapDocument = _custom_map
+		unload_level()
+		_show_message(
+			"⚔️ Victoire — %s" % document.name if victory else "💀 Défaite — %s" % document.name,
+			"%s\n\nCarte d'essai : rien n'a été reporté dans ta campagne." % reason,
+			func() -> void: show_editor(document))
+		return
+
 	var campaign: Node = _campaign()
 	if not campaign or not _runner:
 		show_title()
@@ -275,19 +330,24 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 
 
 #region Chargement de niveau
-func _load_level(scene_path: String) -> void:
+## Charge une bataille.
+##
+## [param prebuilt] permet de fournir un niveau déjà bâti — c'est le cas d'une
+## carte du joueur, montée à la volée par [CustomBattle] plutôt que chargée
+## depuis un fichier de scène.
+func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 	_clear_ui()
 	unload_level()
 
-	var scene: PackedScene = load(scene_path)
-	if not scene:
+	var scene: PackedScene = load(scene_path) if not prebuilt else null
+	if not scene and not prebuilt:
 		push_error("[Main] Scène introuvable : %s" % scene_path)
 		show_title()
 		return
 
 	_play_music("music_battle")
 	_enable_3d_camera(true)
-	_level = scene.instantiate()
+	_level = prebuilt if prebuilt else scene.instantiate()
 	var world: Node = get_node_or_null("World")
 	if world:
 		world.add_child(_level)
@@ -297,7 +357,7 @@ func _load_level(scene_path: String) -> void:
 	var recorder: Node = get_node_or_null("/root/BattleRecorder")
 	if recorder:
 		recorder.start_battle({
-			"scene": scene_path,
+			"scene": scene_path if not scene_path.is_empty() else "carte du joueur",
 			"chapter": _chapter.id if _chapter else "skirmish",
 		})
 

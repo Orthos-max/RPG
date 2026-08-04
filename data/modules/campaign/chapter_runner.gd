@@ -170,6 +170,8 @@ func _count_turns() -> void:
 
 ## Applique le roster persistant aux pions du niveau et retire les non-déployés.
 func _apply_roster() -> void:
+	if chapter and not chapter.use_roster:
+		return  # Carte du joueur : ses unités sont celles qu'elle déclare.
 	var campaign: Node = get_node_or_null("/root/Campaign")
 	if not campaign or not level or not level.player or campaign.roster.is_empty():
 		return

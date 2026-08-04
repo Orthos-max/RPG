@@ -33,6 +33,9 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 ## Unités que le chapitre impose au déploiement (identifiants de roster).
 ## Indispensable à un objectif « protéger » : la protégée doit être en scène.
 @export var required_units: Array[String] = []
+## Le roster de campagne remplace-t-il les pions de la carte ?
+## Faux pour une carte du joueur : ses unités sont celles qu'elle déclare.
+@export var use_roster: bool = true
 ## Unités recrutables à la fin du chapitre (chemins .tres)
 @export var recruits: Array[String] = []
 ## Or gagné à la victoire
@@ -58,6 +61,7 @@ static func from_dict(data: Dictionary) -> ChapterData:
 	c.bonus_objectives = data.get("bonus_objectives", [])
 	c.deploy_slots = int(data.get("deploy_slots", 3))
 	c.deploy_tiles = data.get("deploy_tiles", [])
+	c.use_roster = bool(data.get("use_roster", true))
 	c.reward_gold = int(data.get("reward_gold", 300))
 	c.recommended_level = int(data.get("recommended_level", 1))
 
