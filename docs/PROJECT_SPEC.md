@@ -372,6 +372,26 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 > **Ajouté le 2026-08-04.** À transmettre à Claude Code tel quel.
 > Objectif : produire un `.exe` d'installation Windows avec Inno Setup 6.
 
+### ⚠️ État réel au 2026-08-04 (mesuré, pas supposé)
+
+**Le script d'installation est écrit ; la chaîne n'a jamais produit le moindre
+fichier.** Vérifié en tentant l'export :
+
+| Maillon | État |
+|---|---|
+| `scripts/build/windows/setup.iss` | ✅ Complet — GUID stable, FR/EN, raccourcis, désinstallation qui **préserve les sauvegardes** de `%APPDATA%` |
+| `scripts/build/package.sh` | ✅ Prépare le staging, convertit l'icône, appelle ISCC |
+| `export_presets.cfg` → `Windows Desktop` | ✅ Présent |
+| **Modèles d'exportation Godot 4.3** | ❌ **Absents** — `export_templates/` est vide, l'export échoue avant tout le reste |
+| Compilateur Inno Setup (`ISCC`) ou `wine` | ❌ Absents de la machine de développement |
+| `build/` | ❌ N'a jamais existé — aucun `.exe`, aucun `.pck`, aucun `.zip` |
+
+Autrement dit : ce n'est pas seulement l'installeur qui n'a jamais tourné sous
+Windows — **le jeu n'a jamais été exporté du tout**, sur aucune plateforme. Le
+premier pas n'est pas Windows, c'est d'installer les modèles d'exportation 4.3
+(éditeur : *Éditeur → Gérer les modèles d'exportation*) et de vérifier qu'un export
+macOS local démarre. L'installeur Windows ne se teste qu'ensuite, et sous Windows.
+
 ### Contexte
 
 Le projet a déjà :
@@ -486,23 +506,79 @@ Les passes du 2026-08-04 ont livré la reconnexion réseau, les deux objectifs d
 chapitre restés sans carte, le choix des cases de déploiement, le polissage UX,
 la préparation du système sonore, et l'éditeur de cartes — complété depuis par
 l'annulation et le redimensionnement.
-**Backlog : 44 items faits, 4 restants.** Ordre conseillé pour la reprise :
+**Backlog : 44 items faits, 4 restants.** Ordre conseillé pour la reprise —
+classé par ce que ça rapporte au projet, pas par facilité :
 
-1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
-   livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
-   à vérifier. *Le mode headless ne crée pas les collisions de tuiles, donc le test
-   doit se faire fenêtre ouverte, deux instances.*
-2. 🔨 **Exécuter l'installeur Windows sur une vraie machine.** Le `.iss` existe et
-   `package.sh` le compile ; personne ne l'a encore lancé sous Windows.
-3. 🔊 **Fournir les fichiers audio.** Tout le reste est branché et attend :
-   [`assets/audio/README.md`](../assets/audio/README.md) donne la liste, le format
-   et l'intention de chaque son. Ensuite seulement, les **animations de duel**.
-4. **Aligner les noms sur le lore** — *à ne pas entamer avant que le lore soit posé
-   (document en cours d'écriture par Aurèle et sa compagne).* Les héros s'appellent
-   encore Chrom, Lissa, Frederick. Ce ne sera pas qu'un renommage : les identifiants
-   de sauvegarde, la cible du chapitre 2 et les `required_units` du chapitre 6 en
-   dépendent.
-5. **Signature macOS** (certificat Apple) et **port 2D** (`fe_2d/`), selon l'envie.
+### 🥇 1. La grille en données (le refactor qui débloque le reste)
+
+Aujourd'hui, « qui est à côté de qui » et « cette case est-elle occupée » se
+répondent par des **rayons 3D** (`tile_raycasting.tscn`, `TacticsTile.get_neighbors()`,
+`get_tile_occupier()`), et le pathfinding accroche son état (`pf_root`, `pf_distance`)
+sur des nœuds `StaticBody3D`. Trois conséquences déjà payées :
+
+- **Aucun tour de combat complet n'est testable en headless** — la limite connue
+  documentée plus bas vient précisément de là.
+- Des règles pures irréprochables (`MapDocument`, `ObjectiveDB`, `DeploymentPlan`)
+  posées sur un cœur de déplacement qui, lui, exige une scène 3D montée.
+- Tout changement de rendu bute dessus.
+
+`MapData` contient déjà le nécessaire. Ce n'est pas une réécriture : déplacer
+l'adjacence et l'occupation dans la donnée, et laisser les tuiles ne faire que de
+l'affichage.
+
+### 🥈 2. Prouver une bataille fenêtre ouverte
+
+`shot.gd` a démontré qu'on peut lancer une vraie fenêtre avec collisions et rendu.
+La suite : un `test_window.gd` qui joue **un tour complet** — sélection, déplacement,
+attaque, mort. C'est le plus gros trou de preuve du projet, et il n'est ouvrable que
+depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent avant.
+
+### 🥉 3. Finir la route artistique
+
+| Étape | Pourquoi |
+|---|---|
+| Porter le cadrage dans **la caméra du jeu** (orthographique, inclinaison fixe) et réparer la cible perdue après le déploiement | Le cadrage « Awakening » n'existe que dans `shot.gd` ; en jeu, on entre en bataille sur une vue braquée sur le vide (`Camera focuses on: <null>`) |
+| **Décors posés sur les cases** — arbres sur la forêt, rochers sur la montagne, créneaux sur les murs | Ce qui sépare « un damier teinté » d'« un champ de bataille ». Formes simples, sans artiste |
+| **Retravailler le surlignage de portée** | Les matériaux de portée remplacent le terrain d'un bloc : ils sont restés plats alors que tout le reste a gagné du grain |
+
+### 4. Supprimer `fe_2d/`
+
+1 074 lignes de code mort qui **dupliquent les règles** (ses propres unités, ses
+propres stats) et contredisent la direction prise. Le garder, c'est entretenir un
+piège pour la prochaine personne qui ouvre le dépôt.
+
+### 5. Aligner les noms sur le lore
+
+*À ne pas entamer avant que le lore soit posé (document écrit par Aurèle et sa
+compagne).* Les héros s'appellent encore Chrom, Lissa, Frederick. Ce ne sera pas
+qu'un renommage : les identifiants de sauvegarde, la cible du chapitre 2 et les
+`required_units` du chapitre 6 en dépendent — et chaque jour d'attente ajoute des
+sauvegardes à migrer. La table de correspondance et le chemin de migration peuvent
+être préparés d'avance.
+
+### 6. Les deux dettes de vérification (matériel requis)
+
+- ⚠️ **Partie en ligne sur deux vraies machines.** Toujours la seule brique livrée
+  sans preuve de bout en bout, et la reconnexion y a ajouté du chemin.
+- 🔨 **Chaîne d'empaquetage Windows.** Voir l'état exact au §4bis : elle n'a jamais
+  produit le moindre binaire, faute de modèles d'exportation.
+
+### 7. Confort de l'éditeur de cartes
+
+Roster figé à 9 unités sans réglage de niveau, aucun import/export dans l'interface
+(le JSON se copie à la main). Utile, nettement moins urgent que ce qui précède.
+
+### 8. Le reste
+
+🔊 **Fichiers audio** — tout est branché et attend :
+[`assets/audio/README.md`](../assets/audio/README.md) donne la liste, le format et
+l'intention de chaque son ; `Audio.missing_cues()` dit lesquels manquent. Ensuite
+seulement, les **animations de duel**. Puis la **signature macOS** (certificat Apple).
+
+> **Si l'on ne devait en faire que trois** : le refactor de la grille (1), le tour
+> complet prouvé fenêtre ouverte (2), et la caméra du jeu (3, première ligne). Les
+> deux premiers assainissent le cœur ; le troisième est ce qu'on voit dès le
+> lancement.
 
 ---
 
