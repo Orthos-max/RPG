@@ -85,6 +85,7 @@ func _run() -> void:
 
 	var runner: Node = level.get_node_or_null("ChapterRunner")
 	_check(runner != null, "ChapterRunner attaché au niveau")
+	await _settle_deployment(runner)
 
 	var player_pawns: int = _count_pawns(level.player)
 	var enemy_pawns: int = _count_pawns(level.opponent)
@@ -176,6 +177,8 @@ func _run_seize_chapter(main: Node, campaign: Node, session: Node) -> void:
 	if not runner:
 		return
 
+	await _settle_deployment(runner)
+
 	var target: Vector2i = runner.seize_target()
 	_check(target.x >= 0, "objectif « prise de point » reconnu %s" % str(target))
 
@@ -198,6 +201,46 @@ func _run_seize_chapter(main: Node, campaign: Node, session: Node) -> void:
 	var point: Dictionary = state.get("objective_point", {})
 	_check(int(point.get("col", -1)) == target.x and int(point.get("row", -1)) == target.y,
 		"Ciel reçoit la case à défendre", str(point))
+
+
+## Traverse la phase de placement quand elle existe.
+##
+## Elle ne s'ouvre que fenêtre ouverte : sans rendu, les tuiles n'ont pas de
+## collision et les pions ne savent pas où ils se tiennent. Ce test tourne dans
+## les deux modes, d'où la condition — en `--headless`, il n'y a rien à faire.
+func _settle_deployment(runner: Node) -> void:
+	if not runner:
+		return
+	var phase: Node = null
+	for _i in 30:
+		phase = runner.get_node_or_null("DeploymentPhase")
+		if phase and not phase.plan.slots.is_empty():
+			break
+		await physics_frame
+
+	if not phase or not is_instance_valid(phase):
+		_check(DisplayServer.get_name() == "headless",
+			"placement des unités : absent seulement en headless", DisplayServer.get_name())
+		return
+
+	_check(not phase.plan.slots.is_empty(),
+		"placement : %d case(s) ouverte(s)" % phase.plan.slots.size())
+	_check(phase.plan.placed_count() > 0,
+		"placement : les unités déployées sont sur des cases ouvertes")
+
+	# Un déplacement volontaire vers une case libre, comme un clic du joueur.
+	var free: Array = phase.plan.free_slots()
+	var units: Array = phase.plan.assignments().keys()
+	if not free.is_empty() and not units.is_empty():
+		var moved: String = str(units[0])
+		var result: Dictionary = phase.plan.place(moved, free[0])
+		_check(bool(result["ok"]) and phase.plan.position_of(moved) == free[0],
+			"placement : une unité change de case", str(result))
+
+	phase.confirm()
+	await physics_frame
+	_check(runner.get_node_or_null("DeploymentPhase") == null,
+		"placement confirmé : la bataille reprend la main")
 
 
 #region Helpers

@@ -47,6 +47,7 @@ func _init() -> void:
 	_test_network_codes()
 	_test_three_way()
 	_test_reconnection()
+	_test_deployment()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -944,4 +945,67 @@ func _test_reconnection() -> void:
 		_check(not net.is_reconnecting(), "réseau au repos : aucune reconnexion")
 		_check(net.reserved_seats().is_empty(), "réseau au repos : aucune place gardée")
 		_check(not net.in_battle, "réseau au repos : aucune bataille en cours")
+#endregion
+
+
+#region 16. Cases de déploiement
+func _test_deployment() -> void:
+	print("\n🪧 Test 16: choix des cases de déploiement")
+
+	var plan := DeploymentPlan.new()
+	plan.configure([Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2), Vector2i(3, 2)])
+	_check(plan.slots.size() == 3, "cases dédoublonnées (%d)" % plan.slots.size())
+	_check(plan.is_slot(Vector2i(4, 2)) and not plan.is_slot(Vector2i(9, 9)),
+		"une case hors zone reste fermée")
+
+	# Pose simple
+	_check(bool(plan.place("Lord", Vector2i(3, 2))["ok"]), "une unité se pose sur une case ouverte")
+	_check(plan.position_of("Lord") == Vector2i(3, 2), "la position est retenue")
+	_check(plan.occupant(Vector2i(3, 2)) == "Lord", "la case connaît son occupante")
+	_check(plan.free_slots().size() == 2, "les cases libres se comptent")
+
+	var closed: Dictionary = plan.place("Lord", Vector2i(9, 9))
+	_check(not bool(closed["ok"]) and plan.position_of("Lord") == Vector2i(3, 2),
+		"case fermée refusée, sans déplacer l'unité")
+
+	# Déplacement vers une case libre
+	plan.place("Lord", Vector2i(5, 2))
+	_check(plan.position_of("Lord") == Vector2i(5, 2) and plan.occupant(Vector2i(3, 2)).is_empty(),
+		"l'ancienne case est libérée")
+
+	# Échange : le geste courant quand on réarrange la ligne de départ
+	plan.place("Cleric", Vector2i(4, 2))
+	var swap: Dictionary = plan.place("Cleric", Vector2i(5, 2))
+	_check(str(swap["swapped"]) == "Lord", "poser sur une case prise échange les deux unités")
+	_check(plan.position_of("Cleric") == Vector2i(5, 2)
+			and plan.position_of("Lord") == Vector2i(4, 2),
+		"les deux unités ont bien permuté")
+	_check(plan.placed_count() == 2, "aucune unité perdue dans l'échange")
+
+	plan.place("Cleric", Vector2i(5, 2))
+	_check(plan.position_of("Cleric") == Vector2i(5, 2), "reposer une unité sur sa case ne change rien")
+
+	plan.remove("Cleric")
+	_check(plan.position_of("Cleric").x == -1 and plan.occupant(Vector2i(5, 2)).is_empty(),
+		"une unité retirée libère sa case")
+
+	# Zone par défaut : le voisinage de la ligne de départ, dans les bornes
+	var slots: Array[Vector2i] = DeploymentPlan.default_slots(
+		[Vector2i(0, 0), Vector2i(1, 0)], Vector2i(16, 10), 1)
+	_check(slots.has(Vector2i(0, 0)) and slots.has(Vector2i(1, 1)),
+		"la zone par défaut couvre le voisinage")
+	_check(not slots.has(Vector2i(-1, 0)) and not slots.has(Vector2i(0, -1)),
+		"la zone par défaut reste dans la grille")
+	# (0,0) et (1,0) sont dans un coin : la moitié du losange tombe hors grille.
+	_check(slots.size() == 5, "voisinage de rayon 1 sur deux cases de bord (%d)" % slots.size())
+
+	var wide: Array[Vector2i] = DeploymentPlan.default_slots([Vector2i(8, 5)], Vector2i(16, 10), 2)
+	_check(wide.size() == 13, "rayon 2 en plein champ : losange de 13 cases (%d)" % wide.size())
+	_check(DeploymentPlan.default_slots([], Vector2i(16, 10)).is_empty(),
+		"sans ligne de départ, aucune case ouverte")
+
+	# Le chapitre peut imposer sa zone
+	var ch = CAMPAIGN_DB.get_chapter(0)
+	_check(ch != null and ch.deploy_tiles is Array,
+		"les chapitres portent une zone de déploiement (vide = voisinage)")
 #endregion

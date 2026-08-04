@@ -27,6 +27,9 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 @export var bonus_objectives: Array = []
 ## Nombre d'unités déployables
 @export var deploy_slots: int = 3
+## Cases ouvertes au déploiement ([[col, row], …]).
+## Vide : le voisinage de la ligne de départ de la carte fait office de zone.
+@export var deploy_tiles: Array = []
 ## Unités recrutables à la fin du chapitre (chemins .tres)
 @export var recruits: Array[String] = []
 ## Or gagné à la victoire
@@ -51,6 +54,7 @@ static func from_dict(data: Dictionary) -> ChapterData:
 	c.objective = data.get("objective", {"kind": 0})
 	c.bonus_objectives = data.get("bonus_objectives", [])
 	c.deploy_slots = int(data.get("deploy_slots", 3))
+	c.deploy_tiles = data.get("deploy_tiles", [])
 	c.reward_gold = int(data.get("reward_gold", 300))
 	c.recommended_level = int(data.get("recommended_level", 1))
 

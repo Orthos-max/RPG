@@ -11,6 +11,7 @@ signal chapter_finished(victory: bool, bonuses: Array, reason: String)
 
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
+const DEPLOYMENT = preload("res://data/modules/campaign/deployment_phase.gd")
 
 ## Intervalle d'évaluation de l'objectif (secondes)
 const CHECK_INTERVAL: float = 0.5
@@ -25,6 +26,8 @@ var _turn_counted: bool = false
 var _deployed_names: Array = []
 ## Tuile du point de commandement, quand le chapitre en demande un
 var _seize_tile: TacticsTile = null
+## Placement des unités en cours : l'objectif ne s'évalue pas avant le tour 1
+var _deploying: bool = false
 
 
 ## Branche le runner sur un niveau chargé.
@@ -38,10 +41,11 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_apply_roster()
 	_mark_seize_point()
+	_start_deployment()
 
 
 func _process(delta: float) -> void:
-	if _finished or not chapter or not level or not is_instance_valid(level):
+	if _finished or _deploying or not chapter or not level or not is_instance_valid(level):
 		return
 
 	_count_turns()
@@ -180,6 +184,26 @@ func _apply_roster() -> void:
 	print_rich("[color=cyan]📋 Déploiement : %s[/color]" % (
 		", ".join(_deployed_names) if not _deployed_names.is_empty() else "roster par défaut du niveau"
 	))
+
+
+## Ouvre le placement des unités avant le premier tour.
+##
+## Sans fenêtre (tests headless), les tuiles n'ont pas de collision : le pion ne
+## sait pas sur quelle case il se tient et le placement n'aurait aucun sens. On
+## laisse alors la bataille démarrer comme avant.
+func _start_deployment() -> void:
+	if not level or not level.player or not chapter:
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var phase := DEPLOYMENT.new()
+	phase.name = "DeploymentPhase"
+	phase.level = level
+	phase.declared_tiles = chapter.deploy_tiles
+	phase.finished.connect(func() -> void: _deploying = false)
+	_deploying = true
+	add_child(phase)
 
 
 func _apply_unit(stats: Stats, unit: Dictionary) -> void:
