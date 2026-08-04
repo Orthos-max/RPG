@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-04 (brief installeur Windows + mise à jour du §6)
+> Dernière mise à jour : 2026-08-04 (reconnexion réseau, prise de point, déploiement)
 
 ---
 
@@ -59,11 +59,12 @@ data/
       map/         → MapData, générateur
       stats/       → stats, classes, armes, compétences, objets, exp, soutiens
       utilities/   → vector, grid (conversions monde ↔ grille)
-    campaign/    → chapitres, objectifs, contenu de campagne
+    campaign/    → chapitres, objectifs, contenu de campagne, plan de déploiement
+    net/         → seat_registry (places gardées), reconnect_plan (retour de l'invité)
   modules/     → nœuds Godot (gameplay et écrans)
     tactics/     → level, arena, participants, pawn, camera, controls
     ai/          → ciel_ai.gd (pont, autoload)
-    campaign/    → chapter_runner (roster + objectif en cours de bataille)
+    campaign/    → chapter_runner (roster + objectif), deployment_phase (placement)
     menu/        → title_screen, prep_screen, lobby_screen
     net/         → net_mirror (côté invité)
     ui/          → turn_banner, hints, input capture
@@ -149,14 +150,18 @@ automatiquement par OS, surchargeable via `CIEL_USERDATA`).
 
 ### 3.7 Tests automatisés (racine)
 - **`test_combat.gd`** — combat FE : stats, calculateur, soin, mort, victoire,
-  soutien, triangle. *(23 assertions)*
+  soutien, triangle. *(31 assertions)*
 - **`test_map.gd`** — MapData (grille 16×10), terrains, hauteurs, chargement.
 - **`test_features.gd`** — validation des ordres, IA locale, croissances,
-  promotions, efficacité, objets, compétences, objectifs, sauvegarde, économie,
-  difficulté, session, codes réseau. *(151 assertions)*
-- **`test_battle.gd`** — intégration : titre → campagne → chapitre chargé → état
-  exporté → ordre rejeté → sauvegarde. *(21 assertions)*
-- **`test_net.gd`** + `scripts/test_net.sh` — transport réseau à deux processus.
+  promotions, efficacité, objets, compétences, objectifs (dont la prise de point),
+  sauvegarde, économie, difficulté, session, codes réseau, reconnexion,
+  déploiement. *(240 assertions)*
+- **`test_battle.gd`** — intégration : titre → campagne → chapitre chargé →
+  placement des unités → état exporté → ordre rejeté → sauvegarde → chapitre à
+  prise de point. *(30 assertions en headless, 36 fenêtre ouverte — le placement
+  demande des collisions de tuiles)*
+- **`test_net.gd`** + `scripts/test_net.sh` — transport réseau à deux processus,
+  coupure réelle et reconnexion comprises.
 
 Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 
@@ -220,13 +225,19 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       complète — +100 or chacun.
 - [x] **Difficulty** : facile/normal/brutal, module l'IA locale (agressivité, prise de
       risque, focus sur les blessés) et le handicap adverse.
-- [ ] **Étoffer le contenu** : 3 chapitres seulement, et l'objectif « prise de point »
-      est supporté par `ObjectiveDB` sans qu'aucune carte ne l'utilise. Ajouter des
-      chapitres, c'est ajouter une entrée dans `CampaignDB.CHAPTERS` + une carte.
-- [ ] **Choix des cases de déploiement** : le bonus de terrain est actif en combat,
-      mais le joueur ne choisit pas où poser ses unités. Aujourd'hui le roster est
-      plaqué sur les pions déjà placés dans la scène (`ChapterRunner._apply_roster`) ;
-      il faudrait des points de déploiement dans la carte et une sélection à la souris.
+- [x] **Étoffer le contenu** : 5 chapitres, et l'objectif « prise de point » est
+      enfin joué. `ObjectiveDB.is_seized` (règle pure, preneur nommable),
+      `ChapterRunner` reporte la case de chaque unité et colore le point à prendre,
+      `ai_state.json` gagne `objective_point` pour que Ciel sache quoi défendre.
+      Chapitres 4 et 5 écrits dans l'univers de [`LORE.md`](LORE.md).
+      *Reste à faire : l'objectif PROTECT n'a toujours aucune carte — il exige une
+      unité nommée toujours déployée, ce que l'écran de préparation ne garantit pas.*
+- [x] **Choix des cases de déploiement** : `DeploymentPlan` (règle pure — cases
+      ouvertes, occupation, échange de deux unités) + `DeploymentPhase` (tuiles
+      surlignées, clic unité puis case, bataille suspendue jusqu'à confirmation).
+      Un chapitre peut déclarer sa zone (`deploy_tiles`) ; sinon c'est le voisinage
+      de la ligne de départ. *L'étape ne s'ouvre pas en `--headless` : sans rendu,
+      les tuiles n'ont pas de collision et un pion ignore où il se tient.*
 
 ### 🤝 P2 — Multijoueur (chantier structuré en phases)
 > Concret et minimal : créer une partie + inviter des amis avec un **code d'accès**.
@@ -260,9 +271,14 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       crée pas les collisions de tuiles. À faire fenêtre ouverte, deux instances.
       Points à surveiller : fidélité du miroir après un déplacement, ordre des
       ordres pendant une animation, fin de tour vue des deux côtés.
-- [ ] **Reconnexion en cours de partie** : aujourd'hui, si l'invité tombe, l'IA
-      locale reprend son camp et il ne peut plus revenir. Il faut garder sa place
-      un temps et lui renvoyer l'état complet à la reconnexion.
+- [x] **Reconnexion en cours de partie** : la place d'un invité coupé lui reste
+      gardée 90 s (`SeatRegistry`, côté hôte) pendant que l'IA locale tient le
+      siège ; l'invité retente tout seul (`ReconnectPlan` — première tentative
+      immédiate, puis toutes les 3 s). Au retour, l'hôte lui rend son contrôleur
+      d'origine, la carte et l'état complet (en fiable, une demi-seconde après la
+      connexion : envoyé depuis le signal lui-même, le paquet se perdait). Un hôte
+      qui quitte volontairement prévient, au lieu de laisser l'invité retenter 90 s.
+      `scripts/test_net.sh` coupe réellement la liaison et vérifie tout le chemin.
 
 ### 📦 P2 — Installateur & distribution (jouer simplement)
 > Objectif : un joueur peut lancer le jeu sans installer/télécharger Godot ni configurer quoi que ce soit.
@@ -416,24 +432,22 @@ Après implémentation, lancer `scripts/build/package.sh` et vérifier que :
 
 ## 6. Prochaines étapes immédiates
 
-Les passes du 2026-08-03 ont livré le multijoueur, les compétences, l'économie et
-le packaging. **Backlog : 33 items faits, 11 restants.** Ordre conseillé pour la
-reprise (mis à jour le 2026-08-04) :
+La passe du 2026-08-04 a livré la reconnexion réseau, l'objectif « prise de point »
+avec deux chapitres, et le choix des cases de déploiement. **Backlog : 39 items
+faits, 6 restants.** Ordre conseillé pour la reprise :
 
-1. 🔨 **Installeur Windows (Inno Setup).** C'est le blocage immédiat pour tester
-   le jeu sur le PC d'Aurèle et le distribuer aux amis qui veulent essayer.
-   Brief complet au §4bis — `setup.iss` + intégration dans `package.sh`.
-2. ⚠️ **Vérifier une partie en ligne sur deux machines.** La seule brique livrée
-   sans preuve de bout en bout. Une fois l'installeur Windows prêt, Aurèle pourra
-   lancer deux instances sur son PC ou avec un ami. *Le mode headless ne crée pas
-   les collisions de tuiles, donc le test doit se faire fenêtre ouverte.*
-3. **Aperçu des dégâts avant d'engager** (P3/UX). Le plus gros gain de confort pour
-   le coût le plus faible : le calculateur renvoie déjà hit/crit/dégâts/double avant
-   le jet, il ne manque que l'affichage au survol d'une cible.
-4. **M5 — Ciel contre un ami en réseau.** La promesse la plus singulière du projet :
-   un humain et l'IA externe dans la même bataille.
-5. **Reconnexion réseau** et **contenu de campagne** (chapitres, objectif « prise de
-   point » jamais utilisé), selon l'envie du moment.
+1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
+   livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
+   à vérifier. *Le mode headless ne crée pas les collisions de tuiles, donc le test
+   doit se faire fenêtre ouverte, deux instances.*
+2. 🔨 **Exécuter l'installeur Windows sur une vraie machine.** Le `.iss` existe et
+   `package.sh` le compile ; personne ne l'a encore lancé sous Windows.
+3. **Aligner les noms sur le lore.** Les héros s'appellent encore Chrom, Lissa,
+   Frederick… alors que `LORE.md` nomme Aurèle et Luna. Ce n'est pas qu'un renommage :
+   les identifiants de sauvegarde et la cible du chapitre 2 en dépendent.
+4. **Polissage UX** : tooltips de stats, annulation d'un déplacement.
+5. **Objectif PROTECT** : il n'a aucune carte parce qu'il exige une unité toujours
+   déployée. Le débloquer demande des unités obligatoires à la préparation.
 6. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
    les règles ne bougeront plus.
 
@@ -441,13 +455,15 @@ reprise (mis à jour le 2026-08-04) :
 
 ## 7. Journal d'implémentation
 
-> **État de vérification au 2026-08-03.** Sont prouvés par des tests automatiques :
+> **État de vérification au 2026-08-04.** Sont prouvés par des tests automatiques :
 > le combat et ses règles, la validation des ordres, l'IA locale, la campagne et sa
-> sauvegarde, l'économie, les compétences, le transport réseau. Sont prouvés à la
-> main, fenêtre ouverte : le chargement d'un chapitre, un tour d'IA locale complet,
-> un aller-retour d'ordres avec Ciel (sélection → déplacement réel → rejet d'un
-> ordre illégal → fin de tour), le hotseat et le salon en ligne. **N'est pas encore
-> prouvé : une bataille complète en réseau entre deux machines.**
+> sauvegarde, l'économie, les compétences, le transport réseau **et la reconnexion
+> après coupure réelle**. Sont prouvés fenêtre ouverte, par `test_battle.gd` : le
+> chargement d'un chapitre, le placement des unités, la case à prendre. Sont
+> prouvés à la main : un tour d'IA locale complet, un aller-retour d'ordres avec
+> Ciel (sélection → déplacement réel → rejet d'un ordre illégal → fin de tour), le
+> hotseat et le salon en ligne. **N'est pas encore prouvé : une bataille complète
+> en réseau entre deux machines, ni une prise de point jouée jusqu'à la victoire.**
 
 ### Passe du 2026-08-03 — les 8 étapes du §6
 
@@ -499,3 +515,36 @@ bash scripts/test_net.sh                             # transport réseau, 2 proc
 > se teste fenêtre ouverte ou via `test_combat.gd` (logique pure). Même limite
 > côté réseau : `scripts/test_net.sh` couvre le transport (code, connexion,
 > diffusion d'état, relais d'ordre), pas le déroulé d'une bataille à deux.
+
+### Passe du 2026-08-04 — reconnexion, prise de point, déploiement
+
+| Livré | Où |
+|---|---|
+| Reconnexion en cours de partie (place gardée, retour automatique, resynchro) | `seat_registry.gd`, `reconnect_plan.gd`, `net_service.gd`, `net_mirror.gd` |
+| Objectif « prise de point » joué de bout en bout + `objective_point` pour Ciel | `objective.gd`, `chapter_runner.gd`, `ciel_ai.gd`, `tactics_tile.gd` |
+| Chapitres 4 et 5, écrits dans l'univers de `LORE.md` | `campaign_db.gd` |
+| Choix des cases de déploiement avant la bataille | `deployment_plan.gd`, `deployment_phase.gd` |
+
+Trois choix structurants de cette passe :
+
+* **L'IA locale ne prend plus le camp d'un absent, elle le garde.** Le contrôleur
+  d'origine est mémorisé avec la place et rendu tel quel au retour — sans ça, un
+  invité revenu aurait récupéré un camp devenu « IA locale » dans la session.
+* **L'état de reprise ne voyage pas comme la diffusion courante.** Celle-ci est un
+  flux qu'un paquet perdu n'abîme pas ; l'instantané de reprise est l'unique
+  paquet qui remet le revenant dans la bataille, il part donc en fiable — et une
+  demi-seconde après la connexion, faute de quoi il se perd (constaté à deux
+  processus : émis depuis le signal `peer_connected`, il n'arrivait jamais).
+* **Poser une unité sur une case occupée échange les deux.** C'est le geste
+  attendu quand on réarrange une ligne de départ ; refuser obligerait à vider une
+  case avant d'en remplir une autre.
+
+**Tests** (tous verts) :
+
+```bash
+godot --headless --path . --script test_combat.gd    #  31 OK — combat FE
+godot --headless --path . --script test_map.gd       # ALL TESTS PASSED
+godot --headless --path . --script test_features.gd  # 240 OK — logique des features
+godot --headless --path . --script test_battle.gd    #  30 OK — intégration (36 fenêtre ouverte)
+bash scripts/test_net.sh                             # transport + reconnexion, 2 processus
+```
