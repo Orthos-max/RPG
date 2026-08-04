@@ -46,9 +46,13 @@ static func describe(objective: Dictionary) -> String:
 		Kind.DEFEAT_BOSS: return "Vaincre %s" % str(objective.get("target", "le commandant"))
 		Kind.SURVIVE: return "Survivre %d tours" % int(objective.get("turns", 5))
 		Kind.PROTECT: return "Protéger %s" % str(objective.get("target", "l'allié"))
-		Kind.SEIZE: return "Prendre la case (%d, %d)" % [
-			int(objective.get("col", 0)), int(objective.get("row", 0))
-		]
+		Kind.SEIZE:
+			var where: String = "le point de commandement (%d, %d)" % [
+				int(objective.get("col", 0)), int(objective.get("row", 0))
+			]
+			var seizer: String = str(objective.get("seizer", ""))
+			return "Prendre %s avec %s" % [where, seizer] if not seizer.is_empty() \
+				else "Prendre %s" % where
 		_: return kind_name(kind)
 
 
@@ -129,6 +133,34 @@ static func evaluate_bonuses(bonuses: Array, snapshot: Dictionary) -> Array:
 				label = "Tous les ennemis éliminés"
 		results.append({"kind": kind, "achieved": achieved, "label": label})
 	return results
+
+
+## Case à prendre d'un objectif « prise de point » — (-1, -1) si sans objet.
+static func seize_target(objective: Dictionary) -> Vector2i:
+	if int(objective.get("kind", Kind.ROUT)) != Kind.SEIZE:
+		return Vector2i(-1, -1)
+	return Vector2i(int(objective.get("col", -1)), int(objective.get("row", -1)))
+
+
+## Le point de commandement est-il tenu ?
+##
+## [param units] Unités du joueur : [{name, hp, col, row}].
+## Le chapitre peut nommer un `seizer` — tradition Fire Emblem où seul le
+## seigneur prend le point. Sans lui, n'importe quelle unité debout suffit.
+static func is_seized(objective: Dictionary, units: Array) -> bool:
+	var target: Vector2i = seize_target(objective)
+	if target.x < 0 or target.y < 0:
+		return false
+
+	var seizer: String = str(objective.get("seizer", ""))
+	for u: Dictionary in units:
+		if int(u.get("hp", 0)) <= 0:
+			continue
+		if not seizer.is_empty() and str(u.get("name", "")) != seizer:
+			continue
+		if int(u.get("col", -1)) == target.x and int(u.get("row", -1)) == target.y:
+			return true
+	return false
 
 
 #region Internes

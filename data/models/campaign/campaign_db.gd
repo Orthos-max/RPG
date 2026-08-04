@@ -94,6 +94,60 @@ const CHAPTERS: Array[Dictionary] = [
 		"reward_gold": 600,
 		"recommended_level": 7,
 	},
+	{
+		"id": "ch04",
+		"index": 3,
+		"title": "Chapitre 4 — Le relais d'Azur",
+		"subtitle": "Tour de captage, versant nord",
+		"intro_lines": [
+			"La bannière plantée sur la tour n'est ni royale ni funèbre : elle est cyan.",
+			"— Ce sont eux. La Révolte d'Azur.",
+			"Ils détournent le flux du Puits depuis ce relais. Prenez le poste de commandement,",
+			"et leur colonne perdra sa route.",
+		],
+		"outro_lines": [
+			"Le poste est à vous. Les tables de captage sont couvertes de relevés :",
+			"quelqu'un mesure la Surcharge depuis des années, jour après jour.",
+			"Ce ne sont pas les notes d'un pillard.",
+		],
+		"scene_path": "res://assets/maps/level/map_level.tscn",
+		# Prise de point : la case (3, 8) est à l'autre bout de la carte, côté
+		# adverse. Il faut traverser, pas seulement survivre.
+		"objective": {"kind": OBJ.Kind.SEIZE, "col": 3, "row": 8},
+		"bonus_objectives": [
+			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 12},
+			{"kind": OBJ.Bonus.NO_LOSSES},
+		],
+		"deploy_slots": 5,
+		"reward_gold": 700,
+		"recommended_level": 10,
+	},
+	{
+		"id": "ch05",
+		"index": 4,
+		"title": "Chapitre 5 — La porte du sanctuaire",
+		"subtitle": "Antichambre du Puits",
+		"intro_lines": [
+			"Derrière cette porte, disent les archives, le Puits d'Éternité bat encore.",
+			"Un géant à bois de cerf en garde le seuil. Il ne crie pas, il ne menace pas.",
+			"Il attend.",
+			"— Ne le contournez pas par la droite. Tenez le seuil, c'est tout ce qui compte.",
+		],
+		"outro_lines": [
+			"Le seuil est pris ; le géant s'est retiré sans un mot,",
+			"comme s'il avait reçu un ordre que personne n'a entendu.",
+			"Loin devant, une silhouette bleue s'éloigne sans se retourner.",
+		],
+		"scene_path": "res://assets/maps/level/map_level.tscn",
+		"objective": {"kind": OBJ.Kind.SEIZE, "col": 13, "row": 9},
+		"bonus_objectives": [
+			{"kind": OBJ.Bonus.FULL_ROUT},
+			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 14},
+		],
+		"deploy_slots": 5,
+		"reward_gold": 900,
+		"recommended_level": 13,
+	},
 ]
 
 

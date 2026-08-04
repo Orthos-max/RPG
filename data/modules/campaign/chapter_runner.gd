@@ -23,6 +23,8 @@ var _finished: bool = false
 var _accum: float = 0.0
 var _turn_counted: bool = false
 var _deployed_names: Array = []
+## Tuile du point de commandement, quand le chapitre en demande un
+var _seize_tile: TacticsTile = null
 
 
 ## Branche le runner sur un niveau chargé.
@@ -35,6 +37,7 @@ func _ready() -> void:
 	# Le niveau finit de s'initialiser sur la frame suivante : on attend.
 	await get_tree().process_frame
 	_apply_roster()
+	_mark_seize_point()
 
 
 func _process(delta: float) -> void:
@@ -65,12 +68,18 @@ func _process(delta: float) -> void:
 
 ## Instantané de la bataille, au format attendu par [ObjectiveDB].
 func build_snapshot() -> Dictionary:
+	var players: Array = _units_of(level.player)
 	return {
 		"turn": turn,
-		"seized": false,
-		"player_units": _units_of(level.player),
+		"seized": OBJ.is_seized(chapter.objective, players) if chapter else false,
+		"player_units": players,
 		"enemy_units": _units_of(level.opponent),
 	}
+
+
+## Point de commandement du chapitre, en coordonnées de grille (-1,-1 si aucun).
+func seize_target() -> Vector2i:
+	return OBJ.seize_target(chapter.objective) if chapter else Vector2i(-1, -1)
 
 
 ## État des unités du joueur, pour reporter XP/PV dans le roster persistant.
@@ -96,14 +105,38 @@ func player_unit_snapshots() -> Array:
 
 
 #region Internes
+## Unités d'un camp, avec leur case : l'objectif « prise de point » a besoin des
+## coordonnées, les autres se contentent du nom et des PV.
 func _units_of(team: Node) -> Array:
 	var units: Array = []
 	if not team or not is_instance_valid(team):
 		return units
+	var arena: Node = level.arena if level else null
 	for p in team.get_children():
-		if p is TacticsPawn and is_instance_valid(p) and p.stats:
-			units.append({"name": EXECUTOR.display_name(p), "hp": p.stats.hp})
+		if not (p is TacticsPawn and is_instance_valid(p) and p.stats):
+			continue
+		var tile: Node = p.get_tile() if p.has_method("get_tile") else null
+		var g: Vector2i = TacticsGrid.tile_to_grid(arena, tile) if tile else Vector2i(-1, -1)
+		units.append({
+			"name": EXECUTOR.display_name(p), "hp": p.stats.hp,
+			"col": g.x, "row": g.y,
+		})
 	return units
+
+
+## Colore la case à prendre, faute de quoi l'objectif serait invisible en jeu.
+func _mark_seize_point() -> void:
+	var target: Vector2i = seize_target()
+	if target.x < 0 or not level or not level.arena:
+		return
+	_seize_tile = TacticsGrid.find_tile(level.arena, target.x, target.y) as TacticsTile
+	if not _seize_tile:
+		push_warning("[ChapterRunner] Point de commandement (%d, %d) absent de la carte %s." % [
+			target.x, target.y, chapter.scene_path if chapter else "?"
+		])
+		return
+	_seize_tile.seize_point = true
+	print_rich("[color=yellow]⚑ Point de commandement : case (%d, %d)[/color]" % [target.x, target.y])
 
 
 ## Un tour complet = les deux camps ont épuisé leurs actions (le niveau les réinitialise).

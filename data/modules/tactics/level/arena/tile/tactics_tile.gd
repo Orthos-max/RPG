@@ -16,6 +16,10 @@ var reachable: bool = false
 var attackable: bool = false
 ## Whether the tile is being hovered over
 var hover: bool = false
+## Point de commandement à prendre (objectif « prise de point » du chapitre)
+var seize_point: bool = false
+## Case où le joueur peut poser une unité avant la bataille
+var deploy_point: bool = false
 
 ## Terrain type for this tile (from MapData.TerrainType)
 @export var terrain_type: int = 0
@@ -37,6 +41,10 @@ var hover_reachable_mat: StandardMaterial3D = TacticsConfig.mat_color.reachable_
 var attackable_mat: StandardMaterial3D = TacticsConfig.mat_color.attackable
 ## Material for hover and attackable state
 var hover_attackable_mat: StandardMaterial3D = TacticsConfig.mat_color.hover_attackable
+## Matériau du point de commandement (objectif de chapitre)
+var seize_mat: StandardMaterial3D = TacticsConfig.mat_color.seize
+## Matériau d'une case de déploiement libre
+var deploy_mat: StandardMaterial3D = TacticsConfig.mat_color.deploy
 #endregion
 
 #region: --- Processing ---
@@ -48,9 +56,16 @@ func _process(_delta: float) -> void:
 		return # If the "Tile" node wasn't found, the function exits early to avoid errors.
 	
 	# Apply terrain base material when no special state is active
+	# Les marques de scénario (point à prendre, case de déploiement) passent avant
+	# le terrain mais derrière tout ce qui dépend du pion en cours : le joueur doit
+	# continuer à voir sa portée de déplacement par-dessus.
 	if not attackable and not reachable and not hover:
 		tile.visible = true
-		if terrain_mat:
+		if deploy_point:
+			tile.material_override = deploy_mat
+		elif seize_point:
+			tile.material_override = seize_mat
+		elif terrain_mat:
 			tile.material_override = terrain_mat
 		return
 	

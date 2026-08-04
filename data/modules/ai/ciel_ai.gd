@@ -18,6 +18,7 @@ const CD = preload("res://data/models/world/stats/class_data.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const LOG = preload("res://data/services/combat/battle_log.gd")
+const OBJ = preload("res://data/models/campaign/objective.gd")
 
 ## Émis à chaque nouvel état exporté (le réseau s'en sert pour diffuser).
 signal state_exported(state: Dictionary)
@@ -793,7 +794,13 @@ func _export_state(level: TacticsLevel) -> void:
 
 	var chapter: Node = _campaign()
 	if chapter and chapter.current_chapter():
-		state["objective"] = chapter.current_chapter().objective_text()
+		var current: ChapterData = chapter.current_chapter()
+		state["objective"] = current.objective_text()
+		# Point de commandement : sans ses coordonnées, Ciel ne peut pas défendre
+		# ce que le joueur vient prendre. Champ additif, absent des autres chapitres.
+		var point: Vector2i = OBJ.seize_target(current.objective)
+		if point.x >= 0:
+			state["objective_point"] = {"col": point.x, "row": point.y}
 
 	var json_str: String = JSON.stringify(state, "\t")
 	var h: int = hash(json_str)

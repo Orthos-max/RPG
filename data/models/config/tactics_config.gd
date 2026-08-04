@@ -13,6 +13,8 @@ static var color: Dictionary = {
 	"blue_bolt": "0aa9ffBF", # Semi-transparent blue bolt color
 	"rosso_corsa": "d10000BF", # Semi-transparent rosso corsa (racing red) color
 	"coral_red": "ff4242BF", # Semi-transparent coral red color
+	"seize_gold": "f5c842BF", # Point de commandement à prendre (objectif de chapitre)
+	"deploy_teal": "27d9c5BF", # Case de déploiement libre (avant la bataille)
 }
 
 ## Dictionary of materials used for different states in the tactics system.
@@ -22,6 +24,8 @@ static var mat_color: Dictionary = {
 	"reachable_hover": create_material(str(color.blue_bolt)),
 	"attackable": create_material(str(color.rosso_corsa)),
 	"hover_attackable": create_material(str(color.coral_red)),
+	"seize": create_material(str(color.seize_gold)),
+	"deploy": create_material(str(color.deploy_teal)),
 }
 
 ## Dictionary of pawn-related configuration values.

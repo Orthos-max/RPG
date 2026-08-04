@@ -399,13 +399,51 @@ func _test_objectives() -> void:
 	_check(bonuses.size() == 2 and bool(bonuses[0]["achieved"]) and bool(bonuses[1]["achieved"]),
 		"objectifs secondaires validés", str(bonuses))
 
+	# --- Prise de point : l'objectif longtemps resté sans carte ---
+	var point: Dictionary = {"kind": OBJ.Kind.SEIZE, "col": 3, "row": 8}
+	var away: Array = [{"name": "Lord", "hp": 10, "col": 8, "row": 2}]
+	var onto: Array = [{"name": "Lord", "hp": 10, "col": 3, "row": 8}]
+
+	_check(OBJ.seize_target(point) == Vector2i(3, 8), "case à prendre exposée")
+	_check(OBJ.seize_target({"kind": OBJ.Kind.ROUT}) == Vector2i(-1, -1),
+		"pas de case à prendre hors objectif SEIZE")
+	_check(not OBJ.is_seized(point, away), "point non tenu tant que personne n'y est")
+	_check(OBJ.is_seized(point, onto), "point tenu dès qu'une unité s'y pose")
+	_check(not OBJ.is_seized(point, [{"name": "Lord", "hp": 0, "col": 3, "row": 8}]),
+		"un mort ne tient pas le point")
+
+	var seize_evaluated: Dictionary = OBJ.evaluate(point,
+		{"turn": 5, "seized": true, "player_units": onto, "enemy_units": alive_enemies})
+	_check(int(seize_evaluated["status"]) == OBJ.Status.VICTORY,
+		"SEIZE : victoire même avec des ennemis debout")
+
+	# Chapitre nommant son preneur : les autres unités ne comptent pas.
+	var lord_only: Dictionary = {"kind": OBJ.Kind.SEIZE, "col": 3, "row": 8, "seizer": "Lord"}
+	_check(not OBJ.is_seized(lord_only, [{"name": "Cleric", "hp": 8, "col": 3, "row": 8}]),
+		"point réservé au seigneur : le clerc ne le prend pas")
+	_check(OBJ.is_seized(lord_only, onto), "le seigneur désigné prend le point")
+	_check(OBJ.describe(lord_only).contains("Lord"), "l'objectif annonce qui doit prendre le point",
+		OBJ.describe(lord_only))
+
 	# Contenu de campagne
-	_check(CAMPAIGN_DB.count() >= 3, "au moins 3 chapitres définis")
+	_check(CAMPAIGN_DB.count() >= 5, "au moins 5 chapitres définis (%d)" % CAMPAIGN_DB.count())
 	var ch1 = CAMPAIGN_DB.get_chapter(0)
 	_check(ch1 != null and ch1.id == "ch01" and not ch1.intro_lines.is_empty(),
 		"chapitre 1 complet (%s)" % (ch1.title if ch1 else "?"))
 	_check(CAMPAIGN_DB.index_of("ch02") == 1 and CAMPAIGN_DB.get_chapter(99) == null,
 		"index de chapitre robuste")
+
+	# Chaque chapitre doit être jouable : index cohérent, carte existante, et une
+	# case à prendre qui tombe bien dans la grille quand l'objectif l'exige.
+	for i: int in CAMPAIGN_DB.count():
+		var ch = CAMPAIGN_DB.get_chapter(i)
+		_check(ch != null and ch.index == i and ResourceLoader.exists(ch.scene_path),
+			"chapitre %d cohérent (%s)" % [i, ch.title if ch else "?"],
+			ch.scene_path if ch else "manquant")
+		var target: Vector2i = OBJ.seize_target(ch.objective)
+		if target.x >= 0:
+			_check(target.x < 16 and target.y < 10,
+				"%s : point de commandement dans la grille %s" % [ch.id, str(target)])
 #endregion
 
 

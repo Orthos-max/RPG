@@ -145,8 +145,59 @@ func _run() -> void:
 	_check(campaign.save_game(99) and campaign.has_save(99), "sauvegarde de campagne écrite")
 	campaign.delete_save(99)
 
+	await _run_seize_chapter(main, campaign, session)
+
 	main.queue_free()
 	await physics_frame
+
+
+## Chapitre à « prise de point » : la case existe, elle est marquée, et Ciel la voit.
+##
+## Le pion ne peut pas réellement s'y poser en headless (pas de collisions de
+## tuiles, donc pas de déplacement), mais tout le reste de la chaîne se vérifie :
+## coordonnées → tuile de la carte → marquage → export dans `ai_state.json`.
+func _run_seize_chapter(main: Node, campaign: Node, session: Node) -> void:
+	var index: int = CampaignDB.index_of("ch04")
+	if index < 0:
+		_ko("Chapitre à prise de point", "aucun chapitre SEIZE dans CampaignDB")
+		return
+
+	campaign.chapter_index = index
+	session.chapter_index = index
+	main.show_prep()
+	await physics_frame
+	main._on_battle_requested()
+	for _i in 60:
+		await physics_frame
+
+	var level: Node = _find_class(main, "TacticsLevel")
+	var runner: Node = level.get_node_or_null("ChapterRunner") if level else null
+	_check(runner != null, "chapitre 4 chargé avec son runner")
+	if not runner:
+		return
+
+	var target: Vector2i = runner.seize_target()
+	_check(target.x >= 0, "objectif « prise de point » reconnu %s" % str(target))
+
+	var tile: Node = TacticsGrid.find_tile(level.arena, target.x, target.y)
+	_check(tile != null, "la case à prendre existe sur la carte %s" % str(target))
+	_check(tile != null and bool(tile.get("seize_point")),
+		"la case à prendre est marquée en jeu")
+
+	var snapshot: Dictionary = runner.build_snapshot()
+	_check(not bool(snapshot["seized"]), "point non tenu au premier tour")
+	_check(snapshot["player_units"].is_empty()
+			or snapshot["player_units"][0].has("col"),
+		"instantané : les unités portent leur case")
+
+	# L'état n'est exporté que si Ciel tient le camp adverse (coupé plus haut).
+	session.set_ciel_enabled(true)
+	for _i in 30:
+		await physics_frame
+	var state: Dictionary = _read_json(STATE_FILE)
+	var point: Dictionary = state.get("objective_point", {})
+	_check(int(point.get("col", -1)) == target.x and int(point.get("row", -1)) == target.y,
+		"Ciel reçoit la case à défendre", str(point))
 
 
 #region Helpers
