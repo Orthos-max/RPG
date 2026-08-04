@@ -155,7 +155,7 @@ automatiquement par OS, surchargeable via `CIEL_USERDATA`).
 - **`test_features.gd`** — validation des ordres, IA locale, croissances,
   promotions, efficacité, objets, compétences, objectifs (dont la prise de point),
   sauvegarde, économie, difficulté, session, codes réseau, reconnexion,
-  déploiement. *(240 assertions)*
+  déploiement, annulation de déplacement, fiche d'unité. *(258 assertions)*
 - **`test_battle.gd`** — intégration : titre → campagne → chapitre chargé →
   placement des unités → état exporté → ordre rejeté → sauvegarde → chapitre à
   prise de point. *(30 assertions en headless, 36 fenêtre ouverte — le placement
@@ -311,7 +311,11 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       restants, létalité (sûre ou « seulement si critique »), triangle/terrain/soutien/
       efficacité/procs. Affiché par `BattleForecastPanel` au survol d'une cible à portée.
       *Le moteur ne gérant pas la riposte, la prévision n'affiche qu'un camp.*
-- [ ] **Polissage UX** (suite) : tooltips de stats, annulation d'un déplacement.
+- [x] **Polissage UX** (suite) : `PawnMoveMemory` (annulation d'un déplacement tant
+      que l'unité n'a rien fait d'autre, bouton « Undo move » grisé sinon) et
+      `UnitSheet` + `UnitSheetPanel` (fiche au survol : esquive, critique, vitesse
+      d'attaque, arme, portée, et le bonus du terrain occupé — jusque-là calculé en
+      combat sans jamais s'afficher avant d'engager).
 - [ ] **Mods / éditeur de niveau intégré** (map_editor déjà présent) pour créer ses cartes.
 
 
@@ -433,8 +437,8 @@ Après implémentation, lancer `scripts/build/package.sh` et vérifier que :
 ## 6. Prochaines étapes immédiates
 
 La passe du 2026-08-04 a livré la reconnexion réseau, l'objectif « prise de point »
-avec deux chapitres, et le choix des cases de déploiement. **Backlog : 39 items
-faits, 6 restants.** Ordre conseillé pour la reprise :
+avec deux chapitres, le choix des cases de déploiement et le polissage UX.
+**Backlog : 40 items faits, 5 restants.** Ordre conseillé pour la reprise :
 
 1. ⚠️ **Vérifier une partie en ligne sur deux machines.** Toujours la seule brique
    livrée sans preuve de bout en bout — et la reconnexion vient d'ajouter du chemin
@@ -442,14 +446,15 @@ faits, 6 restants.** Ordre conseillé pour la reprise :
    doit se faire fenêtre ouverte, deux instances.*
 2. 🔨 **Exécuter l'installeur Windows sur une vraie machine.** Le `.iss` existe et
    `package.sh` le compile ; personne ne l'a encore lancé sous Windows.
-3. **Aligner les noms sur le lore.** Les héros s'appellent encore Chrom, Lissa,
-   Frederick… alors que `LORE.md` nomme Aurèle et Luna. Ce n'est pas qu'un renommage :
-   les identifiants de sauvegarde et la cible du chapitre 2 en dépendent.
-4. **Polissage UX** : tooltips de stats, annulation d'un déplacement.
-5. **Objectif PROTECT** : il n'a aucune carte parce qu'il exige une unité toujours
+3. **Aligner les noms sur le lore** — *à ne pas entamer avant que le lore soit posé
+   (document en cours d'écriture par Aurèle et sa compagne).* Les héros s'appellent
+   encore Chrom, Lissa, Frederick. Ce ne sera pas qu'un renommage : les identifiants
+   de sauvegarde et la cible du chapitre 2 en dépendent.
+4. **Objectif PROTECT** : il n'a aucune carte parce qu'il exige une unité toujours
    déployée. Le débloquer demande des unités obligatoires à la préparation.
-6. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
-   les règles ne bougeront plus.
+5. **Sons & animations de combat** : le dernier gros morceau, à garder pour quand
+   les règles ne bougeront plus. Demande des assets sonores.
+6. **Éditeur de niveau intégré** (`map_editor` déjà présent) pour créer ses cartes.
 
 ---
 
@@ -524,6 +529,7 @@ bash scripts/test_net.sh                             # transport réseau, 2 proc
 | Objectif « prise de point » joué de bout en bout + `objective_point` pour Ciel | `objective.gd`, `chapter_runner.gd`, `ciel_ai.gd`, `tactics_tile.gd` |
 | Chapitres 4 et 5, écrits dans l'univers de `LORE.md` | `campaign_db.gd` |
 | Choix des cases de déploiement avant la bataille | `deployment_plan.gd`, `deployment_phase.gd` |
+| Annulation d'un déplacement + fiche d'unité au survol | `move_memory.gd`, `unit_sheet.gd`, `unit_sheet_panel.gd`, `selection.gd` |
 
 Trois choix structurants de cette passe :
 
@@ -544,7 +550,7 @@ Trois choix structurants de cette passe :
 ```bash
 godot --headless --path . --script test_combat.gd    #  31 OK — combat FE
 godot --headless --path . --script test_map.gd       # ALL TESTS PASSED
-godot --headless --path . --script test_features.gd  # 240 OK — logique des features
+godot --headless --path . --script test_features.gd  # 258 OK — logique des features
 godot --headless --path . --script test_battle.gd    #  30 OK — intégration (36 fenêtre ouverte)
 bash scripts/test_net.sh                             # transport + reconnexion, 2 processus
 ```
