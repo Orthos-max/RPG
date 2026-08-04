@@ -113,16 +113,19 @@ func select_pawn_to_attack() -> void:
 
 ## Handles the player's intention to move
 func _player_wants_to_move() -> void:
+	_play_ui("ui_select")
 	serv.player_wants_to_move()
 
 
 ## Handles the player's intention to cancel an action
 func _player_wants_to_cancel() -> void:
+	_play_ui("ui_cancel")
 	serv.player_wants_to_cancel()
 
 
 ## Handles the player's intention to wait
 func _player_wants_to_wait() -> void:
+	_play_ui("ui_confirm")
 	serv.player_wants_to_wait()
 
 
@@ -133,12 +136,21 @@ func _player_wants_to_skip_turn() -> void:
 
 ## Handles the player's intention to attack
 func _player_wants_to_attack() -> void:
+	_play_ui("ui_select")
 	serv.player_wants_to_attack()
 
 
 ## Ramène le pion à son point de départ (annulation du déplacement)
 func _player_wants_to_undo_move() -> void:
+	_play_ui("ui_cancel")
 	serv.player_wants_to_undo_move()
+
+
+## Joue un son d'interface (silencieux tant qu'aucun fichier n'est fourni)
+func _play_ui(cue: String) -> void:
+	var audio: Node = get_node_or_null("/root/Audio")
+	if audio:
+		audio.play(cue)
 
 
 ## Met à jour la fiche d'unité affichée au survol (dictionnaire vide = masquée)

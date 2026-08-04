@@ -67,6 +67,17 @@ func _process(delta: float) -> void:
 	_finished = true
 	var victory: bool = status == OBJ.Status.VICTORY
 	var bonuses: Array = OBJ.evaluate_bonuses(chapter.bonus_objectives, snapshot) if victory else []
+
+	# Le journal ignorait comment une bataille se terminait : ni les replays ni
+	# l'audio (qui l'écoute) n'avaient de quoi marquer la victoire.
+	var recorder: Node = get_node_or_null("/root/BattleRecorder")
+	if recorder:
+		recorder.record(recorder.Kind.OBJECTIVE, {
+			"status": "victory" if victory else "defeat",
+			"reason": str(verdict["reason"]),
+			"chapter": chapter.id, "turn": turn,
+		})
+
 	chapter_finished.emit(victory, bonuses, str(verdict["reason"]))
 
 

@@ -165,6 +165,7 @@ GameSession="*res://data/services/session/game_session.gd"
 Network="*res://data/services/network/net_service.gd"
 Campaign="*res://data/services/campaign/campaign_state.gd"
 BattleRecorder="*res://data/services/combat/battle_log.gd"
+Audio="*res://data/services/audio/audio_service.gd"
 CielAI="*res://data/modules/ai/ciel_ai.gd"
 
 [rendering]

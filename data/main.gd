@@ -59,6 +59,8 @@ func show_title() -> void:
 	_clear_ui()
 	_leave_network()
 
+	_play_music("music_title")
+
 	var screen := TitleScreen.new()
 	screen.new_game_requested.connect(_on_new_game)
 	screen.continue_requested.connect(_on_continue)
@@ -92,6 +94,7 @@ func show_prep() -> void:
 			"Tous les chapitres sont franchis. Merci d'avoir joué.")
 		return
 
+	_play_music("music_prep")
 	_chapter = campaign.current_chapter()
 	var screen := PrepScreen.new()
 	screen.chapter = _chapter
@@ -282,6 +285,7 @@ func _load_level(scene_path: String) -> void:
 		show_title()
 		return
 
+	_play_music("music_battle")
 	_enable_3d_camera(true)
 	_level = scene.instantiate()
 	var world: Node = get_node_or_null("World")
@@ -365,6 +369,16 @@ func _clear_ui() -> void:
 	if _ui and is_instance_valid(_ui):
 		_ui.queue_free()
 	_ui = null
+
+
+## Change la musique d'ambiance selon l'écran.
+##
+## Sans fichier audio, l'appel ne fait rien : le service reste silencieux tant
+## que les assets ne sont pas déposés (voir `assets/audio/README.md`).
+func _play_music(cue: String) -> void:
+	var audio: Node = get_node_or_null("/root/Audio")
+	if audio:
+		audio.play_music(cue)
 
 
 func _campaign() -> Node:

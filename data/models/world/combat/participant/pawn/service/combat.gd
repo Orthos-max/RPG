@@ -9,6 +9,7 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const MapDataRef = preload("res://data/models/world/map/map_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 const ForecastRef = preload("res://data/services/combat/battle_forecast.gd")
+const BattleLog = preload("res://data/services/combat/battle_log.gd")
 
 var _victory_checked: bool = false  ## Prevents duplicate victory/defeat triggers
 
@@ -321,8 +322,16 @@ func award_exp(attacker: TacticsPawn, defender: TacticsPawn, is_kill: bool) -> v
 	print("+%d EXP%s (%s)" % [exp_amount, kill_text, a_name])
 	
 	if result["leveled_up"]:
-		# Level up and promotion messages are already printed in gain_exp()
-		pass
+		# Les messages sont déjà imprimés par gain_exp() ; le journal, lui,
+		# manquait la montée de niveau — elle n'apparaissait ni dans les replays
+		# ni pour l'audio, qui écoute justement ce journal.
+		_record(&"record", [BattleLog.Kind.LEVEL_UP, {
+			"pawn": a_name, "level": attacker.stats.level, "exp": attacker.stats.exp,
+		}])
+		if bool(result.get("promoted", false)):
+			_record(&"record", [BattleLog.Kind.PROMOTION, {
+				"pawn": a_name, "class_id": attacker.stats.character_class,
+			}])
 
 
 ## Journalise un événement via l'autoload BattleRecorder, s'il est présent.

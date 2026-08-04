@@ -49,6 +49,7 @@ func _init() -> void:
 	_test_reconnection()
 	_test_deployment()
 	_test_ux_polish()
+	_test_audio()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1150,4 +1151,80 @@ func _test_ux_polish() -> void:
 	_check(UnitSheet.terrain_label("forest") == "Forêt"
 			and UnitSheet.terrain_label("inconnu").is_empty(),
 		"terrains traduits, inconnu ignoré")
+#endregion
+
+
+#region 18. Audio — catalogue et branchement
+## Aucun fichier n'est encore fourni : ce qu'on vérifie ici, c'est que le
+## système est prêt à les recevoir et qu'il reste muet sans eux.
+func _test_audio() -> void:
+	print("\n🔊 Test 18: catalogue sonore et service audio")
+
+	# --- Catalogue ---
+	_check(SoundDB.keys().size() >= 15, "catalogue fourni (%d sons)" % SoundDB.keys().size())
+	var buses: Array = [SoundDB.BUS_SFX, SoundDB.BUS_MUSIC, SoundDB.BUS_UI]
+	var well_formed: bool = true
+	var bad: String = ""
+	for key: String in SoundDB.keys():
+		var entry: Dictionary = SoundDB.cue(key)
+		if not entry.has("file") or not str(entry["bus"]) in buses \
+				or float(entry["pitch_min"]) > float(entry["pitch_max"]):
+			well_formed = false
+			bad = key
+	_check(well_formed, "chaque son déclare un fichier, un bus connu et une hauteur valide", bad)
+	_check(SoundDB.path_of("hit").begins_with(SoundDB.AUDIO_DIR),
+		"les chemins pointent dans assets/audio", SoundDB.path_of("hit"))
+	_check(SoundDB.cue("inexistant").is_empty() and SoundDB.path_of("inexistant").is_empty(),
+		"clé inconnue : catalogue muet plutôt qu'en erreur")
+	_check(SoundDB.is_music("music_battle") and not SoundDB.is_music("hit"),
+		"musiques et bruitages distingués")
+
+	# --- Traduction des événements de bataille ---
+	_check(SoundDB.cue_for_event({"kind_name": "attack", "hit": true, "crit": false}) == "hit",
+		"un coup qui touche")
+	_check(SoundDB.cue_for_event({"kind_name": "attack", "hit": true, "crit": true}) == "hit_crit",
+		"un critique ne sonne pas comme un coup normal")
+	_check(SoundDB.cue_for_event({"kind_name": "attack", "hit": false, "crit": false}) == "miss",
+		"une attaque ratée a son propre bruit")
+	_check(SoundDB.cue_for_event({"kind_name": "death", "team": "player"}) == "death_ally"
+			and SoundDB.cue_for_event({"kind_name": "death", "team": "opponent"}) == "death_enemy",
+		"perdre une unité et en abattre une ne s'entendent pas pareil")
+	_check(SoundDB.cue_for_event({"kind_name": "turn_start", "team": "player"}) == "turn_player",
+		"début de tour du joueur")
+	_check(SoundDB.cue_for_event({"kind_name": "objective", "status": "victory"}) == "victory"
+			and SoundDB.cue_for_event({"kind_name": "objective", "status": "defeat"}) == "defeat",
+		"fin de chapitre sonorisée")
+	_check(SoundDB.cue_for_event({"kind_name": "command_rejected"}).is_empty(),
+		"un ordre rejeté de Ciel ne fait pas de bruit au joueur")
+	_check(SoundDB.cue_for_event({}).is_empty(), "événement vide : aucun son")
+
+	# --- Service ---
+	var audio: Node = root.get_node_or_null("Audio")
+	if not audio:
+		_ko("Autoload Audio", "introuvable")
+		return
+	_ok("Autoload Audio disponible")
+
+	for bus: String in buses:
+		_check(AudioServer.get_bus_index(bus) != -1, "bus %s créé au démarrage" % bus)
+
+	# Sans fichier, jouer ne doit rien casser — et le dire proprement.
+	_check(not audio.play("hit"), "un son absent ne se joue pas")
+	_check(not audio.play("inexistant"), "une clé inconnue ne se joue pas")
+	_check(not audio.play(""), "une clé vide ne se joue pas")
+	_check(audio.missing_cues().size() == SoundDB.keys().size(),
+		"tous les sons sont encore à fournir (%d)" % audio.missing_cues().size())
+
+	# --- Réglages de volume ---
+	var before: float = audio.get_volume(SoundDB.BUS_MUSIC)
+	audio.set_volume(SoundDB.BUS_MUSIC, 0.42)
+	_check(is_equal_approx(audio.get_volume(SoundDB.BUS_MUSIC), 0.42), "volume réglé")
+	_check(audio.save_settings(), "réglages enregistrés")
+	audio.set_volume(SoundDB.BUS_MUSIC, 1.0)
+	audio.load_settings()
+	_check(is_equal_approx(audio.get_volume(SoundDB.BUS_MUSIC), 0.42), "réglages relus du disque")
+	audio.set_volume(SoundDB.BUS_MUSIC, 2.5)
+	_check(is_equal_approx(audio.get_volume(SoundDB.BUS_MUSIC), 1.0), "volume borné à 1.0")
+	audio.set_volume(SoundDB.BUS_MUSIC, before)
+	audio.save_settings()
 #endregion
