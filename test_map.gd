@@ -14,6 +14,7 @@ func _init() -> void:
 	all_ok = _test_terrain_materials() and all_ok
 	all_ok = _test_scene_loading() and all_ok
 	all_ok = _test_framing() and all_ok
+	all_ok = _test_props() and all_ok
 
 	if all_ok:
 		print_rich("[color=green][b]=== ALL TESTS PASSED ===[/b][/color]")
@@ -204,6 +205,110 @@ func _test_framing() -> bool:
 		ok = false
 	else:
 		print_rich("  OK: une arène absente ne fait pas dérailler la mesure")
+
+	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
+## Décor des cases : ce qui pousse dessus, et ce qui ne doit jamais gêner.
+##
+## Trois promesses tenues ici plutôt qu'à l'œil : chaque terrain reçoit ce qui
+## lui revient, rien ne dépasse la hauteur d'un pion, et le centre d'une case
+## praticable reste dégagé. La dernière est la seule qui se voie en jouant —
+## un feuillage sur la tête d'une unité — et la plus facile à casser en
+## élargissant une frondaison.
+##
+## Tout passe par [method TacticsProps.placements] : le décor posé, lui, ne se
+## laisse pas interroger sans écran (un `MultiMesh` y rend l'identité).
+func _test_props() -> bool:
+	print_rich("[color=cyan]--- Test: Décor des cases ---[/color]")
+	var ok := true
+	var tile_size := 1.0
+
+	var cells: Array = []
+	var terrains := [TERRAIN.FOREST, TERRAIN.MOUNTAIN, TERRAIN.WALL,
+		TERRAIN.GRASS, TERRAIN.WATER, TERRAIN.PATH, TERRAIN.PIT]
+	for i in terrains.size():
+		cells.append({
+			"cell": Vector2i(i, 0),
+			"terrain": terrains[i],
+			"top": Vector3(float(i) * tile_size, 0.0, 0.0),
+		})
+
+	var batches: Dictionary = TacticsProps.placements(cells, tile_size)
+
+	# Chaque terrain reçoit sa garniture — et les autres n'en reçoivent aucune.
+	var counts := {}
+	for kind: String in batches:
+		counts[kind] = batches[kind].size()
+	var expected := {"trunk": 1, "canopy": 1, "rock": 2, "merlon": 1}
+	if counts != expected:
+		print_rich("[color=red]  FAIL: garniture %s (attendu %s)[/color]" % [str(counts), str(expected)])
+		ok = false
+	else:
+		print_rich("  OK: forêt → arbre, montagne → 2 rochers, mur → créneau")
+		print_rich("  OK: herbe, eau, chemin et fosse restent nus")
+
+	# Rien ne dépasse la hauteur d'un pion. Tous les maillages font une unité de
+	# haut : la composante verticale de l'échelle est donc la hauteur réelle.
+	var tallest := 0.0
+	for kind: String in batches:
+		for xf: Transform3D in batches[kind]:
+			var b: Basis = xf.basis
+			var half_y: float = 0.5 * (absf(b.x.y) + absf(b.y.y) + absf(b.z.y))
+			tallest = maxf(tallest, xf.origin.y + half_y)
+	if tallest > TacticsProps.MAX_HEIGHT + 0.001:
+		print_rich("[color=red]  FAIL: décor haut de %.2f (plafond %.2f)[/color]" % [
+			tallest, TacticsProps.MAX_HEIGHT])
+		ok = false
+	else:
+		print_rich("  OK: le plus haut décor tient sous le plafond (%.2f ≤ %.2f)" % [
+			tallest, TacticsProps.MAX_HEIGHT])
+
+	# Le centre d'une case praticable reste dégagé : la forêt se traverse.
+	#
+	# Tronc et frondaison sont des solides de révolution : leur emprise au sol est
+	# un disque, dont le rayon ne dépend pas de l'orientation — l'encadrer par une
+	# boîte tournée le surestimerait de 40 % et condamnerait un décor correct.
+	var covered := false
+	var margin := 1.0
+	var radii := {"trunk": 0.06, "canopy": 0.22}
+	for kind: String in radii:
+		for xf: Transform3D in batches.get(kind, []):
+			var radius: float = float(radii[kind]) * tile_size * xf.basis.x.length()
+			var offset: float = Vector2(xf.origin.x, xf.origin.z).length()
+			if offset <= radius:
+				covered = true
+			else:
+				margin = minf(margin, 1.0 - radius / offset)
+	if covered:
+		print_rich("[color=red]  FAIL: le décor recouvre le centre d'une case praticable[/color]")
+		ok = false
+	else:
+		print_rich("  OK: le centre d'une case de forêt reste libre (marge : %.0f %%)" % [margin * 100.0])
+
+	# Deux calculs successifs donnent exactement le même bois.
+	var again: Dictionary = TacticsProps.placements(cells, tile_size)
+	if str(again) != str(batches):
+		print_rich("[color=red]  FAIL: décor non déterministe[/color]")
+		ok = false
+	else:
+		print_rich("  OK: recalculé à l'identique")
+
+	# Et la pose, elle, ne s'empile pas : un seul nœud d'accueil.
+	var host := Node3D.new()
+	TacticsProps.build(host, cells, tile_size)
+	TacticsProps.build(host, cells, tile_size)
+	var hosts := 0
+	for child in host.get_children():
+		if child.name == "Props":
+			hosts += 1
+	if hosts != 1:
+		print_rich("[color=red]  FAIL: %d nœuds « Props » empilés[/color]" % hosts)
+		ok = false
+	else:
+		print_rich("  OK: reposer le décor remplace l'ancien au lieu de l'empiler")
+	host.free()
 
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
 	return ok

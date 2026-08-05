@@ -122,6 +122,7 @@ func _rebuild_all() -> void:
 
 	_cam_target = Vector3.ZERO
 	_refresh_camera()
+	_rebuild_props()
 	_rebuild_markers()
 
 
@@ -160,6 +161,27 @@ func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
 	var terrain: int = doc.terrain_at(pos)
 	mesh_instance.material_override = TacticsConfig.terrain_material.get(
 		terrain, TacticsConfig.terrain_material[MapDataClass.TerrainType.GRASS])
+
+
+## Redessine le décor : arbres, rochers, créneaux, comme en bataille.
+##
+## L'éditeur décrit ses cases lui-même — ses tuiles sont des corps nus, sans le
+## script qui porte le terrain en bataille. Le calcul de la garniture, lui, reste
+## celui de [TacticsProps] : ce qu'on dessine ici est ce qu'on jouera.
+func _rebuild_props() -> void:
+	var cells: Array = []
+	for row: int in doc.grid_size.y:
+		for col: int in doc.grid_size.x:
+			var pos := Vector2i(col, row)
+			var height: float = doc.height_at(pos)
+			var thickness: float = maxf(absf(height), MIN_THICKNESS)
+			var center: Vector3 = _tile_center(pos, height)
+			cells.append({
+				"cell": pos,
+				"terrain": doc.terrain_at(pos),
+				"top": Vector3(center.x, center.y + thickness / 2.0, center.z),
+			})
+	TacticsProps.build(self, cells, doc.tile_size)
 
 
 ## Redessine les repères posés sur la carte : unités, zone de départ, point à prendre.
@@ -337,7 +359,8 @@ func _refresh_tile(pos: Vector2i) -> void:
 	var body: Node = _tiles.get(_key(pos), null)
 	if body:
 		_apply_tile(body as StaticBody3D, pos)
-	# Les repères suivent la hauteur de leur case.
+	# Repères et décor suivent le terrain et la hauteur de leur case.
+	_rebuild_props()
 	_rebuild_markers()
 
 

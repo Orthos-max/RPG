@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-05 (caméra du jeu : cadrage « Awakening » en bataille)
+> Dernière mise à jour : 2026-08-05 (caméra du jeu, puis décor des cases)
 
 ---
 
@@ -110,6 +110,8 @@ test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
 - **`tactics_participant.gd`** / **`tactics_player.gd`** / **`tactics_opponent.gd`** — participants.
 - **`pawn.gd`** — unité sur la grille.
 - **`support_tracker.gd`** — suivi des soutiens en session.
+- **`props.gd`** (`data/models/view/scenery/`) — décor posé sur les cases :
+  arbres, rochers, créneaux. Procédural, sans collision, déterministe.
 - **`camera.gd`** — caméra tactics (pan/zoom/rotation, focus sur pions), cadrée
   sur le plateau à l'ouverture d'une bataille par **`framing.gd`**
   (`data/models/view/camera/tactics/`) : orthographique, inclinaison fixe.
@@ -570,7 +572,7 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 | Étape | Pourquoi |
 |---|---|
 | ✅ **La caméra du jeu** — orthographique, inclinaison fixe, posée sur le plateau (2026-08-05) | Fait : [`framing.gd`](../data/models/view/camera/tactics/framing.gd). Voir le journal ci-dessous |
-| **Décors posés sur les cases** — arbres sur la forêt, rochers sur la montagne, créneaux sur les murs | Ce qui sépare « un damier teinté » d'« un champ de bataille ». Formes simples, sans artiste |
+| ✅ **Décors posés sur les cases** — arbres, rochers, créneaux (2026-08-05) | Fait : [`props.gd`](../data/models/view/scenery/props.gd), en bataille **et** dans l'éditeur |
 | **Retravailler le surlignage de portée** | Les matériaux de portée remplacent le terrain d'un bloc : ils sont restés plats alors que tout le reste a gagné du grain |
 
 ### 4. Supprimer `fe_2d/`
@@ -777,3 +779,52 @@ bash scripts/test_net.sh                             # transport + reconnexion, 
 
 Le test du cadrage a été vérifié capable d'échouer : correctif du panoramique
 retiré, `test_battle.gd` tombe à 66 OK / 2 ÉCHECS et nomme la fuite.
+
+---
+
+### Passe du 2026-08-05 (3) — le décor des cases
+
+Le plateau disait son terrain par la seule teinte de ses cases : un damier vert
+clair et vert foncé, où « forêt » était une convention à retenir plutôt qu'une
+chose à voir. Le cadrage de la passe précédente ayant remis tout le plateau à
+l'écran, sa platitude sautait aux yeux.
+
+| Livré | Où |
+|---|---|
+| Arbres sur la forêt, rochers sur la montagne, créneaux sur les murs — procéduraux, un `MultiMesh` par type | `data/models/view/scenery/props.gd` |
+| Le décor apparaît aussi **dans l'éditeur de cartes**, redessiné à chaque coup de pinceau | `map_editor_level.gd` (`_rebuild_props`) |
+| Le calcul du décor se vérifie en headless | `test_map.gd` |
+
+Trois règles tiennent l'ensemble, et chacune est tenue par un test :
+
+* **Rien ne cache une unité.** Tout décor est plafonné à 0,85 unité (un pion en
+  fait ~1,2), et sur la forêt — le seul de ces trois terrains où l'on puisse se
+  tenir — il est décalé vers un coin, centre dégagé avec 28 % de marge. Montagne
+  et mur sont infranchissables : leur décor peut occuper toute la case.
+* **Rien n'intercepte la souris.** Aucune collision sur ces volumes : la
+  sélection continue de viser la tuile.
+* **Rien n'est tiré au hasard.** La variation vient d'un hachage des coordonnées
+  de la case — deux machines d'une même partie en réseau dessinent le même bois.
+
+Deux choses apprises en mesurant :
+
+* **`MultiMesh.get_instance_transform()` rend l'identité en headless.** Un test
+  qui interroge le décor *posé* ne mesure donc rien. D'où
+  `TacticsProps.placements()`, public : tout le calcul, séparé de la pose, et
+  c'est lui que le test interroge.
+* **`SphereMesh` lisse ses normales quel que soit son nombre de segments.** Les
+  rochers en sphère donnaient des œufs ; ce sont les arêtes vives d'un bloc
+  incliné qui font la pierre.
+
+**Tests** (tous verts) :
+
+```bash
+godot --headless --path . --script test_combat.gd    #  31 OK
+godot --headless --path . --script test_map.gd       # ALL TESTS PASSED (+ décor)
+godot --headless --path . --script test_features.gd  # 374 OK
+godot --headless --path . --script test_battle.gd    #  68 OK
+bash scripts/test_net.sh                             # transport + reconnexion
+```
+
+Éprouvé capable d'échouer : le décalage vers le coin ramené de 0,30 à 0,10, le
+test nomme le feuillage posé sur le centre de la case.
