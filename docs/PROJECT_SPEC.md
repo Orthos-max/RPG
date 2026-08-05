@@ -304,6 +304,9 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       menu Démarrer/bureau, entrée de désinstallation, pont `ciel_game/` inclus, version
       lue dans `project.godot`. `package.sh` compile le `.iss` si `ISCC.exe` est
       disponible (natif ou via Wine) et se rabat sur le seul `.zip` sinon.
+- [x] **Construction automatisée** : `.github/workflows/windows-installer.yml` bâtit
+      le `.exe` sur un runner Windows (Godot 4.3 + modèles en cache + Inno Setup) et
+      publie l'artefact `Ciel-Emblem-Windows`. Premier livrable : run `31029824017`.
       *Reste à faire : exécuter l'installeur sur une vraie machine Windows.*
 - [ ] **Signature & notarisation macOS** : sans elles, le premier lancement impose
       le détour « clic droit → Ouvrir » (documenté dans `INSTALL.md`). Demande un
@@ -372,25 +375,30 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
 > **Ajouté le 2026-08-04.** À transmettre à Claude Code tel quel.
 > Objectif : produire un `.exe` d'installation Windows avec Inno Setup 6.
 
-### ⚠️ État réel au 2026-08-04 (mesuré, pas supposé)
+### ✅ État réel au 2026-08-05 (mesuré, pas supposé)
 
-**Le script d'installation est écrit ; la chaîne n'a jamais produit le moindre
-fichier.** Vérifié en tentant l'export :
+**La chaîne produit un installeur.** Le blocage de la veille — ni modèles
+d'exportation, ni compilateur Inno Setup sur la machine de développement — est levé
+en déplaçant la construction sur un runner Windows, qui apporte les deux :
+[`.github/workflows/windows-installer.yml`](../.github/workflows/windows-installer.yml).
 
 | Maillon | État |
 |---|---|
 | `scripts/build/windows/setup.iss` | ✅ Complet — GUID stable, FR/EN, raccourcis, désinstallation qui **préserve les sauvegardes** de `%APPDATA%` |
 | `scripts/build/package.sh` | ✅ Prépare le staging, convertit l'icône, appelle ISCC |
 | `export_presets.cfg` → `Windows Desktop` | ✅ Présent |
-| **Modèles d'exportation Godot 4.3** | ❌ **Absents** — `export_templates/` est vide, l'export échoue avant tout le reste |
-| Compilateur Inno Setup (`ISCC`) ou `wine` | ❌ Absents de la machine de développement |
-| `build/` | ❌ N'a jamais existé — aucun `.exe`, aucun `.pck`, aucun `.zip` |
+| Modèles d'exportation Godot 4.3 | ✅ Installés par la CI (mis en cache entre les runs) |
+| Compilateur Inno Setup (`ISCC`) | ✅ Fourni par l'image `windows-latest` |
+| Livrables | ✅ Run `31029824017` — `Ciel-Emblem-Setup-0.1.0.exe` (22 Mo) et `CielEmblem-0.1.0-windows.zip` (29 Mo), contenu vérifié : exe, `.pck`, pont `ciel_game/`, notice |
 
-Autrement dit : ce n'est pas seulement l'installeur qui n'a jamais tourné sous
-Windows — **le jeu n'a jamais été exporté du tout**, sur aucune plateforme. Le
-premier pas n'est pas Windows, c'est d'installer les modèles d'exportation 4.3
-(éditeur : *Éditeur → Gérer les modèles d'exportation*) et de vérifier qu'un export
-macOS local démarre. L'installeur Windows ne se teste qu'ensuite, et sous Windows.
+Trois incompatibilités que seule une vraie machine Windows pouvait révéler, toutes
+corrigées : Git Bash ne fournit pas `zip` (repli sur `Compress-Archive`) ; ISCC et
+Godot refusent les chemins POSIX `/d/a/…` (traduits par `cygpath`) ; `ISCC_PATH`
+n'était honoré que dans la branche Wine.
+
+**Reste la seule dette : lancer l'installeur sur une machine Windows** —
+installation, raccourcis, lancement, et surtout une désinstallation qui laisse
+`%APPDATA%\Godot\app_userdata\Ciel Emblem\` intact.
 
 ### Contexte
 
@@ -560,8 +568,8 @@ sauvegardes à migrer. La table de correspondance et le chemin de migration peuv
 
 - ⚠️ **Partie en ligne sur deux vraies machines.** Toujours la seule brique livrée
   sans preuve de bout en bout, et la reconnexion y a ajouté du chemin.
-- 🔨 **Chaîne d'empaquetage Windows.** Voir l'état exact au §4bis : elle n'a jamais
-  produit le moindre binaire, faute de modèles d'exportation.
+- 🔨 **Installeur Windows exécuté.** La chaîne produit désormais un `.exe` (§4bis) ;
+  il reste à l'installer, le lancer et le désinstaller sur une machine Windows.
 
 ### 7. Confort de l'éditeur de cartes
 

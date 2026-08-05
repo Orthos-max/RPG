@@ -99,6 +99,17 @@ Le `.dmg` utilise `create-dmg` s'il est installé (`brew install create-dmg`), s
 
 #### Installeur Windows (Inno Setup)
 
+**Le plus simple : laisser la CI le construire.** Le workflow
+[`.github/workflows/windows-installer.yml`](../.github/workflows/windows-installer.yml)
+tourne sur un runner Windows, qui apporte à la fois Inno Setup et de quoi installer
+les 800 Mo de modèles d'exportation — rien à poser sur la machine de développement.
+Il se déclenche à chaque poussée sur `development`, ou à la main depuis l'onglet
+**Actions** (*Run workflow*). L'artefact **Ciel-Emblem-Windows** contient
+`Ciel-Emblem-Setup-<version>.exe` et le `.zip` portable.
+
+Le reste de cette section décrit la construction **en local**, utile pour itérer
+sans attendre la CI.
+
 La recette est dans `scripts/build/windows/setup.iss` ; `package.sh` la compile
 automatiquement après avoir produit le `.zip`, **si** le compilateur Inno Setup 6
 est disponible. Sinon il le signale et se contente du `.zip` — le packaging
