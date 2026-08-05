@@ -47,7 +47,11 @@ func handle_player_turn(delta: float, camp: TacticsParticipant, participant: Tac
 
 	match res.stage:
 		res.STAGE_SELECT_PAWN: controls.select_pawn(camp)
-		res.STAGE_SHOW_ACTIONS: camp.show_available_pawn_actions()
+		res.STAGE_SHOW_ACTIONS:
+			# Cliquer une autre de ses unités y bascule : sans cela, choisir une
+			# unité vous y enfermait jusqu'à trouver « Annuler » au bas du menu.
+			controls.reselect_pawn(camp)
+			camp.show_available_pawn_actions()
 		res.STAGE_SHOW_MOVEMENTS: camp.show_available_movements()
 		res.STAGE_SELECT_LOCATION: controls.select_new_location()
 		res.STAGE_MOVE_PAWN: camp.move_pawn()

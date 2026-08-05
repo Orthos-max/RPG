@@ -8,6 +8,8 @@ signal called_set_actions_menu_visibility
 signal called_move_camera
 ## Signal emitted when a pawn needs to be selected.
 signal called_select_pawn
+## Demande de basculer sur une autre unité, menu d'actions déjà ouvert.
+signal called_reselect_pawn
 ## Signal emitted when a pawn needs to be selected for attack.
 signal called_select_pawn_to_attack
 ## Signal emitted when a new location needs to be selected.
@@ -50,6 +52,11 @@ func move_camera(delta: float) -> void:
 ## Selects a pawn for the given player.
 func select_pawn(camp: TacticsParticipant) -> void:
 	called_select_pawn.emit(camp)
+
+
+## Bascule sur l'unité survolée si le joueur en clique une autre que la sienne.
+func reselect_pawn(camp: TacticsParticipant) -> void:
+	called_reselect_pawn.emit(camp)
 
 
 ## Selects a pawn to attack.

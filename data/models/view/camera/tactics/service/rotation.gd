@@ -3,7 +3,12 @@ extends RefCounted
 ## Service class for handling camera rotation in tactical view
 
 const DELTA_SMOOTHING: int = 10
+## Débattement vertical du regard libre, en degrés autour de l'horizontale.
+const MAX_VERT_ROT: int = 20
+const MIN_VERT_ROT: int = -45
 const FREE_LOOK_ROT_FACTOR: int = 2
+## Écart au cap visé en deçà duquel la rotation est considérée terminée (radians)
+const ROTATION_SETTLED: float = 0.001
 
 var res: TacticsCameraResource
 var controls: TacticsControlsResource
@@ -39,7 +44,12 @@ func rotate_camera(delta: float, t_pivot: Node3D, p_pivot: Node3D) -> void:
 	t_pivot.rotation = new_quat_t.get_euler()
 	p_pivot.rotation = new_quat_p.get_euler()
 	
-	if is_equal_approx(t_pivot.rotation.y, deg_to_rad(res.y_rot)):
+	# Comparaison d'angles, pas de nombres : `get_euler()` rend un cap dans
+	# (-180°, 180°] alors que `y_rot` vit dans [0°, 360°) — dès qu'on dépassait
+	# un demi-tour, l'égalité devenait impossible et `is_rotating` restait vrai
+	# pour toujours. Or c'est lui qui autorise le regard libre : la caméra
+	# perdait le clic-milieu sans que rien ne le signale.
+	if absf(angle_difference(t_pivot.rotation.y, deg_to_rad(res.y_rot))) < ROTATION_SETTLED:
 		res.is_rotating = false
 
 
@@ -108,13 +118,15 @@ func get_free_look_mouse_input() -> Vector2:
 
 ## Applies free look rotation to the camera pivots
 ##
-## Le regard libre fait tourner le plateau, jamais se relever la vue :
-## l'inclinaison du cadrage « Awakening » est fixe ([TacticsFraming]). La
-## relever aplatit le damier jusqu'à un plan de dessus où toutes les cases se
-## ressemblent — c'est précisément ce que le cadrage cherche à éviter.
+## Le regard libre relève et abaisse la vue autant qu'il la fait tourner.
+## L'inclinaison de **repos** reste celle du cadrage « Awakening »
+## ([TacticsFraming]) — la vue y revient dès qu'on relâche — mais l'y bloquer en
+## permanence rendait la caméra moins libre qu'avant, pour rien : regarder
+## derrière un rempart est un besoin de joueur, pas une entorse au cadrage.
 func apply_free_look_rotation(input: Vector2, delta: float, t_pivot: Node3D, p_pivot: Node3D) -> void:
 	t_pivot.rotate_y((input.x * FREE_LOOK_ROT_FACTOR) * delta)
-	p_pivot.rotation.x = 0.0
+	p_pivot.rotate_x((input.y * FREE_LOOK_ROT_FACTOR) * delta)
+	p_pivot.rotation.x = clamp(p_pivot.rotation.x, deg_to_rad(MIN_VERT_ROT), deg_to_rad(MAX_VERT_ROT))
 
 
 ## Resets twist and pitch inputs

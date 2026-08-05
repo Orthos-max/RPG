@@ -107,6 +107,10 @@ func select_new_location() -> void:
 
 
 ## Initiates the process of selecting a pawn to attack
+func reselect_pawn(camp: TacticsParticipant) -> void:
+	serv.reselect_pawn(camp, self)
+
+
 func select_pawn_to_attack() -> void:
 	serv.select_pawn_to_attack(self)
 

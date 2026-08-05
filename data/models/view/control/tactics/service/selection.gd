@@ -56,6 +56,42 @@ func _select_hovered_pawn(ctrl: TacticsControls) -> PhysicsBody3D:
 	return pawn if pawn else tile.get_tile_occupier() if tile else null
 
 
+## Bascule sur une autre de ses unités, menu d'actions déjà ouvert.
+##
+## Sans cela, choisir une unité vous y enfermait : l'étape « montrer les
+## actions » ne rappelait plus la sélection, donc cliquer sur une autre unité ne
+## faisait rien. Il fallait trouver « Cancel » au bas du menu pour reprendre la
+## main — un joueur qui ne l'a pas trouvé conclut, à raison, qu'il ne peut pas
+## jouer. Tout Fire Emblem accepte ce geste.
+##
+## Ne bascule que vers une unité **de son camp et encore capable d'agir**, et
+## seulement à cette étape-ci : au milieu d'un déplacement ou d'un ciblage,
+## changer d'unité serait une fausse manœuvre plutôt qu'une intention.
+func reselect_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
+	var hovered: TacticsPawn = input_service.get_3d_canvas_mouse_position(2, ctrl)
+	if not hovered or not is_instance_valid(hovered):
+		return
+	if hovered == ctrl.curr_pawn or not hovered.can_act():
+		return
+	if not (hovered in camp.get_children()):
+		return
+	if not Input.is_action_just_pressed("ui_accept"):
+		return
+
+	if ctrl.curr_pawn and is_instance_valid(ctrl.curr_pawn):
+		ctrl.curr_pawn.show_pawn_stats(false)
+	arena.reset_all_tile_markers()
+	controls.set_battle_forecast({})
+
+	ctrl.curr_pawn = hovered
+	_update_unit_sheet(hovered)
+	hovered.show_pawn_stats(true)
+	t_cam.target = hovered
+	participant.curr_pawn = hovered
+	controls.set_actions_menu_visibility(true, hovered)
+	participant.stage = participant.STAGE_SHOW_ACTIONS
+
+
 ## Selects the tile currently hovered by the mouse.
 func _select_hovered_tile(ctrl: TacticsControls) -> TacticsTile:
 	var pawn: TacticsPawn = input_service.get_3d_canvas_mouse_position(2, ctrl)

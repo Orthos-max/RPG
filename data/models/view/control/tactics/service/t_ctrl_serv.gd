@@ -44,6 +44,7 @@ func setup(ctrl: TacticsControls) -> void:
 		controls.connect("called_set_cursor_shape_to_move", ctrl.set_cursor_shape_to_move)
 		controls.connect("called_set_cursor_shape_to_arrow", ctrl.set_cursor_shape_to_arrow)
 		controls.connect("called_select_pawn", ctrl.select_pawn)
+		controls.connect("called_reselect_pawn", ctrl.reselect_pawn)
 		controls.connect("called_select_pawn_to_attack", ctrl.select_pawn_to_attack)
 		controls.connect("called_select_new_location", ctrl.select_new_location)
 		controls.connect("called_set_battle_forecast", ctrl.set_battle_forecast)
@@ -73,6 +74,11 @@ func set_actions_menu_visibility(v: bool, p: Variant, ctrl: TacticsControls) -> 
 ## Delegates pawn selection to the pawn selection service.
 func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	pawn_selection_service.select_pawn(camp, ctrl)
+
+
+## Delegates switching to another own pawn to the pawn selection service.
+func reselect_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
+	pawn_selection_service.reselect_pawn(camp, ctrl)
 
 
 ## Delegates new location selection to the pawn selection service.

@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-05 (caméra du jeu, puis décor des cases)
+> Dernière mise à jour : 2026-08-05 (caméra, décor, puis retour de jeu d'Aurèle)
 
 ---
 
@@ -560,7 +560,12 @@ sur des nœuds `StaticBody3D`. Trois conséquences déjà payées :
 l'adjacence et l'occupation dans la donnée, et laisser les tuiles ne faire que de
 l'affichage.
 
-### 🥈 2. Prouver une bataille fenêtre ouverte
+### 🥈 2. Prouver une bataille fenêtre ouverte — **remonté en tête (2026-08-05)**
+
+> Les trois blocages remontés par Aurèle le 2026-08-05 (échange au déploiement,
+> changement d'unité, regard libre) sont **tous** passés au travers de la suite
+> headless : rien n'y pilote la souris. Deux dataient d'avant. C'est le meilleur
+> argument possible pour ce chantier.
 
 `shot.gd` a démontré qu'on peut lancer une vraie fenêtre avec collisions et rendu.
 La suite : un `test_window.gd` qui joue **un tour complet** — sélection, déplacement,
@@ -828,3 +833,46 @@ bash scripts/test_net.sh                             # transport + reconnexion
 
 Éprouvé capable d'échouer : le décalage vers le coin ramené de 0,30 à 0,10, le
 test nomme le feuillage posé sur le centre de la case.
+
+---
+
+### Passe du 2026-08-05 (4) — trois blocages remontés par Aurèle
+
+Premier retour de jeu réel sur la build `b928b85`. Trois reproches, trois causes
+distinctes — dont une seule venait de la passe précédente.
+
+| Reproche | Cause réelle | Correctif |
+|---|---|---|
+| « la caméra est moins libre » | l'inclinaison verrouillée **et** le regard libre mort : `is_rotating` ne redescendait jamais | `service/rotation.gd` |
+| « on ne peut pas échanger deux unités au déploiement » | le pion masque toujours sa case au rayon : cliquer la deuxième ne faisait que la reprendre | `deployment_phase.gd` |
+| « on ne peut pas sélectionner les différentes unités » | l'étape « montrer les actions » ne rappelait plus la sélection | `service/turn.gd`, `service/selection.gd` |
+
+**La caméra.** Deux fautes, pas une. L'inclinaison fixe (§6.3) rendait bien le
+cadrage « Awakening », mais interdisait de regarder derrière un rempart : elle
+redevient libre, et ne sert plus que de position de repos. Surtout,
+`rotate_camera` comparait `t_pivot.rotation.y`, que `get_euler()` rend dans
+(-180°, 180°], à `y_rot`, qui vit dans [0°, 360°) : au-delà d'un demi-tour
+l'égalité était impossible, `is_rotating` restait vrai pour toujours, et c'est
+lui qui autorise le clic-milieu. **Le regard libre était donc mort tout court.**
+Bug latent depuis toujours pour les caps > 180° ; poser `y_rot = 315` au
+démarrage l'a rendu permanent. La comparaison se fait maintenant sur des angles.
+
+Le zoom souffrait du même genre d'erreur d'unité : `zoom_speed = 10` fait cinq
+crans sur une plage d'ouverture de 55°, mais **deux** sur une plage de hauteur de
+19 unités. Un cran de molette envoyait d'une butée à l'autre. Le pas s'exprime
+désormais en fraction de la plage, quelle que soit l'unité.
+
+**Les deux clics.** Même forme dans les deux cas : *cliquer une autre unité ne
+fait pas la chose évidente*. Au déploiement, l'aide annonçait « Deux unités
+échangent leurs places » alors que le rayon touchait toujours le pion avant sa
+case — l'échange était injouable. En bataille, choisir une unité vous y
+enfermait jusqu'à trouver « Cancel » au bas du menu. Les deux gestes sont
+désormais ceux de n'importe quel Fire Emblem.
+
+> **Le trou de couverture.** Aucun de ces trois bugs n'était visible pour la
+> suite headless, et deux d'entre eux étaient déjà là avant. `test_battle.gd`
+> vérifiait la *règle* d'échange (`plan.place()`) sans jamais emprunter le
+> *chemin du clic* ; rien ne pilote la souris. C'est exactement ce que le
+> `test_window.gd` du §6.2 doit couvrir, et ce retour le fait passer devant le
+> reste : les trois correctifs ci-dessus ont été vérifiés à la main, en fenêtre,
+> avec des clics simulés — pas par la suite.

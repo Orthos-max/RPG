@@ -156,6 +156,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	var pawn: Node = _raycast(2)
 	if pawn is TacticsPawn and pawn.get_parent() == level.player:
+		# Une unité déjà en main + un clic sur une autre = l'échange annoncé par
+		# l'aide en bas d'écran. Le pion masque toujours sa case au rayon : sans
+		# ce cas, le clic ne faisait que reprendre l'unité cliquée, et les deux
+		# unités ne pouvaient jamais permuter — quoi qu'en dise l'aide.
+		if _selected and is_instance_valid(_selected) and pawn != _selected:
+			_drop_on(_grid_of(pawn))
+			return
 		_selected = pawn
 		_refresh_hud()
 		return

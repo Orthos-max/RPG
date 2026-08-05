@@ -32,9 +32,25 @@ static func current_zoom(cam_node: Camera3D) -> float:
 	return float(cam_node.get(zoom_property(cam_node)))
 
 
+## Nombre de crans de molette pour parcourir toute la plage de zoom.
+##
+## Le pas ne peut pas être une constante en unités : `zoom_speed` vaut 10, ce qui
+## fait cinq crans sur une plage d'ouverture de 55°, mais deux sur une plage de
+## hauteur de 19 unités — un cran de molette envoyait alors d'une butée à
+## l'autre. On raisonne donc en fraction de la plage, quelle que soit l'unité.
+const ZOOM_STEPS: float = 12.0
+
+
 ## Adjust the target FOV for zooming
+##
+## Seul le **sens** de `zoom_increment` compte : son amplitude est celle d'un
+## cran, calculée sur la plage courante.
 func zoom_camera(zoom_increment: float) -> void:
-	res.target_fov = clamp(res.target_fov + zoom_increment, res.min_zoom, res.max_zoom)
+	if is_zero_approx(zoom_increment):
+		return
+	var step: float = (res.max_zoom - res.min_zoom) / ZOOM_STEPS
+	res.target_fov = clampf(
+		res.target_fov + signf(zoom_increment) * step, res.min_zoom, res.max_zoom)
 
 
 ## Smoothly interpolate current FOV to target FOV
