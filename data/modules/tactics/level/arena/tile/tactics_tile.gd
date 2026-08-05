@@ -88,12 +88,22 @@ func _process(_delta: float) -> void:
 #region: --- Methods ---
 # Getters
 ## Returns all 4 directly adjacent tiles
+##
+## L'index de grille répond sans moteur physique. Le repli sur les rayons ne
+## sert qu'aux tuiles qui n'y sont pas inscrites (scène montée à la main hors
+## d'une arène) ; il disparaîtra quand la parité sera prouvée fenêtre ouverte.
 func get_neighbors(height: float) -> Array:
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.has_tile(self):
+		return grid.neighbors_of(self, height)
 	return $RayCasting.get_all_neighbors(height)
 
 
-## Returns any collider directly (<=1m) above
+## Returns the pawn standing on this tile, if any
 func get_tile_occupier() -> Object:
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.has_tile(self):
+		return grid.occupant_of(self)
 	return $RayCasting.get_object_above()
 
 

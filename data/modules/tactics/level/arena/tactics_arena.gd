@@ -11,6 +11,9 @@ const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 @export var res: TacticsArenaResource = load("res://data/models/world/combat/arena/arena.tres")
 ## Service handling arena-related operations
 var serv: TacticsArenaService
+## Index de la grille en données : adjacence et occupation, sans rayon 3D.
+## Bâti par [method configure_tiles], une fois les tuiles à leur place.
+var grid: BattleGrid = null
 
 
 func _ready() -> void:

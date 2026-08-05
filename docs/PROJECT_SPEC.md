@@ -517,7 +517,29 @@ l'annulation et le redimensionnement.
 **Backlog : 44 items faits, 4 restants.** Ordre conseillé pour la reprise —
 classé par ce que ça rapporte au projet, pas par facilité :
 
-### 🥇 1. La grille en données (le refactor qui débloque le reste)
+### ✅ 1. La grille en données — première moitié faite (2026-08-05)
+
+`BattleGrid` ([`data/models/world/map/battle_grid.gd`](../data/models/world/map/battle_grid.gd))
+répond désormais aux deux questions qui gouvernent la tactique — **qui est à côté
+de qui**, **cette case est-elle occupée** — par de l'arithmétique sur des
+coordonnées, sans moteur physique. Il se bâtit depuis les tuiles réellement en
+scène, ce qui couvre aussi les chapitres écrits à la main, sans `MapData`.
+
+Vérifié en headless (`test_battle.gd`) : l'index couvre les 160 cases, s'accorde
+avec l'ancienne conversion **sur les 160 tuiles**, retrouve chaque pion sur sa
+case, et **calcule une portée de déplacement sans fenêtre** (40 cases pour 5 points
+de mouvement, aucune au-delà). `TacticsGrid` — la conversion que parle le pont
+CielAI — passe par l'index quand il existe : une seule formule, et une
+consultation directe au lieu d'un balayage de toutes les tuiles.
+
+Ce qui reste de l'ancien monde :
+- `pf_root` / `pf_distance` vivent toujours sur les nœuds `StaticBody3D` ; le
+  parcours est juste, mais son état s'accroche encore à la scène.
+- Le repli sur `tile_raycasting.tscn` subsiste dans `TacticsTile`, pour les tuiles
+  hors index. À supprimer une fois la parité prouvée fenêtre ouverte (§6.2).
+- `TacticsPawn.get_tile()` reste un rayon vers le bas.
+
+### 🥇 1bis. La grille en données (le refactor qui débloque le reste)
 
 Aujourd'hui, « qui est à côté de qui » et « cette case est-elle occupée » se
 répondent par des **rayons 3D** (`tile_raycasting.tscn`, `TacticsTile.get_neighbors()`,

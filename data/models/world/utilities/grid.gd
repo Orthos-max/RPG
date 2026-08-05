@@ -43,6 +43,12 @@ static func tile_to_grid(arena: Node, tile: Node3D) -> Vector2i:
 	if not tile or not is_instance_valid(tile):
 		return Vector2i(-1, -1)
 
+	# L'index de bataille tient déjà la réponse, et sans MapData. La formule qui
+	# suit ne sert qu'aux tuiles qu'il ne connaît pas (éditeur, scène isolée).
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.has_tile(tile):
+		return grid.cell_of(tile)
+
 	var gs: Vector2i = grid_size(arena)
 	var ts: float = tile_size(arena)
 	var pos: Vector3 = tile.global_position
@@ -54,6 +60,13 @@ static func tile_to_grid(arena: Node, tile: Node3D) -> Vector2i:
 
 ## Tuile située à une position de grille (null si absente).
 static func find_tile(arena: Node, col: int, row: int) -> Node3D:
+	# Consultation directe plutôt qu'un balayage de toutes les tuiles.
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.size() > 0:
+		var found: Node = grid.tile_at_cell(Vector2i(col, row))
+		if found is Node3D:
+			return found as Node3D
+
 	for tile in tiles(arena):
 		if tile is Node3D and tile_to_grid(arena, tile) == Vector2i(col, row):
 			return tile

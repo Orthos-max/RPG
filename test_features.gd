@@ -52,6 +52,7 @@ func _init() -> void:
 	_test_audio()
 	_test_map_editor()
 	_test_map_history()
+	_test_battle_grid()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1476,4 +1477,73 @@ func _test_map_history() -> void:
 		deep.undo()
 	_check(not deep.can_undo() and deep.redo_steps() == 3,
 		"annuler jusqu'au bout laisse tout à rétablir")
+#endregion
+
+
+#region 21. Grille de bataille en données
+## Ce que ces tests prouvent : l'adjacence et l'occupation se calculent sans
+## scène montée ni moteur physique. C'était impossible tant que les réponses
+## venaient de rayons 3D.
+func _test_battle_grid() -> void:
+	print("\n🗺️ Test 21: grille de bataille (adjacence & occupation)")
+
+	# Une grille 4×3 posée comme l'arène les génère : centrée sur l'origine,
+	# donc à des positions en .5 — le cas qui piégeait un arrondi naïf.
+	var grid := BattleGrid.new()
+	var tiles: Dictionary = {}
+	for row: int in 3:
+		for col: int in 4:
+			var node := Node3D.new()
+			var pos := Vector3(float(col) - 2.0 + 0.5, 0.0, float(row) - 1.5 + 0.5)
+			node.position = pos  # lue par _infer_tile_size
+			grid.add_tile(node, pos)
+			tiles[Vector2i(col, row)] = node
+
+	_check(grid.size() == 12, "12 cases inscrites, aucune collision de coordonnées",
+		"taille = %d" % grid.size())
+
+	# Le piège : de part et d'autre de zéro, deux tuiles voisines doivent rester
+	# voisines. round() les aurait séparées d'une case fantôme.
+	var left: Vector2i = grid.coord_at_position(Vector3(-0.5, 0, 0))
+	var right: Vector2i = grid.coord_at_position(Vector3(0.5, 0, 0))
+	_check(right.x - left.x == 1, "les cases restent contiguës en traversant zéro",
+		"%s puis %s" % [str(left), str(right)])
+
+	var middle: Node3D = tiles[Vector2i(1, 1)]
+	_check(grid.neighbors_of(middle, 1.0).size() == 4, "une case au centre a 4 voisines")
+
+	var corner: Node3D = tiles[Vector2i(0, 0)]
+	_check(grid.neighbors_of(corner, 1.0).size() == 2, "une case au coin n'en a que 2")
+
+	# Dénivellation : une falaise coupe l'adjacence.
+	var cliff := Node3D.new()
+	grid.add_tile(cliff, Vector3(0.5 + 1.0, 3.0, -0.5))  # voisine de (2,1), 3 m plus haut
+	var below: Node3D = tiles[Vector2i(2, 1)]
+	var reachable_neighbors: Array = grid.neighbors_of(below, 1.0)
+	_check(not reachable_neighbors.has(cliff), "une falaise de 3 m n'est pas adjacente")
+	_check(grid.neighbors_of(below, 4.0).has(cliff), "elle le redevient si l'on saute 4 m")
+
+	# Occupation : posée en donnée, lue sans rayon.
+	var pawn := RefCounted.new()
+	_check(not grid.is_taken(middle), "une case vide n'est pas occupée")
+	grid.place_occupant(grid.coord_of(middle), pawn)
+	_check(grid.is_taken(middle), "la case porte son pion")
+	_check(grid.occupant_of(middle) == pawn, "et rend bien celui-là")
+	_check(not grid.is_taken(corner), "sans contaminer la voisine")
+
+	grid.place_occupant(grid.coord_of(middle), null)
+	_check(not grid.is_taken(middle), "le pion parti, la case se libère")
+
+	# Une tuile inconnue de l'index ne doit rien affirmer.
+	var stranger := Node3D.new()
+	_check(not grid.has_tile(stranger) and grid.neighbors_of(stranger, 1.0).is_empty(),
+		"une tuile hors index n'invente pas de voisines")
+
+	_check(is_equal_approx(BattleGrid._infer_tile_size(tiles.values()), 1.0),
+		"le côté d'une case se déduit des positions")
+
+	for node: Node3D in tiles.values():
+		node.free()
+	cliff.free()
+	stranger.free()
 #endregion

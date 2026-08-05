@@ -320,6 +320,8 @@ func _run_custom_map(main: Node, campaign: Node) -> void:
 	_check(TacticsGrid.grid_size(level.arena) == document.grid_size,
 		"l'arène adopte la grille de la carte %s" % str(TacticsGrid.grid_size(level.arena)))
 
+	_check_battle_grid(level, document.grid_size)
+
 	var runner: Node = level.get_node_or_null("ChapterRunner")
 	_check(runner != null, "la carte est pilotée comme un chapitre")
 	await _settle_deployment(runner)
@@ -380,6 +382,100 @@ func _settle_deployment(runner: Node) -> void:
 
 
 #region Helpers
+## L'index de grille répond-il vraiment, et dit-il la même chose que la formule
+## qu'il remplace ? Le repli sur les rayons 3D masquerait une régression : ces
+## vérifications échouent s'il prend le relais.
+func _check_battle_grid(level: Node, expected_size: Vector2i) -> void:
+	var grid: BattleGrid = BattleGrid.current
+	_check(grid != null and grid.size() == expected_size.x * expected_size.y,
+		"l'index de grille couvre les %d cases" % (expected_size.x * expected_size.y),
+		"index = %s" % ("absent" if not grid else str(grid.size())))
+	if not grid:
+		return
+
+	# Parité avec l'ancienne conversion, tuile par tuile.
+	var mismatches: int = 0
+	var scanned: int = 0
+	for tile: Node in TacticsGrid.tiles(level.arena):
+		if not tile is Node3D:
+			continue
+		scanned += 1
+		var by_index: Vector2i = grid.cell_of(tile)
+		var by_formula: Vector2i = _legacy_tile_to_grid(level.arena, tile as Node3D, expected_size)
+		if by_index != by_formula:
+			mismatches += 1
+	_check(scanned > 0 and mismatches == 0,
+		"index et ancienne formule s'accordent sur les %d tuiles" % scanned,
+		"%d désaccords" % mismatches)
+
+	# Adjacence : une case du milieu a bien ses quatre voisines, sans rayon.
+	var middle: Node3D = TacticsGrid.find_tile(level.arena, expected_size.x / 2, expected_size.y / 2)
+	_check(middle != null and grid.neighbors_of(middle, 10.0).size() == 4,
+		"une case centrale a 4 voisines par la donnée seule")
+
+	# Occupation : les pions en scène sont retrouvés sur leurs cases.
+	grid.refresh_occupancy(true)
+	var occupied: int = 0
+	for tile: Node in TacticsGrid.tiles(level.arena):
+		if grid.is_taken(tile):
+			occupied += 1
+	_check(occupied == _count_pawns(level.player) + _count_pawns(level.opponent),
+		"chaque pion occupe une case dans l'index (%d)" % occupied)
+
+	_check_reachability_headless(level, grid)
+
+
+## Le gain attendu du refactor : calculer où un pion peut aller, sans fenêtre.
+## Le parcours part des voisines et de l'occupation — l'un et l'autre sont
+## désormais de la donnée, donc plus rien n'exige de moteur physique monté.
+func _check_reachability_headless(level: Node, grid: BattleGrid) -> void:
+	var pawn: TacticsPawn = null
+	for child: Node in level.player.get_children():
+		if child is TacticsPawn and is_instance_valid(child):
+			pawn = child
+			break
+	if not pawn:
+		_check(false, "un pion du joueur sert de point de départ")
+		return
+
+	var from: Node = null
+	for tile: Node in TacticsGrid.tiles(level.arena):
+		if grid.occupant_of(tile) == pawn:
+			from = tile
+			break
+	_check(from != null, "le pion est retrouvé sur sa case par l'index seul")
+	if not from:
+		return
+
+	var movement: float = float(pawn.stats.movement)
+	level.arena.reset_all_tile_markers()
+	level.arena.process_surrounding_tiles(from, float(pawn.stats.jump))
+	level.arena.mark_reachable_tiles(from, movement)
+
+	var origin: Vector2i = grid.cell_of(from)
+	var reachable: int = 0
+	var too_far: int = 0
+	for tile: Node in TacticsGrid.tiles(level.arena):
+		if not tile.get("reachable"):
+			continue
+		reachable += 1
+		var cell: Vector2i = grid.cell_of(tile)
+		if absi(cell.x - origin.x) + absi(cell.y - origin.y) > int(movement):
+			too_far += 1
+
+	_check(reachable > 1, "la portée de déplacement se calcule sans fenêtre (%d cases)" % reachable)
+	_check(too_far == 0, "aucune case atteignable au-delà des %d points de mouvement" % int(movement),
+		"%d cases trop loin" % too_far)
+
+
+## La conversion d'avant le refactor, gardée ici comme témoin.
+func _legacy_tile_to_grid(_arena: Node, tile: Node3D, gs: Vector2i) -> Vector2i:
+	var pos: Vector3 = tile.global_position
+	var col: int = int(round(pos.x + (float(gs.x) / 2.0) - 0.5))
+	var row: int = int(round(pos.z + (float(gs.y) / 2.0) - 0.5))
+	return Vector2i(clampi(col, 0, gs.x - 1), clampi(row, 0, gs.y - 1))
+
+
 func _count_pawns(team: Node) -> int:
 	if not team or not is_instance_valid(team):
 		return 0

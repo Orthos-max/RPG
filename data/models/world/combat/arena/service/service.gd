@@ -40,6 +40,13 @@ func configure_tiles(arena: TacticsArena) -> void:
 	var _tiles: Node3D = arena.get_node("Tiles")
 	TILE_SERVICE.tiles_into_staticbodies(_tiles)
 
+	# L'index de grille se bâtit une fois les tuiles converties : c'est leur
+	# position finale qui donne les coordonnées. Les pions se cherchent depuis le
+	# niveau, qui les porte tous, quel que soit leur camp.
+	var pawn_root: Node = arena.get_parent() if arena.get_parent() else arena
+	var tile_size: float = arena.res.map_data.tile_size if arena.res and arena.res.map_data else 0.0
+	arena.grid = BattleGrid.build_for(_tiles, pawn_root, tile_size)
+
 
 ## Process tiles surrounding a root tile
 ## [param root_tile] The starting tile
