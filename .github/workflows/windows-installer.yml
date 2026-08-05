@@ -86,8 +86,8 @@ jobs:
         run: |
           # Premier passage : Godot construit .godot/ (imports). Il rend un code
           # non nul sur des avertissements bénins, d'où le || true — l'export qui
-          # suit est le vrai juge.
-          "$GODOT_BIN" --headless --path . --import || true
+          # suit est le vrai juge. Le chemin doit être au format Windows.
+          "$GODOT_BIN" --headless --path "$(cygpath -w "$PWD")" --import || true
 
       - name: Exporter et compiler l'installeur
         shell: bash

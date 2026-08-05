@@ -36,5 +36,6 @@ addons/script-tabs/LICENSE
 addons/script-tabs/plugin.cfg
 addons/script-tabs/plugin.gd
 
-# Livrables de build (exports, staging, installeurs)
-build/
+# Livrables de build (exports, staging, installeurs).
+# Ancré à la racine : sans le « / » initial, la règle attrape aussi scripts/build/.
+/build/

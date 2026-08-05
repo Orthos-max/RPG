@@ -36,6 +36,16 @@ default_target() {
     esac
 }
 
+# Sous Git Bash, Godot est un binaire Windows : il refuse les chemins « /d/a/… »
+# (« Invalid project path specified »). Ailleurs, le chemin passe tel quel.
+to_native() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1"
+    else
+        printf '%s' "$1"
+    fi
+}
+
 preset_for() {
     case "$1" in
         macos)   echo "macOS" ;;
@@ -72,10 +82,13 @@ for target in "${TARGETS[@]}"; do
     mkdir -p "$(dirname "$OUTPUT")"
     echo "▶ Export $PRESET ($MODE) → $OUTPUT"
 
+    PROJECT_ARG="$(to_native "$PROJECT_DIR")"
+    OUTPUT_ARG="$(to_native "$OUTPUT")"
+
     if [ "$MODE" = "debug" ]; then
-        "$GODOT" --headless --path "$PROJECT_DIR" --export-debug "$PRESET" "$OUTPUT"
+        "$GODOT" --headless --path "$PROJECT_ARG" --export-debug "$PRESET" "$OUTPUT_ARG"
     else
-        "$GODOT" --headless --path "$PROJECT_DIR" --export-release "$PRESET" "$OUTPUT"
+        "$GODOT" --headless --path "$PROJECT_ARG" --export-release "$PRESET" "$OUTPUT_ARG"
     fi
 
     if [ $? -ne 0 ] || [ ! -e "$OUTPUT" ]; then
