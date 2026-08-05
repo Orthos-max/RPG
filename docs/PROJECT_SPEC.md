@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-05 (caméra, décor, puis retour de jeu d'Aurèle)
+> Dernière mise à jour : 2026-08-05 (caméra, décor, retour de jeu, chasse aux bugs)
 
 ---
 
@@ -876,3 +876,37 @@ désormais ceux de n'importe quel Fire Emblem.
 > `test_window.gd` du §6.2 doit couvrir, et ce retour le fait passer devant le
 > reste : les trois correctifs ci-dessus ont été vérifiés à la main, en fenêtre,
 > avec des clics simulés — pas par la suite.
+
+---
+
+### Passe du 2026-08-05 (5) — déplacer une unité à la souris était impossible
+
+En pilotant un tour complet à la souris pour chercher des bugs, le premier
+trouvé est le plus gros du projet : **cliquer une case atteignable ne déplaçait
+pas l'unité**. Le pion repassait aussitôt au menu d'actions sans avoir bougé.
+Reproduit à l'identique sur `29aceb7` — le bug est ancien, pas une régression.
+
+**La cause.** Contrôles et caméra vivent dans `main.tscn` et survivent aux
+niveaux ; l'arène arrive avec la carte. `TacticsControls` chargeait donc une
+ressource d'arène **par défaut** (`arena.tres`), alors que les cartes de
+chapitre passent par `map_arena.tres` — deux instances distinctes de la même
+classe. Or les contrôles parlent à l'arène **par signaux** portés par cette
+ressource : personne n'était à l'autre bout.
+
+Tout ce que les contrôles demandaient à l'arène se perdait donc en silence :
+surlignage du survol, remise à zéro des marqueurs, et surtout
+`get_pathfinding_tilestack()`, qui rendait une pile vide. Une pile vide, pour
+`move_pawn()`, veut dire « trajet terminé » : retour au menu, pion immobile.
+
+**Le correctif.** Le niveau met les contrôles en relation avec l'arène qu'il a
+réellement montée (`TacticsLevel._bind_controls_to_arena()` →
+`TacticsControls.use_arena()`). Deviner une ressource ne suffit pas : c'est la
+même leçon que le rayon de caméra écrit à la main, corrigé le même jour.
+
+> **Pourquoi la suite ne voyait rien.** Le pont CielAI et l'IA locale appellent
+> le **nœud** arène directement, jamais la ressource : les 68 vérifications
+> passaient au vert sur un jeu injouable à la main. Le nouveau test compare les
+> deux instances et demande un vrai trajet — retirer le correctif le fait tomber
+> à 70 OK / 2 ÉCHECS, en nommant la pile vide.
+
+`test_battle.gd` : **72 OK**.

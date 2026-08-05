@@ -71,6 +71,17 @@ func set_actions_menu_visibility(v: bool, p: Variant, ctrl: TacticsControls) -> 
 	ui_service.set_actions_menu_visibility(v, p, ctrl)
 
 
+## Fait pointer les contrôles vers l'arène réellement montée en scène.
+##
+## Voir [method TacticsControls.use_arena] : ici on répercute simplement le
+## changement sur le service qui s'en sert, la sélection.
+func use_arena(live: TacticsArenaResource) -> void:
+	if not live:
+		return
+	arena = live
+	pawn_selection_service.arena = live
+
+
 ## Delegates pawn selection to the pawn selection service.
 func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	pawn_selection_service.select_pawn(camp, ctrl)

@@ -56,12 +56,27 @@ func _ready() -> void:
 	_setup_camps() # Trois camps si la session le demande (M5), deux sinon
 	participant.configure(camera, ui_control) # Configure participant with camera and UI control
 
+	_bind_controls_to_arena() # Les contrôles doivent viser CETTE arène
 	_frame_board() # Poser la caméra sur ce plateau-ci, pas sur celui d'avant
 
 func _physics_process(delta: float) -> void:
 	match turn_stage:
 		0: _init_turn() # Initialize turn
 		1: _handle_turn(delta) # Handle ongoing turn
+
+
+## Fait adopter aux contrôles la ressource d'arène de ce niveau.
+##
+## Contrôles et caméra vivent dans `main.tscn` et survivent aux niveaux ; l'arène,
+## elle, arrive avec la carte. Sans cette mise en relation, les contrôles
+## s'adressaient à la ressource d'arène qu'ils avaient chargée par défaut — celle
+## d'aucune carte de chapitre.
+func _bind_controls_to_arena() -> void:
+	if not arena or not arena.res:
+		return
+	var controls: Node = get_tree().root.get_node_or_null("Main/TacticsControls")
+	if controls and controls.has_method("use_arena"):
+		controls.use_arena(arena.res)
 
 
 ## Pose la caméra sur ce plateau : centre mesuré, rayon, cadrage d'ouverture.

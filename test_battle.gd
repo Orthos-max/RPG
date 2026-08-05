@@ -99,6 +99,7 @@ func _run() -> void:
 				and snapshot["enemy_units"].size() == enemy_pawns,
 			"instantané d'objectif cohérent")
 
+	_check_arena_binding(main, level)
 	await _check_framing(main, level)
 
 	# --- Export d'état pour Ciel ---
@@ -384,6 +385,43 @@ func _settle_deployment(runner: Node) -> void:
 
 
 #region Helpers
+## Les contrôles s'adressent-ils à l'arène réellement en scène ?
+##
+## Contrôles et caméra vivent dans `main.tscn` et survivent aux niveaux ; l'arène
+## arrive avec la carte. Les contrôles chargeaient donc une ressource d'arène par
+## défaut — celle d'aucune carte de chapitre, qui passent par `map_arena.tres`.
+## Deux instances distinctes : tous les signaux d'arène émis par les contrôles
+## partaient dans le vide, y compris le calcul du trajet, qui rendait une pile
+## vide. **Déplacer une unité à la souris était impossible**, et le pion revenait
+## au menu sans avoir bougé.
+##
+## Rien ne le signalait : le pont CielAI et l'IA locale appellent le nœud arène
+## directement, donc toute la suite passait au vert sur un jeu injouable.
+func _check_arena_binding(main: Node, level: Node) -> void:
+	var controls: Node = main.get_node_or_null("TacticsControls")
+	_check(controls != null, "contrôles montés dans main.tscn")
+	if not controls or not level or not level.arena:
+		return
+
+	_check(controls.arena == level.arena.res,
+		"les contrôles visent l'arène de ce niveau",
+		"deux ressources distinctes : les signaux d'arène se perdent")
+	_check(level.arena.res.is_connected("called_get_pathfinding_tilestack",
+			Callable(level.arena, "get_pathfinding_tilestack")),
+		"le calcul de trajet est bien relié à l'arène")
+
+	# Et il rend un trajet, pas une pile vide.
+	var start: Node3D = TacticsGrid.find_tile(level.arena, 4, 4)
+	var goal: Node3D = TacticsGrid.find_tile(level.arena, 6, 4)
+	if start and goal:
+		level.arena.process_surrounding_tiles(start, 10.0, [])
+		var path: Array = controls.arena.get_pathfinding_tilestack(goal)
+		_check(path.size() >= 2,
+			"un trajet demandé par les contrôles fait %d étape(s)" % path.size(),
+			"pile vide : le pion ne bougerait pas")
+		level.arena.reset_all_tile_markers()
+
+
 ## La bataille s'ouvre-t-elle sur le plateau, et y reste-t-elle ?
 ##
 ## La caméra vit au-dessus des niveaux et leur survit : entrer en bataille la

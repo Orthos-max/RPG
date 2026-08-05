@@ -107,6 +107,27 @@ func select_new_location() -> void:
 
 
 ## Initiates the process of selecting a pawn to attack
+## Fait pointer les contrôles vers l'arène réellement montée en scène.
+##
+## Les contrôles vivent dans `main.tscn` et survivent aux niveaux : ils ne
+## peuvent que **deviner** quelle ressource d'arène est en jeu, et leur valeur
+## par défaut (`arena.tres`) n'était juste que pour les cartes qui l'emploient.
+## Les chapitres, eux, passent par `map_arena.tres` — deux instances distinctes,
+## donc les contrôles émettaient tous leurs signaux d'arène dans le vide :
+## surlignage du survol, remise à zéro des marqueurs, et surtout **le calcul du
+## trajet**, qui rendait une pile vide. Déplacer une unité à la souris était
+## impossible ; le pion repassait aussitôt au menu sans avoir bougé.
+##
+## Le niveau appelle donc ceci en s'ouvrant, avec l'arène qu'il a réellement
+## montée. Deviner ne suffit pas.
+func use_arena(live: TacticsArenaResource) -> void:
+	if not live or live == arena:
+		return
+	arena = live
+	if serv:
+		serv.use_arena(live)
+
+
 func reselect_pawn(camp: TacticsParticipant) -> void:
 	serv.reselect_pawn(camp, self)
 
