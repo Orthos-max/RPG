@@ -123,12 +123,33 @@ package_windows() {
 
     local archive="$DIST_DIR/CielEmblem-$VERSION-windows.zip"
     rm -f "$archive"
-    (cd "$staging" && zip -qr "$archive" .) || return 1
+    make_zip "$staging" "$archive" || return 1
     echo "✔ $archive"
 
     # L'installeur est un bonus : son absence ne fait pas échouer le packaging,
     # le .zip reste un livrable valable.
     build_windows_installer "$staging" || true
+}
+
+# Zippe le contenu d'un dossier. Git Bash (CI Windows) ne fournit pas `zip` :
+# on se rabat sur Compress-Archive, toujours présent sous Windows.
+make_zip() {
+    local src="$1" archive="$2"
+
+    if command -v zip >/dev/null 2>&1; then
+        (cd "$src" && zip -qr "$archive" .)
+        return $?
+    fi
+
+    if command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+        powershell.exe -NoProfile -NonInteractive -Command \
+            "Compress-Archive -Path '$(cygpath -w "$src")\*' -DestinationPath '$(cygpath -w "$archive")' -Force" \
+            >/dev/null 2>&1
+        [ -f "$archive" ] && return 0
+    fi
+
+    echo "  ✘ Aucun outil de compression disponible (zip / Compress-Archive)." >&2
+    return 1
 }
 
 # Convertit l'icône du projet en .ico pour l'installeur, si un convertisseur est
@@ -155,6 +176,18 @@ make_windows_icon() {
 find_iscc() {
     ISCC_CMD=()
     ISCC_WINE=0
+
+    # Chemin imposé (CI Windows : Inno Setup est fourni avec l'image, mais hors
+    # du PATH de Git Bash). Ailleurs, un ISCC.exe ne s'exécute qu'avec Wine —
+    # c'est la branche plus bas qui s'en charge.
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            if [ -n "${ISCC_PATH:-}" ] && [ -f "$ISCC_PATH" ]; then
+                ISCC_CMD=("$ISCC_PATH")
+                return 0
+            fi
+            ;;
+    esac
 
     if command -v ISCC.exe >/dev/null 2>&1; then
         ISCC_CMD=("ISCC.exe")
@@ -196,23 +229,31 @@ build_windows_installer() {
         return 1
     fi
 
+    # ISCC ne comprend que des chemins Windows : winepath sous Wine, cygpath
+    # sous Git Bash. Sans traduction, il cherche un dossier « /d/a/… » inexistant.
     local iss_arg="$iss" src_arg="$staging" out_arg="$DIST_DIR"
     if [ "$ISCC_WINE" -eq 1 ]; then
         iss_arg="$(winepath -w "$iss" 2>/dev/null || echo "$iss")"
         src_arg="$(winepath -w "$staging" 2>/dev/null || echo "$staging")"
         out_arg="$(winepath -w "$DIST_DIR" 2>/dev/null || echo "$DIST_DIR")"
+    elif command -v cygpath >/dev/null 2>&1; then
+        iss_arg="$(cygpath -w "$iss")"
+        src_arg="$(cygpath -w "$staging")"
+        out_arg="$(cygpath -w "$DIST_DIR")"
     fi
 
     echo "▶ Compilation de l'installeur Windows (Inno Setup)…"
+    local log="$BUILD_DIR/iscc.log"
     "${ISCC_CMD[@]}" \
         "/DMyAppVersion=$VERSION" \
         "/DSourceDir=$src_arg" \
         "/DOutputDir=$out_arg" \
-        "$iss_arg" >/dev/null 2>&1
+        "$iss_arg" >"$log" 2>&1
 
     local setup="$DIST_DIR/Ciel-Emblem-Setup-$VERSION.exe"
     if [ ! -f "$setup" ]; then
-        echo "  ✘ Inno Setup a échoué — voir docs/INSTALL.md." >&2
+        echo "  ✘ Inno Setup a échoué — 20 dernières lignes :" >&2
+        tail -n 20 "$log" >&2
         return 1
     fi
     echo "✔ $setup"

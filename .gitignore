@@ -35,3 +35,6 @@ addons/debug_menu/plugin.gd
 addons/script-tabs/LICENSE
 addons/script-tabs/plugin.cfg
 addons/script-tabs/plugin.gd
+
+# Livrables de build (exports, staging, installeurs)
+build/

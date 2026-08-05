@@ -1,0 +1,114 @@
+name: Installeur Windows
+
+# Construit le jeu et son installeur sur une vraie machine Windows.
+#
+# Pourquoi ce workflow : Inno Setup ne tourne que sous Windows, et les modèles
+# d'exportation Godot pèsent ~800 Mo. Le runner GitHub fournit les deux — rien
+# à installer sur la machine de développement.
+#
+# Résultat : un artefact « Ciel-Emblem-Windows » téléchargeable depuis l'onglet
+# Actions, contenant Ciel-Emblem-Setup-<version>.exe et le .zip portable.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [development]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+
+env:
+  GODOT_VERSION: 4.3-stable
+  # Sans cela, Git Bash prend « /DMyAppVersion=… » pour un chemin POSIX et le
+  # réécrit en chemin Windows avant qu'ISCC ne le voie.
+  MSYS2_ARG_CONV_EXCL: '*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache des modèles d'exportation
+        id: cache-templates
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Roaming/Godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}
+
+      - name: Installer Godot ${{ env.GODOT_VERSION }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION"
+
+          # L'éditeur : c'est lui qui exporte, même en headless.
+          Invoke-WebRequest "$base/Godot_v${env:GODOT_VERSION}_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath C:\godot -Force
+
+          # rcedit grave le nom du produit et la version dans le .exe exporté
+          # (export_presets.cfg → application/modify_resources=true).
+          New-Item -ItemType Directory -Force -Path C:\tools | Out-Null
+          Invoke-WebRequest "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" `
+            -OutFile C:\tools\rcedit-x64.exe
+
+          # Godot ne cherche rcedit que via ce réglage d'éditeur. Le fichier est
+          # partiel : les réglages absents reprennent leur valeur par défaut.
+          $cfgDir = "$env:APPDATA\Godot"
+          New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
+          Set-Content "$cfgDir\editor_settings-4.3.tres" -Encoding UTF8 -Value @(
+            '[gd_resource type="EditorSettings" format=3]',
+            '',
+            '[resource]',
+            'export/windows/rcedit = "C:/tools/rcedit-x64.exe"'
+          )
+
+      - name: Modèles d'exportation
+        if: steps.cache-templates.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION"
+
+          # Un .tpz est un .zip : Expand-Archive exige l'extension pour l'admettre.
+          Invoke-WebRequest "$base/Godot_v${env:GODOT_VERSION}_export_templates.tpz" -OutFile templates.zip
+          Expand-Archive templates.zip -DestinationPath C:\tpl -Force
+
+          $dest = "$env:APPDATA\Godot\export_templates\$($env:GODOT_VERSION -replace '-', '.')"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Move-Item C:\tpl\templates\* $dest -Force
+
+      - name: Importer les ressources
+        shell: bash
+        env:
+          GODOT_BIN: /c/godot/Godot_v4.3-stable_win64.exe
+        run: |
+          # Premier passage : Godot construit .godot/ (imports). Il rend un code
+          # non nul sur des avertissements bénins, d'où le || true — l'export qui
+          # suit est le vrai juge.
+          "$GODOT_BIN" --headless --path . --import || true
+
+      - name: Exporter et compiler l'installeur
+        shell: bash
+        env:
+          GODOT_BIN: /c/godot/Godot_v4.3-stable_win64.exe
+          ISCC_PATH: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+        run: bash scripts/build/package.sh windows
+
+      - name: Vérifier les livrables
+        shell: bash
+        run: |
+          set -e
+          version="$(grep -m1 '^config/version=' project.godot | cut -d'"' -f2)"
+          setup="build/dist/Ciel-Emblem-Setup-$version.exe"
+          [ -f "$setup" ] || { echo "✘ $setup absent"; ls -R build/dist; exit 1; }
+          echo "✔ $setup ($(du -h "$setup" | cut -f1))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ciel-Emblem-Windows
+          path: |
+            build/dist/*.exe
+            build/dist/*.zip
+          if-no-files-found: error

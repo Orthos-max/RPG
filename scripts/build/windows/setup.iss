@@ -11,7 +11,7 @@
 #define MyAppName "Ciel Emblem"
 #define MyAppPublisher "CielAI"
 #define MyAppExeName "CielEmblem.exe"
-#define MyAppURL "https://github.com/tamilahciel/ciel-emblem"
+#define MyAppURL "https://github.com/Orthos-max/RPG"
 
 ; Version injectée par package.sh (/DMyAppVersion=…), repli si compilé à la main.
 #ifndef MyAppVersion
