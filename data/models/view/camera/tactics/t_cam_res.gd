@@ -27,7 +27,13 @@ var target_velocity: Vector3 = Vector3.ZERO
 var target: Node3D = null:
 	set(val):
 		target = val
+		focus_timer = 0.0 # Toute nouvelle cible repart avec un délai neuf
 		DebugLog.debug_nospam("cam", val) # Log target change
+## Temps passé à poursuivre la cible courante, en secondes.
+## La caméra est un CharacterBody3D : une cible posée au sol peut rester hors
+## d'atteinte (collision avec le terrain). Sans ce compteur, elle la poursuivrait
+## indéfiniment — et le joueur ne pourrait plus déplacer sa vue.
+var focus_timer: float = 0.0
 #endregion
 
 #region Zoom

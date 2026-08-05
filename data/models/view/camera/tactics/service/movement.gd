@@ -8,6 +8,8 @@ const VELOCITY_SMOOTHING: int = 8
 const MIN_THRESHOLD: float = 0.1
 const MIN_DISTANCE: float = 0.25
 const SPEED_DIVIDER: int = 4
+## Durée maximale d'une poursuite de cible, en secondes.
+const FOCUS_TIMEOUT: float = 2.0
 
 var res: TacticsCameraResource
 var controls: TacticsControlsResource
@@ -49,16 +51,24 @@ func move_camera(h: float, v: float, joystick: bool, delta: float, camera: Tacti
 
 
 ## Moves the camera to focus on a target, respecting boundary constraints
-func focus_on_target(camera: TacticsCamera) -> void:
+func focus_on_target(camera: TacticsCamera, delta: float) -> void:
 	if not res.target or res.target == null:
 		return
-	
+
 	var from: Vector3 = camera.global_position
 	var to: Vector3 = res.target.global_position
 	if from.distance_to(to) <= MIN_DISTANCE:
 		res.target = null
 		return
-	
+
+	# Garde-fou : une cible que la caméra ne peut pas atteindre (elle glisse
+	# contre le terrain avant d'arriver) la ramènerait sur place à chaque image,
+	# sans jamais rendre la main. Passé le délai, on lâche prise.
+	res.focus_timer += delta
+	if res.focus_timer >= FOCUS_TIMEOUT:
+		res.target = null
+		return
+
 	var vel: Vector3 = (to-from) * res.move_speed / SPEED_DIVIDER
 	
 	# Clamp the target position within the boundary

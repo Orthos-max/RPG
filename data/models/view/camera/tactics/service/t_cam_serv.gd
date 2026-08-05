@@ -45,6 +45,10 @@ func process(delta: float, camera: TacticsCamera) -> void:
 	
 	var input_dir: Vector2 = InputCaptureResource.cam_direction
 	if input_dir != Vector2.ZERO:
+		# La main du joueur prime sur le suivi : tant qu'une cible est posée,
+		# move_camera refuse de bouger et focus_on_target ramène la vue à chaque
+		# image. Déplacer la caméra, c'est décider de ne plus suivre.
+		res.target = null
 		pan.wasd_pan(delta, camera, input_dir)
 	elif pan.is_cursor_near_edge(camera) and not controls.is_joystick:
 		pan.edge_pan(delta, camera)
@@ -55,5 +59,5 @@ func process(delta: float, camera: TacticsCamera) -> void:
 	if camera.velocity.length() < MIN_VEL:
 		camera.velocity = Vector3.ZERO
 	
-	move.focus_on_target(camera)
+	move.focus_on_target(camera, delta)
 	zoom.apply_zoom_smoothing(camera, delta)
