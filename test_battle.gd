@@ -99,6 +99,8 @@ func _run() -> void:
 				and snapshot["enemy_units"].size() == enemy_pawns,
 			"instantané d'objectif cohérent")
 
+	await _check_framing(main, level)
+
 	# --- Export d'état pour Ciel ---
 	session.set_ciel_enabled(true)
 	for _i in 20:
@@ -382,6 +384,53 @@ func _settle_deployment(runner: Node) -> void:
 
 
 #region Helpers
+## La bataille s'ouvre-t-elle sur le plateau, et y reste-t-elle ?
+##
+## La caméra vit au-dessus des niveaux et leur survit : entrer en bataille la
+## laissait là où l'écran précédent l'avait posée, puis le panoramique de bord —
+## déclenché par un curseur hors fenêtre, ou par la position (0,0) que rend un
+## serveur d'affichage sans souris — l'emmenait jusqu'à sa limite de
+## déplacement. Le joueur ouvrait sa première bataille sur un morceau de ciel.
+## Rien ne le signalait : aucun test ne regardait où pointait la vue.
+func _check_framing(main: Node, level: Node) -> void:
+	var camera: Node = main.get_node_or_null("Camera/TacticsCamera")
+	_check(camera != null, "caméra tactique montée dans main.tscn")
+	if not camera or not level:
+		return
+
+	var cam_node: Camera3D = camera.cam_node
+	_check(cam_node.projection == Camera3D.PROJECTION_ORTHOGONAL,
+		"cadrage orthographique (« Awakening »)",
+		"projection = %d" % cam_node.projection)
+	_check(is_equal_approx(snappedf(camera.t_pivot.rotation_degrees.x, 0.1),
+			TacticsFraming.PITCH_DEGREES),
+		"inclinaison fixée à %.0f°" % TacticsFraming.PITCH_DEGREES,
+		"inclinaison = %.1f°" % camera.t_pivot.rotation_degrees.x)
+
+	var bounds: Dictionary = TacticsFraming.board_bounds(level.arena)
+	var board: Vector2 = bounds["size"]
+	_check(board.x > 0.0 and board.y > 0.0,
+		"étendue du plateau mesurée sur les tuiles : %.0f × %.0f" % [board.x, board.y])
+	_check(cam_node.size >= TacticsFraming.fit_size(board) - 0.01,
+		"le cadrage d'ouverture tient le plateau entier (size = %.1f)" % cam_node.size,
+		"il en faudrait %.1f" % TacticsFraming.fit_size(board))
+
+	# Le plateau reste sous la vue le temps que la boucle de tour s'installe :
+	# c'est la fuite elle-même que l'on cherche, pas la position d'une image.
+	var strayed: float = 0.0
+	for _i in 120:
+		await physics_frame
+		strayed = maxf(strayed, camera.global_position.distance_to(bounds["center"]))
+	var allowed: float = TacticsFraming.pan_radius(level.arena)
+	_check(strayed <= allowed,
+		"la vue reste sur le plateau (écart max %.1f ≤ %.1f)" % [strayed, allowed],
+		"la caméra a fui à %.1f du centre" % strayed)
+	# Une caméra collée à sa limite est déjà en train de dériver : la fuite
+	# précédente s'arrêtait pile là, faute de pouvoir aller plus loin.
+	_check(strayed < allowed - 0.5,
+		"et sans venir buter sur sa limite de déplacement")
+
+
 ## L'index de grille répond-il vraiment, et dit-il la même chose que la formule
 ## qu'il remplace ? Le repli sur les rayons 3D masquerait une régression : ces
 ## vérifications échouent s'il prend le relais.

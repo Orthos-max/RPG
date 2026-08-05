@@ -27,16 +27,49 @@ static var serv: TacticsCameraService
 
 
 func _ready() -> void:
+	# Le cadrage « Awakening » précède la mise en service : c'est lui qui décide
+	# de la projection, donc de la propriété sur laquelle le zoom va travailler.
+	TacticsFraming.apply_projection(cam_node, cam_node.size)
+	res.x_rot = int(TacticsFraming.PITCH_DEGREES)
+	res.y_rot = TacticsFraming.YAW_DEGREES
+	# Les bornes du .tres sont des degrés d'ouverture, sans rapport avec la
+	# hauteur de monde qu'attend une caméra orthographique.
+	res.min_zoom = TacticsFraming.MIN_ORTHO_SIZE
+	res.max_zoom = TacticsFraming.MAX_ORTHO_SIZE
+
 	serv = TacticsCameraService.new(res, controls) # Initialize camera service
 	serv.setup(self, cam_node) # Set up camera service
 	res.boundary_center = global_position  # Set the initial boundary center
 	# Connect signals
 	res.connect("called_rotate_camera", rotate_camera)
 	res.connect("called_move_camera", move_camera)
+	res.connect("called_frame_board", frame_board)
 
 
 func _process(delta: float) -> void:
 	serv.process(delta, self) # Process camera service
+
+
+## Pose la caméra sur un plateau : centre, rayon de promenade, hauteur d'image.
+##
+## Appelée à l'ouverture d'une bataille ([TacticsLevel]). Le déplacement est
+## instantané et sans cible : le joueur doit voir son armée dès la première
+## image, pas y arriver en glissant depuis l'endroit où l'écran précédent avait
+## laissé la caméra.
+func frame_board(center: Vector3, radius: float, size: float) -> void:
+	res.target = null
+	velocity = Vector3.ZERO
+	global_position = center
+	res.boundary_center = center
+	res.boundary_radius = radius
+
+	TacticsFraming.apply_projection(cam_node, size)
+	serv.zoom.adopt_current_zoom(cam_node)
+
+	# Sans cela, la vue arriverait à l'inclinaison de repos en glissant sur une
+	# poignée d'images — visible, et pour rien.
+	t_pivot.rotation_degrees = Vector3(res.x_rot, res.y_rot, 0)
+	p_pivot.rotation_degrees = Vector3(0, 0, res.z_rot)
 
 
 ## Moves the camera based on input

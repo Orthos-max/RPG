@@ -24,7 +24,6 @@ reflected_light_source = 3
 [node name="TacticsLevel" type="Node3D"]
 script = ExtResource("1_4gyi1")
 camera = ExtResource("2_u24sq")
-camera_boundary_radius = 13.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0.0, 6.0, 0.0)

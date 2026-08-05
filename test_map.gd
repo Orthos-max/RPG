@@ -13,6 +13,7 @@ func _init() -> void:
 	all_ok = _test_map_data() and all_ok
 	all_ok = _test_terrain_materials() and all_ok
 	all_ok = _test_scene_loading() and all_ok
+	all_ok = _test_framing() and all_ok
 
 	if all_ok:
 		print_rich("[color=green][b]=== ALL TESTS PASSED ===[/b][/color]")
@@ -148,5 +149,61 @@ func _test_scene_loading() -> bool:
 		print_rich("[color=red]  FAIL: wrong grid size[/color]")
 		ok = false
 	
+	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
+## Cadrage de bataille : la géométrie qui décide de ce que le joueur voit.
+##
+## Calcul pur, donc vérifiable sans monter une scène — et il vaut mieux, parce
+## qu'une erreur ici ne se voit pas dans un journal : elle se voit à l'écran,
+## sous la forme d'un plateau à moitié hors champ.
+func _test_framing() -> bool:
+	print_rich("[color=cyan]--- Test: Cadrage de bataille ---[/color]")
+	var ok := true
+
+	# Un plateau vu en diagonale se projette pareil qu'il soit posé en large ou
+	# en long : c'est la somme de ses côtés qui compte, pas leur répartition.
+	var wide := TacticsFraming.fit_size(Vector2(15, 9))
+	var tall := TacticsFraming.fit_size(Vector2(9, 15))
+	if not is_equal_approx(wide, tall):
+		print_rich("[color=red]  FAIL: cadrage asymétrique (%.3f vs %.3f)[/color]" % [wide, tall])
+		ok = false
+	else:
+		print_rich("  OK: 15×9 et 9×15 demandent le même cadrage (%.2f)" % wide)
+
+	# La carte du chapitre 1 tient à l'écran, marge comprise.
+	if not is_equal_approx(snappedf(wide, 0.001), 16.873):
+		print_rich("[color=red]  FAIL: cadrage du 16×10 = %.3f (attendu 16.873)[/color]" % wide)
+		ok = false
+	else:
+		print_rich("  OK: le 16×10 du chapitre 1 tient dans 16.87 unités de haut")
+
+	# Une carte plus grande demande plus de recul, jamais moins.
+	if TacticsFraming.fit_size(Vector2(31, 31)) <= wide:
+		print_rich("[color=red]  FAIL: une grande carte ne demande pas plus de recul[/color]")
+		ok = false
+	else:
+		print_rich("  OK: le cadrage croît avec le plateau")
+
+	# Le cadrage d'ouverture reste dans des bornes lisibles, quelle que soit la
+	# carte : une immense ne doit pas réduire les unités à des pixels.
+	var huge := clampf(TacticsFraming.fit_size(Vector2(60, 60)),
+		TacticsFraming.MIN_OPENING_SIZE, TacticsFraming.MAX_OPENING_SIZE)
+	if huge != TacticsFraming.MAX_OPENING_SIZE:
+		print_rich("[color=red]  FAIL: cadrage d'ouverture non borné (%.2f)[/color]" % huge)
+		ok = false
+	else:
+		print_rich("  OK: l'ouverture reste bornée à [%.0f, %.0f]" % [
+			TacticsFraming.MIN_OPENING_SIZE, TacticsFraming.MAX_OPENING_SIZE])
+
+	# Sans tuile — arène pas encore montée — rien ne doit exploser.
+	var empty: Dictionary = TacticsFraming.board_bounds(null)
+	if empty["center"] != Vector3.ZERO or empty["size"] != Vector2.ZERO:
+		print_rich("[color=red]  FAIL: une arène absente devrait mesurer zéro[/color]")
+		ok = false
+	else:
+		print_rich("  OK: une arène absente ne fait pas dérailler la mesure")
+
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
 	return ok

@@ -30,7 +30,9 @@ func setup(camera: TacticsCamera, cam_node: Camera3D) -> void:
 	if not res:
 		push_error("TacticsCamera needs a CameraResource (T Cam) from /data/models/view/camera/tactics/")
 	else:
-		res.target_fov = cam_node.fov
+		# `fov` en perspective, `size` en orthographique : le zoom sait laquelle.
+		res.current_fov = TacticsCameraZoomService.current_zoom(cam_node)
+		res.target_fov = res.current_fov
 		res.viewport_size = camera.get_viewport().size
 
 

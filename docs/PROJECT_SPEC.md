@@ -2,7 +2,7 @@
 
 > **Document de cap.** Décrit ce que le jeu **est** aujourd'hui et ce qu'il doit **devenir**.
 > Servira de référence à Claude Code pour implémenter les prochaines features.
-> Dernière mise à jour : 2026-08-04 (reconnexion réseau, prise de point, déploiement)
+> Dernière mise à jour : 2026-08-05 (caméra du jeu : cadrage « Awakening » en bataille)
 
 ---
 
@@ -110,7 +110,9 @@ test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
 - **`tactics_participant.gd`** / **`tactics_player.gd`** / **`tactics_opponent.gd`** — participants.
 - **`pawn.gd`** — unité sur la grille.
 - **`support_tracker.gd`** — suivi des soutiens en session.
-- **`camera.gd`** — caméra tactics (pan/zoom/rotation, focus sur pions).
+- **`camera.gd`** — caméra tactics (pan/zoom/rotation, focus sur pions), cadrée
+  sur le plateau à l'ouverture d'une bataille par **`framing.gd`**
+  (`data/models/view/camera/tactics/`) : orthographique, inclinaison fixe.
 - **`controls.gd`** — contrôles (souris/gamepad/clavier).
 
 ### 3.5 IA ennemie
@@ -567,7 +569,7 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 
 | Étape | Pourquoi |
 |---|---|
-| Porter le cadrage dans **la caméra du jeu** (orthographique, inclinaison fixe) et réparer la cible perdue après le déploiement | Le cadrage « Awakening » n'existe que dans `shot.gd` ; en jeu, on entre en bataille sur une vue braquée sur le vide (`Camera focuses on: <null>`) |
+| ✅ **La caméra du jeu** — orthographique, inclinaison fixe, posée sur le plateau (2026-08-05) | Fait : [`framing.gd`](../data/models/view/camera/tactics/framing.gd). Voir le journal ci-dessous |
 | **Décors posés sur les cases** — arbres sur la forêt, rochers sur la montagne, créneaux sur les murs | Ce qui sépare « un damier teinté » d'« un champ de bataille ». Formes simples, sans artiste |
 | **Retravailler le surlignage de portée** | Les matériaux de portée remplacent le terrain d'un bloc : ils sont restés plats alors que tout le reste a gagné du grain |
 
@@ -714,3 +716,64 @@ godot --headless --path . --script test_features.gd  # 258 OK — logique des fe
 godot --headless --path . --script test_battle.gd    #  30 OK — intégration (36 fenêtre ouverte)
 bash scripts/test_net.sh                             # transport + reconnexion, 2 processus
 ```
+
+---
+
+### Passe du 2026-08-05 (2) — la caméra du jeu
+
+Le cadrage « Awakening » n'existait que dans `shot.gd`, l'outil de capture. En
+jeu, une bataille s'ouvrait sur ceci : du ciel, et un coin de plateau en bas à
+droite. Mesuré avant de corriger — trois causes distinctes, pas une.
+
+| Livré | Où |
+|---|---|
+| Le cadrage devient un module : centre et étendue du plateau **mesurés sur les tuiles**, projection, inclinaison, bornes de zoom | `data/models/view/camera/tactics/framing.gd` |
+| Une bataille pose la caméra sur son plateau à l'ouverture, par signal | `tactics_level.gd`, `t_cam_res.gd`, `camera.gd` |
+| Le zoom agit sur `size` en orthographique, sur `fov` en perspective | `service/zoom.gd`, `service/t_cam_serv.gd` |
+| Le panoramique de bord n'obéit plus à un curseur qui ne commande rien | `service/panning.gd` |
+| L'inclinaison ne bouge plus au regard libre | `service/rotation.gd` |
+| Le cadrage se vérifie en headless — calcul pur et fuite de la vue | `test_map.gd`, `test_battle.gd` |
+
+**Les trois causes, mesurées :**
+
+1. **Aucun cadrage.** La caméra vit dans `main.tscn` et survit aux niveaux : elle
+   entrait en bataille là où l'écran précédent l'avait laissée, avec un rayon de
+   déplacement centré sur l'origine du monde plutôt que sur la carte.
+2. **Le panoramique de bord obéissait à un curseur hors fenêtre.** Le seuil
+   testait `mouse_pos.x <= 1`, vrai aussi pour des coordonnées négatives : souris
+   sortie du jeu, la caméra partait toute seule jusqu'à sa limite. Sans écran,
+   le serveur d'affichage rend (0,0) — un ordre permanent, et la raison pour
+   laquelle aucun test headless n'avait jamais pu regarder où pointait la vue.
+3. **Projection perspective.** Le zoom écrivait dans `fov` ; en orthographique
+   cette propriété ne fait rien, il fallait donc que le zoom sache sur laquelle
+   des deux travailler.
+
+Deux choix structurants :
+
+* **Le plateau se mesure, il ne se déclare pas.** Le centre et l'étendue viennent
+  des tuiles réellement en scène, pas de `MapData` — les chapitres écrits à la
+  main n'en ont pas, et ce sont justement ceux dont le centre n'est pas
+  l'origine. `camera_boundary_radius`, écrit à la main dans deux scènes, était
+  juste pour la carte qui l'avait reçu et faux pour les cartes du joueur : il
+  passe à 0 (mesure) et reste disponible comme choix explicite de chapitre.
+* **L'inclinaison est fixe, y compris au regard libre.** La relever aplatit le
+  damier jusqu'à un plan de dessus où toutes les cases se ressemblent — c'est ce
+  que le cadrage cherche à éviter. Le regard libre fait tourner, il ne relève
+  plus.
+
+`shot.gd` remettait une cible à la caméra avant chaque capture, faute de quoi il
+photographiait le vide. Le contournement est retiré : l'outil montre de nouveau
+ce que voit un joueur.
+
+**Tests** (tous verts) :
+
+```bash
+godot --headless --path . --script test_combat.gd    #  31 OK
+godot --headless --path . --script test_map.gd       # ALL TESTS PASSED (+ cadrage, calcul pur)
+godot --headless --path . --script test_features.gd  # 374 OK
+godot --headless --path . --script test_battle.gd    #  68 OK (+ 7 sur le cadrage)
+bash scripts/test_net.sh                             # transport + reconnexion, 2 processus
+```
+
+Le test du cadrage a été vérifié capable d'échouer : correctif du panoramique
+retiré, `test_battle.gd` tombe à 66 OK / 2 ÉCHECS et nomme la fuite.

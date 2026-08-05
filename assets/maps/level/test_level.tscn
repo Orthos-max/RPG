@@ -18,7 +18,6 @@
 [node name="TacticsLevel" type="Node3D"]
 script = ExtResource("1_4gyi1")
 camera = ExtResource("2_u24sq")
-camera_boundary_radius = 13.0
 
 [node name="TacticsArena" parent="." instance=ExtResource("3_xw0fp")]
 unique_name_in_owner = true

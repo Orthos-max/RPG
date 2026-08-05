@@ -70,23 +70,20 @@ func _open_battle(main: Node) -> void:
 	for _i in 30:
 		await physics_frame
 
-	# La caméra perd sa cible une fois le déploiement confirmé et reste braquée
-	# sur le vide : pour une capture, on la recale sur un pion du joueur.
-	if level and level.camera:
-		for pawn in level.player.get_children():
-			if pawn is Node3D:
-				level.camera.target = pawn
-				break
+	# Plus rien à recaler ici : [TacticsFraming] pose la caméra sur le plateau à
+	# l'ouverture du niveau. L'outil photographie donc bien ce que voit un
+	# joueur — c'était le contraire tant qu'il fallait lui remettre une cible.
 	for _i in 40:
 		await physics_frame
 
 
 ## Caméra d'observation : cadre toute l'arène, sans dépendre de celle du jeu.
 ##
-## La caméra tactique est contrainte (rayon de déplacement, cible qui s'annule
-## une fois atteinte) : impossible d'en tirer un cadrage reproductible. Celle-ci
-## est posée en orthographique, inclinée, et regarde le centre de la grille —
-## c'est aussi le banc d'essai du cadrage « Awakening ».
+## La caméra tactique suit le jeu — elle se pose sur le pion qu'on sélectionne,
+## le joueur la promène : son cadrage n'est pas reproductible d'une capture à
+## l'autre. Celle-ci ne bouge jamais, et sert donc à comparer deux passes de
+## rendu. Le cadrage « Awakening » qu'elle prototypait vit maintenant dans le
+## jeu ([TacticsFraming]) ; les valeurs ci-dessous n'ont plus à s'y accorder.
 func _frame_arena(main: Node) -> void:
 	var level: Node = _find_class(main, "TacticsLevel")
 	var arena: Node = level.arena if level else null

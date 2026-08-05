@@ -12,8 +12,13 @@ const GuestCampScript = preload("res://data/modules/tactics/level/participants/o
 #region: --- Props ---
 ## Camera resource for the tactics system
 @export var camera: TacticsCameraResource = load("res://data/models/view/camera/tactics/camera.tres")
-## Radius of the camera boundary
-@export var camera_boundary_radius: float = 10.0
+## Rayon de promenade de la caméra, en unités monde.
+##
+## 0 — le cas normal — laisse [TacticsFraming] le mesurer sur le plateau : un
+## rayon écrit à la main est juste pour la carte qui l'a reçu et faux pour
+## toutes les autres, à commencer par celles que le joueur dessine lui-même.
+## Une valeur positive reste un choix de chapitre, et prime.
+@export var camera_boundary_radius: float = 0.0
 ## UI control resource for the tactics system
 @export var ui_control: TacticsControlsResource = load("res://data/models/view/control/tactics/control.tres")
 ## Reference to the TacticsParticipant node
@@ -50,14 +55,25 @@ func _ready() -> void:
 	_setup_camps() # Trois camps si la session le demande (M5), deux sinon
 	participant.configure(camera, ui_control) # Configure participant with camera and UI control
 
-	# Update camera boundary radius if necessary
-	if camera.boundary_radius != camera_boundary_radius:
-		camera.boundary_radius = camera_boundary_radius
+	_frame_board() # Poser la caméra sur ce plateau-ci, pas sur celui d'avant
 
 func _physics_process(delta: float) -> void:
 	match turn_stage:
 		0: _init_turn() # Initialize turn
 		1: _handle_turn(delta) # Handle ongoing turn
+
+
+## Pose la caméra sur ce plateau : centre mesuré, rayon, cadrage d'ouverture.
+##
+## La caméra vit dans `main.tscn` et survit aux niveaux : sans ce recadrage,
+## une bataille s'ouvre là où l'écran précédent avait laissé la vue.
+func _frame_board() -> void:
+	if not camera or not arena:
+		return
+	var bounds: Dictionary = TacticsFraming.board_bounds(arena)
+	var radius: float = camera_boundary_radius if camera_boundary_radius > 0.0 \
+			else TacticsFraming.pan_radius(arena)
+	camera.frame_board(bounds["center"], radius, TacticsFraming.opening_size(arena))
 #endregion
 
 #region: --- Camps ---

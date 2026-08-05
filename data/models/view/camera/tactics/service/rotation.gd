@@ -3,8 +3,6 @@ extends RefCounted
 ## Service class for handling camera rotation in tactical view
 
 const DELTA_SMOOTHING: int = 10
-const MAX_VERT_ROT: int = 20
-const MIN_VERT_ROT: int = -45
 const FREE_LOOK_ROT_FACTOR: int = 2
 
 var res: TacticsCameraResource
@@ -109,10 +107,14 @@ func get_free_look_mouse_input() -> Vector2:
 
 
 ## Applies free look rotation to the camera pivots
+##
+## Le regard libre fait tourner le plateau, jamais se relever la vue :
+## l'inclinaison du cadrage « Awakening » est fixe ([TacticsFraming]). La
+## relever aplatit le damier jusqu'à un plan de dessus où toutes les cases se
+## ressemblent — c'est précisément ce que le cadrage cherche à éviter.
 func apply_free_look_rotation(input: Vector2, delta: float, t_pivot: Node3D, p_pivot: Node3D) -> void:
 	t_pivot.rotate_y((input.x * FREE_LOOK_ROT_FACTOR) * delta)
-	p_pivot.rotate_x((input.y * FREE_LOOK_ROT_FACTOR) * delta)
-	p_pivot.rotation.x = clamp(p_pivot.rotation.x, deg_to_rad(MIN_VERT_ROT), deg_to_rad(MAX_VERT_ROT))
+	p_pivot.rotation.x = 0.0
 
 
 ## Resets twist and pitch inputs

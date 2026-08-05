@@ -13,9 +13,35 @@ func _init(_res: TacticsCameraResource) -> void:
 func is_cursor_near_edge(camera: TacticsCamera) -> bool:
 	refresh_cam_viewport_size(camera)
 	res.mouse_pos = camera.get_viewport().get_mouse_position()
+	if not is_cursor_commanding(camera):
+		return false
 	var panning: Dictionary = get_mouse_panning_values()
-	
+
 	return panning.h != 0 or panning.v != 0
+
+
+## Le curseur donne-t-il vraiment un ordre au jeu ?
+##
+## Trois cas où la position de la souris ne veut rien dire, et où la lire comme
+## un ordre faisait partir la caméra toute seule jusqu'à sa limite de
+## déplacement — le joueur retrouvait sa bataille cadrée sur le ciel :
+##
+## - **aucune souris** : sans écran, le serveur d'affichage rend (0,0), un coin
+##   d'écran donc un ordre de panoramique permanent. C'est ce qui interdisait de
+##   vérifier le cadrage d'une bataille en headless — la caméra avait toujours
+##   fui avant qu'on la regarde ;
+## - **fenêtre sans le focus** : le jeu garde la dernière position connue alors
+##   que le joueur est ailleurs ;
+## - **curseur hors fenêtre** : `get_mouse_position()` rend des coordonnées
+##   négatives ou au-delà du bord, que le seuil de bord lisait comme « collé au
+##   bord ».
+func is_cursor_commanding(camera: TacticsCamera) -> bool:
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE):
+		return false
+	var window: Window = camera.get_window()
+	if window and not window.has_focus():
+		return false
+	return Rect2(Vector2.ZERO, Vector2(res.viewport_size)).has_point(res.mouse_pos)
 
 
 ## Handles panning with WASD keys

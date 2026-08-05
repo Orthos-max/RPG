@@ -8,6 +8,11 @@ signal called_move_camera
 signal called_free_look
 ## Emitted when camera rotation is requested
 signal called_rotate_camera
+## Demande à la caméra de se poser sur un plateau : centre, rayon, hauteur d'image.
+##
+## Le niveau ne connaît que cette ressource — le nœud caméra vit un cran au-dessus,
+## dans `main.tscn`, et lui survit. Le signal est le seul fil entre les deux.
+signal called_frame_board(center: Vector3, radius: float, size: float)
 
 #region Movement
 @export_category("Movement")
@@ -135,4 +140,9 @@ func rotate_camera(delta: float, twist: float = 0.0) -> void:
 ## Emits signal for free look mode
 func free_look(delta: float) -> void:
 	called_free_look.emit(delta)
+
+
+## Demande le cadrage d'un plateau ([TacticsFraming] fournit les valeurs).
+func frame_board(center: Vector3, radius: float, size: float) -> void:
+	called_frame_board.emit(center, radius, size)
 #endregion
