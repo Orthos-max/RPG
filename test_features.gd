@@ -1102,6 +1102,57 @@ func _test_chapter_map() -> void:
 			and CMAP.defense_at(map, Vector2i(999, 999)) == 0,
 		"une case hors carte ne rapporte rien plutôt que de faire dérailler la lecture")
 
+	# --- Le chapitre 2 : une carte d'un seul tenant ---
+	# Son relief coupait la bataille en morceaux, chaque camp coincé de son côté
+	# (remonté par Aurèle le 2026-08-06). La carte a été aplatie ; ce test empêche
+	# qu'un relief la recoupe sans qu'on s'en aperçoive.
+	var hand_made: Dictionary = CMAP.scene_tiles(CAMPAIGN_DB.get_chapter(1).scene_path)
+	_check(hand_made.size() == 200,
+		"carte du chapitre 2 lue tuile par tuile (%d cases)" % hand_made.size())
+
+	var flat: bool = true
+	for cell: Vector2i in hand_made:
+		if not is_zero_approx(float(hand_made[cell])):
+			flat = false
+	_check(flat, "la carte du chapitre 2 est de plain-pied")
+
+	# Le saut d'une unité de mouvement 5 vaut 2 ; on vérifie plus sévère encore,
+	# pour qu'une marche même franchissable ne réapparaisse pas en douce.
+	_check(CMAP.zone_count(hand_made, 2.0) == 1,
+		"chapitre 2 : une seule zone, les deux camps peuvent se rejoindre",
+		"%d zones" % CMAP.zone_count(hand_made, 2.0))
+	_check(CMAP.zone_count(hand_made, 0.0) == 1,
+		"chapitre 2 : aucune marche à franchir")
+
+	# Le côté de case déduit d'une carte posée à la main. Les abscisses ci-dessous
+	# sont celles du chapitre 2 : un écart de 0,996 au lieu de 1,0, invisible à
+	# l'œil. Retenu comme côté de case, il décalait le calcul des coordonnées
+	# jusqu'à faire sauter une colonne entière — 160 cases indexées pour 200
+	# tuiles, et un plateau percé en son milieu.
+	var crooked: Array[float] = [-4.504, -3.508, -2.508, -1.508, -0.508,
+		0.492, 1.492, 2.492, 3.492, 4.496]
+	_check(is_equal_approx(BattleGrid.tile_size_from_columns(crooked), 1.0),
+		"une colonne de travers ne fausse plus le côté de case",
+		str(BattleGrid.tile_size_from_columns(crooked)))
+
+	var regular: Array[float] = [-1.5, -0.5, 0.5, 1.5]
+	_check(is_equal_approx(BattleGrid.tile_size_from_columns(regular), 1.0),
+		"une trame régulière donne son pas")
+	var wide: Array[float] = [0.0, 2.0, 4.0, 6.0]
+	_check(is_equal_approx(BattleGrid.tile_size_from_columns(wide), 2.0),
+		"une carte à grandes cases est reconnue comme telle")
+	var lonely: Array[float] = [3.0]
+	_check(is_equal_approx(BattleGrid.tile_size_from_columns(lonely), 1.0),
+		"une seule colonne : on retombe sur 1")
+
+	# Le compteur de zones doit savoir compter : une case isolée par une falaise.
+	var split: Dictionary = {
+		Vector2i(0, 0): 0.0, Vector2i(1, 0): 0.0,
+		Vector2i(2, 0): 9.0, Vector2i(3, 0): 9.0,
+	}
+	_check(CMAP.zone_count(split, 2.0) == 2 and CMAP.zone_count(split, 9.0) == 1,
+		"une falaise sépare bien deux zones, un saut suffisant les réunit")
+
 	# Une carte sans terrain déclaré doit le dire, pas se taire.
 	var handmade: Dictionary = CMAP.read(CAMPAIGN_DB.get_chapter(1))
 	_check(not bool(handmade["ok"]) and not str(handmade["reason"]).is_empty(),

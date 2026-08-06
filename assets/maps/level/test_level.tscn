@@ -30,24 +30,24 @@ unique_name_in_owner = true
 script = ExtResource("7_3m485")
 
 [node name="Pawn" parent="TacticsParticipant/TacticsPlayer" instance=ExtResource("8_08tl5")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.46078, 2.51051, -3.36416)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.46078, 0, -3.36416)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsPlayer/Pawn" instance=ExtResource("7_2t7xk")]
 
 [node name="Pawn2" parent="TacticsParticipant/TacticsPlayer" instance=ExtResource("8_08tl5")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.37698, 2.51051, -4.34521)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.37698, 0, -4.34521)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsPlayer/Pawn2" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("8_l4u65")
 
 [node name="Pawn3" parent="TacticsParticipant/TacticsPlayer" instance=ExtResource("8_08tl5")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.37889, 2.51051, -4.33249)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.37889, 0, -4.33249)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsPlayer/Pawn3" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("9_nuein")
 
 [node name="Pawn4" parent="TacticsParticipant/TacticsPlayer" instance=ExtResource("8_08tl5")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.339008, 2.51051, -5.5579)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.339008, 0, -5.5579)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsPlayer/Pawn4" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("10_8w028")
@@ -57,37 +57,37 @@ unique_name_in_owner = true
 script = ExtResource("14_t1tcx")
 
 [node name="Pawn" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.37979, -0.0246843, 5.53141)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.37979, 0, 5.53141)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("12_gx1gx")
 
 [node name="Pawn2" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 2.39464, -0.0246843, 5.53141)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 2.39464, 0, 5.53141)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn2" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("12_gx1gx")
 
 [node name="Pawn3" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.38258, 0.134056, 5.53141)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.38258, 0, 5.53141)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn3" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("12_gx1gx")
 
 [node name="Pawn4" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 2.39464, -0.0246843, 6.50388)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 2.39464, 0, 6.50388)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn4" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("13_3cren")
 
 [node name="Pawn5" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.54574, -0.0246843, 7.471)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 3.54574, 0, 7.471)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn5" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("14_f36r6")
 
 [node name="Pawn6" parent="TacticsParticipant/TacticsOpponent" instance=ExtResource("8_08tl5")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.50286, -0.0246843, 7.45141)
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 1.50286, 0, 7.45141)
 
 [node name="Expertise" parent="TacticsParticipant/TacticsOpponent/Pawn6" instance=ExtResource("7_2t7xk")]
 starting_stats = ExtResource("14_f36r6")

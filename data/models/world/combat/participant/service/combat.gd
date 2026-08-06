@@ -41,6 +41,11 @@ func attack_pawn(delta: float, is_player: bool) -> void:
 		# la caméra ne se cale sur lui que s'il est encore debout.
 		if is_instance_valid(res.curr_pawn) and res.curr_pawn.is_alive():
 			camera.target = res.curr_pawn
+			# Frapper ou soigner clôt le tour de l'unité, comme dans Fire Emblem :
+			# on se déplace puis on agit, jamais l'inverse. Sans cela, `can_attack`
+			# tombait bien à faux mais `can_move` restait vrai — l'unité repartait
+			# se promener après son coup.
+			res.curr_pawn.end_pawn_turn()
 
 	# Reset attackable pawn
 	res.attackable_pawn = null

@@ -79,7 +79,90 @@ static func defense_at(map: Dictionary, pos: Vector2i) -> int:
 	return MapDataRef.get_defense_bonus(terrain_at(map, pos))
 
 
+## Hauteur de chaque case d'une carte posée à la main, lue dans la scène.
+##
+## Les cartes de chapitre passent par [MapData] ; celles écrites à la main (le
+## chapitre 2) posent leurs tuiles une par une dans la scène de l'arène. C'est
+## la seule façon de mesurer leur relief sans monter la bataille.
+##
+## [returns] {Vector2i (colonne, ligne) → hauteur}
+static func scene_tiles(scene_path: String) -> Dictionary:
+	var out: Dictionary = {}
+	var packed: PackedScene = load(scene_path)
+	if not packed:
+		return out
+	var found: Dictionary = _tiles_of_state(packed.get_state())
+	for cell: Vector2i in found:
+		out[cell] = found[cell]
+	return out
+
+
+## Nombre de zones où l'on circule sans jamais franchir plus de `max_step`.
+##
+## Deux zones, c'est une carte coupée en deux : chaque camp reste de son côté et
+## la bataille ne peut pas avoir lieu. C'est arrivé au chapitre 2, dont le relief
+## a été aplati le 2026-08-06.
+static func zone_count(cells: Dictionary, max_step: float) -> int:
+	const STEPS: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	]
+	var seen: Dictionary = {}
+	var zones: int = 0
+	for start: Vector2i in cells:
+		if seen.has(start):
+			continue
+		zones += 1
+		var stack: Array[Vector2i] = [start]
+		seen[start] = true
+		while not stack.is_empty():
+			var current: Vector2i = stack.pop_back()
+			for step: Vector2i in STEPS:
+				var next: Vector2i = current + step
+				if not cells.has(next) or seen.has(next):
+					continue
+				if absf(float(cells[next]) - float(cells[current])) <= max_step:
+					seen[next] = true
+					stack.append(next)
+	return zones
+
+
 #region Internes
+## Tuiles d'un état de scène, en (colonne, ligne) → hauteur.
+##
+## On descend aussi dans les scènes imbriquées : le niveau instancie son arène,
+## et ce sont les tuiles de l'arène qui nous intéressent.
+static func _tiles_of_state(state: SceneState, prefix: Transform3D = Transform3D()) -> Dictionary:
+	var out: Dictionary = {}
+	if not state:
+		return out
+
+	var locals: Dictionary = _local_transforms(state)
+	for i: int in state.get_node_count():
+		var path: String = str(state.get_node_path(i))
+		var nested: PackedScene = state.get_node_instance(i)
+		if nested:
+			var here: Transform3D = prefix * _global_transform(path, locals)
+			out.merge(_tiles_of_state(nested.get_state(), here))
+			continue
+		# Une tuile est un enfant direct du nœud « Tiles ». Les chemins rendus par
+		# `SceneState` commencent par « ./ » — l'oublier ne rapporte aucune tuile.
+		var relative: String = path.trim_prefix("./")
+		if not relative.begins_with("Tiles/") or relative.trim_prefix("Tiles/").contains("/"):
+			continue
+		var world: Transform3D = prefix * _global_transform(path, locals)
+		out[Vector2i(floori(world.origin.x + 0.5), floori(world.origin.z + 0.5))] = world.origin.y
+	return out
+
+
+## Transformation cumulée d'un nœud, parents compris.
+static func _global_transform(path: String, locals: Dictionary) -> Transform3D:
+	var total := Transform3D()
+	var walked: String = ""
+	for part: String in path.split("/"):
+		walked = part if walked.is_empty() else "%s/%s" % [walked, part]
+		total = total * (locals.get(walked, Transform3D()) as Transform3D)
+	return total
+
 ## Cherche la ressource de terrain dans l'état de la scène, où qu'elle soit.
 ##
 ## Elle vit sur l'arène, elle-même scène instanciée à l'intérieur du niveau : on
@@ -152,12 +235,7 @@ static func _local_transforms(state: SceneState) -> Dictionary:
 ## Position monde d'un nœud, en composant les transformations de ses parents —
 ## ce que `global_position` refuse de faire hors de l'arbre.
 static func _global_origin(path: String, locals: Dictionary) -> Vector3:
-	var total := Transform3D()
-	var walked: String = ""
-	for part: String in path.split("/"):
-		walked = part if walked.is_empty() else "%s/%s" % [walked, part]
-		total = total * (locals.get(walked, Transform3D()) as Transform3D)
-	return total.origin
+	return _global_transform(path, locals).origin
 
 
 ## Conversion monde → grille, même formule que [TacticsGrid.tile_to_grid] : la

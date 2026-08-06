@@ -2834,806 +2834,802 @@ directional_shadow_mode = 0
 visible = false
 
 [node name="Tile" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 4.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 1.5)
 mesh = SubResource("2")
 
 [node name="Tile001" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 9.5)
 mesh = SubResource("3")
 
 [node name="Tile002" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 9.5)
 mesh = SubResource("4")
 
 [node name="Tile003" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 8.5)
 mesh = SubResource("5")
 
 [node name="Tile004" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 7.5)
 mesh = SubResource("6")
 
 [node name="Tile005" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 8.5)
 mesh = SubResource("7")
 
 [node name="Tile006" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 8.5)
 mesh = SubResource("8")
 
 [node name="Tile007" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 9.5)
 mesh = SubResource("9")
 
 [node name="Tile008" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 7.5)
 mesh = SubResource("10")
 
 [node name="Tile009" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 8.5)
 mesh = SubResource("11")
 
 [node name="Tile010" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 9.5)
 mesh = SubResource("12")
 
 [node name="Tile011" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 7.5)
 mesh = SubResource("13")
 
 [node name="Tile012" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.25, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 8.5)
 mesh = SubResource("14")
 
 [node name="Tile013" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.25, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 9.5)
 mesh = SubResource("15")
 
 [node name="Tile014" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 7.5)
 mesh = SubResource("16")
 
 [node name="Tile015" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 8.5)
 mesh = SubResource("17")
 
 [node name="Tile016" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 9.5)
 mesh = SubResource("18")
 
 [node name="Tile017" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.375, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 7.5)
 mesh = SubResource("19")
 
 [node name="Tile018" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 8.5)
 mesh = SubResource("20")
 
 [node name="Tile019" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 9.5)
 mesh = SubResource("21")
 
 [node name="Tile020" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.126, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 7.5)
 mesh = SubResource("22")
 
 [node name="Tile021" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 8.5)
 mesh = SubResource("23")
 
 [node name="Tile022" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 9.5)
 mesh = SubResource("24")
 
 [node name="Tile023" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 7.5)
 mesh = SubResource("25")
 
 [node name="Tile024" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 8.5)
 mesh = SubResource("26")
 
 [node name="Tile025" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 9.5)
 mesh = SubResource("27")
 
 [node name="Tile026" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 7.5)
 mesh = SubResource("28")
 
 [node name="Tile027" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 8.5)
 mesh = SubResource("29")
 
 [node name="Tile028" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 9.5)
 mesh = SubResource("30")
 
 [node name="Tile029" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 7.5)
 mesh = SubResource("31")
 
 [node name="Tile030" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 7.5)
 mesh = SubResource("32")
 
 [node name="Tile031" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 6.5)
 mesh = SubResource("33")
 
 [node name="Tile032" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 5.5)
 mesh = SubResource("34")
 
 [node name="Tile033" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 5.5)
 mesh = SubResource("35")
 
 [node name="Tile034" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 5.5)
 mesh = SubResource("36")
 
 [node name="Tile035" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.25, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 5.5)
 mesh = SubResource("37")
 
 [node name="Tile036" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 5.5)
 mesh = SubResource("38")
 
 [node name="Tile037" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 5.5)
 mesh = SubResource("39")
 
 [node name="Tile038" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 5.5)
 mesh = SubResource("40")
 
 [node name="Tile039" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 6.5)
 mesh = SubResource("41")
 
 [node name="Tile040" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 6.5)
 mesh = SubResource("42")
 
 [node name="Tile041" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 4.5)
 mesh = SubResource("43")
 
 [node name="Tile042" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 3.5)
 mesh = SubResource("44")
 
 [node name="Tile043" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 3.5)
 mesh = SubResource("45")
 
 [node name="Tile044" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 3.5)
 mesh = SubResource("46")
 
 [node name="Tile045" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 3.5)
 mesh = SubResource("47")
 
 [node name="Tile046" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0.5, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 3.5)
 mesh = SubResource("48")
 
 [node name="Tile047" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0.375, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 3.5)
 mesh = SubResource("49")
 
 [node name="Tile048" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.126, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 3.5)
 mesh = SubResource("50")
 
 [node name="Tile049" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.375, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 2.5)
 mesh = SubResource("51")
 
 [node name="Tile050" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 1.5)
 mesh = SubResource("52")
 
 [node name="Tile051" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 1.5)
 mesh = SubResource("53")
 
 [node name="Tile052" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 1.5)
 mesh = SubResource("54")
 
 [node name="Tile053" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 1.5)
 mesh = SubResource("55")
 
 [node name="Tile054" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 1.5)
 mesh = SubResource("56")
 
 [node name="Tile055" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 1.5)
 mesh = SubResource("57")
 
 [node name="Tile056" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 1.5)
 mesh = SubResource("58")
 
 [node name="Tile057" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 0.5)
 mesh = SubResource("59")
 
 [node name="Tile058" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -0.5)
 mesh = SubResource("60")
 
 [node name="Tile059" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 0.5)
 mesh = SubResource("61")
 
 [node name="Tile060" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -0.5)
 mesh = SubResource("62")
 
 [node name="Tile061" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -0.5)
 mesh = SubResource("63")
 
 [node name="Tile062" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -0.5)
 mesh = SubResource("64")
 
 [node name="Tile063" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0.75, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 0.5)
 mesh = SubResource("65")
 
 [node name="Tile064" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -0.5)
 mesh = SubResource("66")
 
 [node name="Tile065" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 1.25, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -0.5)
 mesh = SubResource("67")
 
 [node name="Tile066" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 1.75, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -1.5)
 mesh = SubResource("68")
 
 [node name="Tile067" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 1.25, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -0.5)
 mesh = SubResource("69")
 
 [node name="Tile068" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 1.75, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -1.5)
 mesh = SubResource("70")
 
 [node name="Tile069" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2.25, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -2.5)
 mesh = SubResource("71")
 
 [node name="Tile070" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -3.5)
 mesh = SubResource("72")
 
 [node name="Tile071" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -3.5)
 mesh = SubResource("73")
 
 [node name="Tile072" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -4.5)
 mesh = SubResource("74")
 
 [node name="Tile073" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -3.5)
 mesh = SubResource("75")
 
 [node name="Tile074" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -4.5)
 mesh = SubResource("76")
 
 [node name="Tile075" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -3.5)
 mesh = SubResource("77")
 
 [node name="Tile076" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -4.5)
 mesh = SubResource("78")
 
 [node name="Tile077" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.508, 2.376, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -3.5)
 mesh = SubResource("79")
 
 [node name="Tile078" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -4.5)
 mesh = SubResource("80")
 
 [node name="Tile079" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2.25, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -3.5)
 mesh = SubResource("81")
 
 [node name="Tile080" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -4.5)
 mesh = SubResource("82")
 
 [node name="Tile081" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -2.5)
 mesh = SubResource("83")
 
 [node name="Tile082" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.508, 2.126, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -2.5)
 mesh = SubResource("84")
 
 [node name="Tile083" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -4.5)
 mesh = SubResource("85")
 
 [node name="Tile084" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.25, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -2.5)
 mesh = SubResource("86")
 
 [node name="Tile085" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -4.5)
 mesh = SubResource("87")
 
 [node name="Tile086" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -1.5)
 mesh = SubResource("88")
 
 [node name="Tile087" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -1.5)
 mesh = SubResource("89")
 
 [node name="Tile088" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -4.5)
 mesh = SubResource("90")
 
 [node name="Tile089" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -5.5)
 mesh = SubResource("91")
 
 [node name="Tile090" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -6.5)
 mesh = SubResource("92")
 
 [node name="Tile091" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -6.5)
 mesh = SubResource("93")
 
 [node name="Tile092" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -6.5)
 mesh = SubResource("94")
 
 [node name="Tile093" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -6.5)
 mesh = SubResource("95")
 
 [node name="Tile094" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -6.5)
 mesh = SubResource("96")
 
 [node name="Tile095" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -6.5)
 mesh = SubResource("97")
 
 [node name="Tile096" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.5, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -6.5)
 mesh = SubResource("98")
 
 [node name="Tile097" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -4.5)
 mesh = SubResource("99")
 
 [node name="Tile098" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.376, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -6.5)
 mesh = SubResource("100")
 
 [node name="Tile099" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2.5, -4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -4.5)
 mesh = SubResource("101")
 
 [node name="Tile100" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2.125, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -6.5)
 mesh = SubResource("102")
 
 [node name="Tile101" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2, -6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -6.5)
 mesh = SubResource("103")
 
 [node name="Tile102" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -7.5)
 mesh = SubResource("104")
 
 [node name="Tile103" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -8.5)
 mesh = SubResource("105")
 
 [node name="Tile104" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -8.5)
 mesh = SubResource("106")
 
 [node name="Tile105" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -8.5)
 mesh = SubResource("107")
 
 [node name="Tile106" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.125, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -8.5)
 mesh = SubResource("108")
 
 [node name="Tile107" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.492, 2.376, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -8.5)
 mesh = SubResource("109")
 
 [node name="Tile108" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -8.5)
 mesh = SubResource("110")
 
 [node name="Tile109" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -9.5)
 mesh = SubResource("111")
 
 [node name="Tile110" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.25, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -9.5)
 mesh = SubResource("112")
 
 [node name="Tile111" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -9.5)
 mesh = SubResource("113")
 
 [node name="Tile112" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -9.5)
 mesh = SubResource("114")
 
 [node name="Tile113" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -9.5)
 mesh = SubResource("115")
 
 [node name="Tile114" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -9.5)
 mesh = SubResource("116")
 
 [node name="Tile115" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -0.5)
 mesh = SubResource("117")
 
 [node name="Tile116" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -1.5)
 mesh = SubResource("118")
 
 [node name="Tile117" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -2.5)
 mesh = SubResource("119")
 
 [node name="Tile118" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -3.5)
 mesh = SubResource("120")
 
 [node name="Tile119" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -1.5)
 mesh = SubResource("121")
 
 [node name="Tile120" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -2.5)
 mesh = SubResource("122")
 
 [node name="Tile121" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -2.5)
 mesh = SubResource("123")
 
 [node name="Tile122" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -2.5)
 mesh = SubResource("124")
 
 [node name="Tile123" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -2.5)
 mesh = SubResource("125")
 
 [node name="Tile124" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -0.5)
 mesh = SubResource("126")
 
 [node name="Tile125" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -1.5)
 mesh = SubResource("127")
 
 [node name="Tile126" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, -0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -0.5)
 mesh = SubResource("128")
 
 [node name="Tile127" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 0.5)
 mesh = SubResource("129")
 
 [node name="Tile128" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.75, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 5.5)
 mesh = SubResource("130")
 
 [node name="Tile129" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 3.25, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 4.5)
 mesh = SubResource("131")
 
 [node name="Tile130" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2.75, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 5.5)
 mesh = SubResource("132")
 
 [node name="Tile131" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2.75, 5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 5.5)
 mesh = SubResource("133")
 
 [node name="Tile132" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 3.25, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 4.5)
 mesh = SubResource("134")
 
 [node name="Tile133" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 3.25, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 4.5)
 mesh = SubResource("135")
 
 [node name="Tile134" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 3.75, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 3.5)
 mesh = SubResource("136")
 
 [node name="Tile135" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 4, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 2.5)
 mesh = SubResource("137")
 
 [node name="Tile136" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 4, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 2.5)
 mesh = SubResource("138")
 
 [node name="Tile137" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 4, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 2.5)
 mesh = SubResource("139")
 
 [node name="Tile138" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 3.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 1.5)
 mesh = SubResource("140")
 
 [node name="Tile139" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 3.5, 1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 1.5)
 mesh = SubResource("141")
 
 [node name="Tile140" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 5.25, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -8.5)
 mesh = SubResource("142")
 
 [node name="Tile141" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 5.25, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -9.5)
 mesh = SubResource("143")
 
 [node name="Tile142" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 5.25, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -7.5)
 mesh = SubResource("144")
 
 [node name="Tile143" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 5.5, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -8.5)
 mesh = SubResource("145")
 
 [node name="Tile144" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 5.5, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -9.5)
 mesh = SubResource("146")
 
 [node name="Tile145" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 5.5, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -8.5)
 mesh = SubResource("147")
 
 [node name="Tile146" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 5.5, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -9.5)
 mesh = SubResource("148")
 
 [node name="Tile147" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 5.5, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -7.5)
 mesh = SubResource("149")
 
 [node name="Tile148" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 5.25, -8.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -8.5)
 mesh = SubResource("150")
 
 [node name="Tile149" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 5.25, -9.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -9.5)
 mesh = SubResource("151")
 
 [node name="Tile150" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 5.5, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -7.5)
 mesh = SubResource("152")
 
 [node name="Tile151" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 5.25, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -7.5)
 mesh = SubResource("153")
 
 [node name="Tile152" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 6.5)
 mesh = SubResource("154")
 
 [node name="Tile153" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 6.5)
 mesh = SubResource("155")
 
 [node name="Tile154" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.126, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 6.5)
 mesh = SubResource("156")
 
 [node name="Tile155" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.375, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 6.5)
 mesh = SubResource("157")
 
 [node name="Tile156" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 6.5)
 mesh = SubResource("158")
 
 [node name="Tile157" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 6.5)
 mesh = SubResource("159")
 
 [node name="Tile158" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 0.5, 6.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, 6.5)
 mesh = SubResource("160")
 
 [node name="Tile159" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 4.5)
 mesh = SubResource("161")
 
 [node name="Tile160" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 4.5)
 mesh = SubResource("162")
 
 [node name="Tile161" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.375, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 4.5)
 mesh = SubResource("163")
 
 [node name="Tile162" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0.25, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 4.5)
 mesh = SubResource("164")
 
 [node name="Tile163" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0.126, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 4.5)
 mesh = SubResource("165")
 
 [node name="Tile164" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0, 4.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 4.5)
 mesh = SubResource("166")
 
 [node name="Tile165" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 2.5)
 mesh = SubResource("167")
 
 [node name="Tile166" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, 2.5)
 mesh = SubResource("168")
 
 [node name="Tile167" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 2.5)
 mesh = SubResource("169")
 
 [node name="Tile168" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 2.5)
 mesh = SubResource("170")
 
 [node name="Tile169" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 2.5)
 mesh = SubResource("171")
 
 [node name="Tile170" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 2.5)
 mesh = SubResource("172")
 
 [node name="Tile171" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, 0.5)
 mesh = SubResource("173")
 
 [node name="Tile172" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, 0.5)
 mesh = SubResource("174")
 
 [node name="Tile173" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, 0.5)
 mesh = SubResource("175")
 
 [node name="Tile174" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, 0.5)
 mesh = SubResource("176")
 
 [node name="Tile175" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 0.75, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, 0.5)
 mesh = SubResource("177")
 
 [node name="Tile176" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 0.5, 0.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, 0.5)
 mesh = SubResource("178")
 
 [node name="Tile177" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.25, -2.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -2.5)
 mesh = SubResource("179")
 
 [node name="Tile178" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -3.5)
 mesh = SubResource("180")
 
 [node name="Tile179" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2.375, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -3.5)
 mesh = SubResource("181")
 
 [node name="Tile180" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 2.5, -3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, -3.5)
 mesh = SubResource("182")
 
 [node name="Tile181" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, -5.5)
 mesh = SubResource("183")
 
 [node name="Tile182" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.50836, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -2.5, 0, -5.5)
 mesh = SubResource("184")
 
 [node name="Tile183" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -5.5)
 mesh = SubResource("185")
 
 [node name="Tile184" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -5.5)
 mesh = SubResource("186")
 
 [node name="Tile185" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -5.5)
 mesh = SubResource("187")
 
 [node name="Tile186" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -5.5)
 mesh = SubResource("188")
 
 [node name="Tile187" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.5, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -5.5)
 mesh = SubResource("189")
 
 [node name="Tile188" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2.376, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -5.5)
 mesh = SubResource("190")
 
 [node name="Tile189" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.49582, 2.25, -5.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 4.5, 0, -5.5)
 mesh = SubResource("191")
 
 [node name="Tile190" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.49164, 2, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 3.5, 0, -7.5)
 mesh = SubResource("192")
 
 [node name="Tile191" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.49164, 2.125, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 2.5, 0, -7.5)
 mesh = SubResource("193")
 
 [node name="Tile192" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.49164, 2.376, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 1.5, 0, -7.5)
 mesh = SubResource("194")
 
 [node name="Tile193" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 2.5, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -7.5)
 mesh = SubResource("195")
 
 [node name="Tile194" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 2.5, -7.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -7.5)
 mesh = SubResource("196")
 
 [node name="Tile195" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.491636, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0.5, 0, -1.5)
 mesh = SubResource("197")
 
 [node name="Tile196" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.508364, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -0.5, 0, -1.5)
 mesh = SubResource("198")
 
 [node name="Tile197" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.50836, 0.5, -1.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -1.5, 0, -1.5)
 mesh = SubResource("199")
 
 [node name="Tile198" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 3.75, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.5, 0, 3.5)
 mesh = SubResource("200")
 
 [node name="Tile199" type="MeshInstance3D" parent="Tiles"]
-transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.50418, 3.75, 3.5)
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -4.5, 0, 3.5)
 mesh = SubResource("201")
 
-[node name="Terrain" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.001, 0)
-mesh = SubResource("202")
-surface_material_override/0 = SubResource("StandardMaterial3D_6eq8p")

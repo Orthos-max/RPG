@@ -206,21 +206,45 @@ func _collect_pawns(node: Node) -> void:
 			_collect_pawns(child)
 
 
-## Déduit le côté d'une case du plus petit écart entre deux tuiles voisines.
+## Déduit le côté d'une case de l'écart **médian** entre deux colonnes de tuiles.
+##
+## Le plus petit écart ne convient pas : sur une carte posée à la main, deux
+## tuiles peuvent se trouver à 0,996 l'une de l'autre au lieu de 1,0 — quatre
+## millièmes qui ne se voient pas à l'œil. Retenir ce 0,996 comme côté de case
+## décale progressivement le calcul des coordonnées, jusqu'à faire **sauter une
+## colonne entière** : deux tuiles tombent sur la même case, une case reste vide,
+## et le plateau se retrouve percé de part en part. C'est ce qui coupait le
+## chapitre 2 en deux moitiés injoignables (2026-08-06) — 160 cases indexées pour
+## 200 tuiles posées.
+##
+## La médiane, elle, ignore une poignée d'irrégularités : il faudrait que la
+## moitié de la carte soit de travers pour la tromper.
 static func _infer_tile_size(tiles: Array) -> float:
 	var xs: Array[float] = []
 	for tile: Node3D in tiles:
 		var x: float = tile.global_position.x
 		if not xs.has(x):
 			xs.append(x)
+	return tile_size_from_columns(xs)
+
+
+## Côté de case déduit des abscisses des colonnes — la médiane de leurs écarts.
+##
+## Séparé de [method _infer_tile_size] pour être éprouvable sans monter de scène :
+## c'est cette arithmétique-là qui a coupé le chapitre 2 en deux.
+static func tile_size_from_columns(xs: Array[float]) -> float:
 	if xs.size() < 2:
 		return 1.0
 
-	xs.sort()
-	var smallest: float = INF
-	for i: int in range(1, xs.size()):
-		var gap: float = xs[i] - xs[i - 1]
-		if gap > 0.001 and gap < smallest:
-			smallest = gap
+	var sorted_xs: Array[float] = xs.duplicate()
+	sorted_xs.sort()
+	var gaps: Array[float] = []
+	for i: int in range(1, sorted_xs.size()):
+		var gap: float = sorted_xs[i] - sorted_xs[i - 1]
+		if gap > 0.001:
+			gaps.append(gap)
+	if gaps.is_empty():
+		return 1.0
 
-	return smallest if smallest < INF else 1.0
+	gaps.sort()
+	return gaps[gaps.size() / 2]
