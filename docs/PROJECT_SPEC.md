@@ -1015,3 +1015,152 @@ supposés : `shot.gd` accepte l'écran `prep` (`equip`, `positions`, `shop`).
 
 **Reste à faire, hérité :** l'équipement ne se change pas *en cours de bataille*
 (seulement en préparation), et le moteur ignore toujours l'usure des armes.
+
+---
+
+### Passe du 2026-08-06 (2) — chasse aux bugs
+
+Trois trouvailles, dont deux régressions introduites par la passe précédente.
+
+**1. Un porteur de grimoire ne pouvait plus attaquer.** Cinq endroits testaient
+`WeaponType.is_magical()` là où ils voulaient dire « porte un bâton » — l'un
+d'eux nommait même sa variable `is_staff_user`. Or `is_magical` répond à une tout
+autre question : « cette attaque vise-t-elle la RÉS plutôt que la DÉF ? », et un
+grimoire y répond oui.
+
+Le bug dormait depuis toujours, sans conséquence : aucune unité du joueur ne
+portait de grimoire, et les mages adverses n'ouvrent pas de menu d'actions.
+L'armurerie vend Feu et Foudre — il suffisait désormais d'en acheter un pour que
+l'unité devienne un soigneur incapable d'attaquer : bouton « Soigner », ennemis
+non ciblables, plus aucune prévision de combat.
+
+Correctif : `WeaponType.is_healing()` (le bâton, et lui seul), et la règle de
+ciblage rassemblée en **un seul endroit**, `TacticsPawnCombatService.can_target()`
+— la laisser recopiée à trois endroits est ce qui a permis au bug d'y survivre.
+
+**2. Revendre toutes ses armes ne coûtait rien.** Un fourreau vide veut dire deux
+choses opposées : « fiche d'avant le catalogue, ses valeurs brutes font foi » ou
+« elle a tout revendu ». `ChapterRunner._apply_arsenal()` ne connaissait que la
+première, donc une unité dépouillée repartait au combat avec l'arme écrite dans
+son `.tres` — l'or était gratuit. Le roster porte maintenant un marqueur
+`uses_arsenal` qui tranche, et `Stats.unequip()` ramène l'unité au contact.
+
+**3. Une suite peut être verte pendant qu'un script ne compile plus.** Trouvé en
+me trompant : en extrayant `can_target`, j'ai laissé une variable référencée après
+sa suppression. `test_combat` a répondu **57 OK / 0 ÉCHECS** et `test_battle`
+**76 OK / 0 ÉCHECS**, erreur de parsing imprimée juste au-dessus. Godot signale et
+continue ; tant qu'aucun test n'emprunte le fichier cassé, le vert ment.
+
+Deux garde-fous écrits en GDScript ont échoué avant de trouver le bon :
+`ResourceLoader.load()` rend un script cassé sans broncher, et `GDScript.reload()`
+échoue sur tout fichier portant un `class_name` — 94 faux positifs sur 107. C'est
+la **sortie du moteur** qui dit la vérité, pas le moteur interrogé depuis
+lui-même. D'où `scripts/test_all.sh` : il lance les quatre suites avec le bon
+binaire et échoue si une erreur de script apparaît, quel que soit le compte de
+tests. Vérifié en cassant volontairement `unit_sheet.gd` — les suites restent à
+« 0 ÉCHECS », le script sort en erreur.
+
+Les deux correctifs sont éprouvés par mutation : remettre le bug fait tomber le
+test qui le garde (`57 OK / 1 ÉCHEC`, `449 OK / 1 ÉCHEC`).
+
+```
+bash scripts/test_all.sh   # 58 / 450 / 76 OK + test_map — et l'absence d'erreurs de script
+```
+
+---
+
+### Passe du 2026-08-06 (3) — deux retours de jeu réel d'Aurèle
+
+**1. Frapper ou soigner clôt le tour de l'unité.** Après une attaque,
+`can_attack` tombait bien à faux, mais `can_move` restait vrai : l'unité repartait
+se promener après son coup. Une ligne dans `TacticsParticipantCombatService`
+(`end_pawn_turn()`), et la règle Fire Emblem est rétablie — on se déplace puis on
+agit, jamais l'inverse. Le soin passe par le même entonnoir, donc il est couvert
+aussi.
+
+**2. Le chapitre 2 était coupé en deux — et pas pour la raison annoncée.**
+Aurèle : « on ne peut pas aller plus loin que la moitié de la map, moi et les
+ennemis bloqués chacun de notre côté ; la map a différents niveaux, ce qui n'est
+pas pris en compte ».
+
+Le relief était un faux coupable. La vraie cause est arithmétique :
+`BattleGrid._infer_tile_size()` déduisait le côté d'une case du **plus petit**
+écart entre deux colonnes de tuiles. Cette carte est posée à la main : deux
+colonnes s'y trouvent à 0,996 l'une de l'autre au lieu de 1,0 — quatre millièmes
+invisibles à l'œil. Retenu comme côté de case, ce 0,996 décalait le calcul des
+coordonnées jusqu'à faire **sauter une colonne entière** : deux tuiles tombaient
+sur la même case, une case restait vide, et le plateau se retrouvait percé de
+part en part. Mesuré : **160 cases indexées pour 200 tuiles posées**.
+
+Le correctif est la **médiane** des écarts au lieu du minimum : il faudrait que la
+moitié de la carte soit de travers pour la tromper. Vérifié en scène — 200 tuiles
+sur 200, côté de case 1,0.
+
+Deux corrections d'accompagnement, à la demande d'Aurèle : le relief du chapitre 2
+est aplati (tuiles à hauteur 0, décor sculpté retiré, pions reposés au sol) et ses
+tuiles sont remises sur une trame régulière de 1,0. Le jeu se joue de plain-pied
+pour le moment.
+
+> **Deux fausses pistes, gardées ici pour qu'on ne les reprenne pas.** D'abord une
+> analyse de connectivité en Python qui concluait à « 16 zones isolées » : elle
+> arrondissait les coordonnées avec `round()`, dont l'arrondi bancaire collapsait
+> les colonnes. La formule du moteur est `floor(x + 0.5)`. Ensuite une sonde qui
+> croyait charger le chapitre 2 mais montrait le chapitre 1 : `Main` retient le
+> chapitre au moment où il **ouvre l'écran de préparation**, changer
+> `chapter_index` ensuite ne suffit pas. `shot.gd` accepte désormais un numéro de
+> chapitre (`battle out.png 2`) et fait la manœuvre correctement.
+
+Trois tests neufs verrouillent tout cela : le côté de case déduit d'une trame de
+travers, le chapitre 2 d'un seul tenant et de plain-pied, et le compteur de zones
+lui-même. Éprouvés par mutation.
+
+```
+bash scripts/test_all.sh   # 58 / 459 / 76 OK + test_map
+```
+
+---
+
+### Passe du 2026-08-06 (4) — quatre demandes d'Aurèle
+
+**1. Renouveler le code d'une partie en ligne.** Un bouton « 🔄 Générer un
+nouveau code » referme le salon et le rouvre. Le code est l'adresse de la machine
+écrite en sept caractères — 5 bits par caractère, soit 35 bits pour 32 bits
+d'adresse. Les **trois bits qui restent en tête** distinguent huit écritures du
+même chemin : le code change d'allure, sans mentir sur la destination.
+
+> Ce que le bouton ne fait pas, et l'écran le dit : révoquer l'ancien code.
+> Il mène toujours à cette machine. Seul un changement de réseau couperait le
+> chemin.
+
+**2. CielAI ne semblait « rien faire » pendant son tour.** Il faisait quelque
+chose : il attendait. `FALLBACK_AFTER_FRAMES` accordait **600 frames — dix
+secondes — par décision** avant que l'IA locale ne prenne la main. Sans client
+Ciel branché, chaque tour adverse devenait une suite de gels de dix secondes.
+
+La patience est désormais conditionnelle : pleine tant que Ciel répond, réduite à
+une demi-seconde dès qu'il s'est tu une fois, et **rendue entière au premier ordre
+reçu** — brancher un client en cours de partie fonctionne sans rien redémarrer.
+
+**3. Sauvegarder et charger.** La campagne écrivait déjà toute seule et
+« Continuer » relisait cet unique emplacement ; ce qui manquait était de
+**choisir**. Quatre emplacements (`Campaign.SAVE_SLOTS`), décrits sans être
+chargés — `slot_info()` relit l'en-tête du JSON, car charger pour décrire
+écraserait la partie en cours. « Charger une partie » à l'écran-titre,
+« 💾 Sauvegarder » à la préparation. L'emplacement 1 reste celui que le jeu écrit
+tout seul : on peut le charger, pas l'écraser à la main.
+
+**4. Un menu principal en deux colonnes, responsive.** Trois grilles (partir au
+combat, réglages, extras) qui passent de deux colonnes à une, dans un
+`ScrollContainer` — une fenêtre courte fait défiler au lieu de perdre ses
+derniers boutons.
+
+> **Le piège du responsive ici.** Le projet est en `stretch/mode="canvas_items"` :
+> la largeur **logique** ne bouge pas avec la fenêtre, seule la hauteur s'étire.
+> Un seuil sur `size.x` ne se déclenche donc jamais — la première version restait
+> obstinément sur deux colonnes en fenêtre étroite. C'est la **forme** de la
+> fenêtre qui décide : `TitleScreen.is_wide()` demande à la fois une largeur
+> minimale et un format plus large que haut.
+
+```
+bash scripts/test_all.sh   # 58 / 478 / 76 OK + test_map
+```

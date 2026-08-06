@@ -1628,7 +1628,22 @@ func _test_ux_polish() -> void:
 		"terrains traduits, inconnu ignoré")
 
 	_test_action_labels()
+	_test_menu_layout()
 
+
+
+## Le menu principal : deux colonnes quand il y a la place, une sinon.
+func _test_menu_layout() -> void:
+	# Le projet est en `stretch/mode="canvas_items"` : la largeur logique ne bouge
+	# pas avec la fenêtre. Se fier à elle seule ne déclencherait jamais rien —
+	# c'est la forme de la fenêtre qui décide.
+	const Title = preload("res://data/modules/menu/title_screen.gd")
+	_check(Title.is_wide(Vector2(1280, 720)), "16:9 → deux colonnes")
+	_check(not Title.is_wide(Vector2(1280, 1646)),
+		"fenêtre en portrait → une seule colonne")
+	_check(not Title.is_wide(Vector2(600, 400)),
+		"fenêtre minuscule → une seule colonne")
+	_check(Title.is_wide(Vector2(1920, 1080)), "plein écran → deux colonnes")
 
 ## Le menu d'actions : une clé qui branche, un libellé qui s'affiche.
 ##

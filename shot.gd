@@ -39,8 +39,17 @@ func _init() -> void:
 			main.show_editor()
 		"prep":
 			await _open_prep(main, args[2] if args.size() > 2 else "")
+		"saves":
+			# Une partie d'abord, sinon les emplacements seraient tous vides.
+			main._on_new_game(DIFF.Level.NORMAL, true)
+			for _i in 5:
+				await physics_frame
+			main.show_saves(args.size() > 2 and args[2] == "save")
+			for _i in 5:
+				await physics_frame
 		_:
-			await _open_battle(main)
+			var chapter: int = int(args[2]) if args.size() > 2 and args[2].is_valid_int() else 1
+			await _open_battle(main, chapter)
 
 	for _i in SETTLE_FRAMES:
 		await physics_frame
@@ -97,10 +106,23 @@ func _find_by_script(node: Node, suffix: String) -> Node:
 	return null
 
 
-## Nouvelle partie → chapitre 1 → déploiement confirmé.
-func _open_battle(main: Node) -> void:
+## Nouvelle partie → chapitre demandé → déploiement confirmé.
+##
+## Le numéro de chapitre se passe en troisième argument (`battle out.png 2`) :
+## regarder une carte précise est le seul moyen de juger son relief et son décor.
+func _open_battle(main: Node, chapter: int = 1) -> void:
 	main._on_new_game(DIFF.Level.NORMAL, true)
 	await physics_frame
+	if chapter > 1:
+		var campaign: Node = root.get_node_or_null("Campaign")
+		if campaign:
+			campaign.chapter_index = chapter - 1
+			campaign.deployment = campaign._default_deployment()
+			# `Main` retient le chapitre au moment où il ouvre la préparation :
+			# changer l'index sans rouvrir cet écran chargerait la carte du
+			# chapitre précédent, et la capture montrerait la mauvaise carte.
+			main.show_prep()
+			await physics_frame
 	main._on_battle_requested()
 	for _i in 60:
 		await physics_frame
