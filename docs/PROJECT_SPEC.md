@@ -201,9 +201,21 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       et deux à déclenchement (Lune perce la défense, Astre ajoute une frappe),
       débloquées par classe et par niveau.
 - [x] **Bonus de terrain** exposé de bout en bout (calculateur → `CombatResult.terrain_defense`
-      → état CielAI `terrain`/`terrain_def`). *Reste à faire : choix du terrain en préparation.*
+      → état CielAI `terrain`/`terrain_def`) **et choisi en préparation** : `ChapterMap`
+      lit la carte du chapitre sans monter la bataille, l'écran de préparation montre
+      la zone de déploiement case par case avec son terrain, et `ChapterRunner` pose
+      les pions sur la case retenue — y compris en headless.
 - [x] **Inventaire limité** par unité (`ItemDB`, 5 emplacements, consommables + toniques).
-      *Reste à faire : menu d'équipement d'armes.*
+- [x] **Armes nommées et menu d'équipement** : `WeaponDB` (14 armes — puissance,
+      portée, précision, critique, poids, prix), fourreau de 3 armes par unité,
+      arme en main appliquée aux stats (`Stats.equip`), armurerie à l'intendance
+      et menu d'équipement à l'écran de préparation. Le poids amorti par la force
+      décide du second coup : la plus grosse arme n'est pas toujours la bonne.
+- [x] **Riposte** : `FECombatCalculator.calculate_exchange` résout un échange
+      complet — assaut, riposte de la cible si elle tient encore debout, son arme
+      engage un combat et l'assaillant est à sa portée, puis un second coup pour le
+      plus rapide des deux. Un archer pris au contact ne rend rien (portée minimale),
+      un bâton non plus. L'assaillant peut mourir de son propre assaut.
 - [x] **Archerie effective vs volants** : x3 de might, classes volantes déclarées
       (Pegasus/Falcon Knight, Wyvern Rider/Lord).
 
@@ -346,7 +358,9 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       forme le calculateur — dégâts totaux, nombre de coups, précision, critique, PV
       restants, létalité (sûre ou « seulement si critique »), triangle/terrain/soutien/
       efficacité/procs. Affiché par `BattleForecastPanel` au survol d'une cible à portée.
-      *Le moteur ne gérant pas la riposte, la prévision n'affiche qu'un camp.*
+      Depuis la riposte, **les deux camps sont annoncés** : dégâts rendus, précision,
+      PV restants de l'assaillant, létalité — et la raison quand la cible ne peut
+      pas riposter.
 - [x] **Polissage UX** (suite) : `PawnMoveMemory` (annulation d'un déplacement tant
       que l'unité n'a rien fait d'autre, bouton « Undo move » grisé sinon) et
       `UnitSheet` + `UnitSheetPanel` (fiche au survol : esquive, critique, vitesse
@@ -518,8 +532,12 @@ Les passes du 2026-08-04 ont livré la reconnexion réseau, les deux objectifs d
 chapitre restés sans carte, le choix des cases de déploiement, le polissage UX,
 la préparation du système sonore, et l'éditeur de cartes — complété depuis par
 l'annulation et le redimensionnement.
-**Backlog : 44 items faits, 4 restants.** Ordre conseillé pour la reprise —
-classé par ce que ça rapporte au projet, pas par facilité :
+La passe du 2026-08-06 a livré les quatre features de jeu qui restaient
+codables : la **riposte**, le **menu d'équipement d'armes**, le **choix du terrain
+en préparation** et le **menu d'actions en français**.
+**Backlog : 47 items faits, 3 restants** (partie en ligne sur deux machines,
+signature macOS, fichiers audio + animations de duel). Ordre conseillé pour la
+reprise — classé par ce que ça rapporte au projet, pas par facilité :
 
 ### ✅ 1. La grille en données — première moitié faite (2026-08-05)
 
@@ -910,3 +928,90 @@ même leçon que le rayon de caméra écrit à la main, corrigé le même jour.
 > à 70 OK / 2 ÉCHECS, en nommant la pile vide.
 
 `test_battle.gd` : **72 OK**.
+
+---
+
+### Passe du 2026-08-06 — riposte, armes, terrain choisi, menu en français
+
+Les quatre dernières features de jeu codables, livrées ensemble.
+
+**1. La riposte.** Le moteur résolvait un combat dans un seul sens : attaquer ne
+coûtait rien, et l'aperçu d'avant-combat n'avait qu'un camp à montrer.
+`FECombatCalculator.calculate_exchange()` produit désormais un **échange** —
+assaut, riposte, puis un second coup pour le plus rapide des deux, et pour lui
+seul. `roll_exchange()` le déroule coup par coup en suivant les PV : dès que l'un
+tombe, l'échange s'arrête, et les dégâts rapportés sont ceux réellement encaissés.
+
+Trois raisons de ne pas riposter, toutes de règle : être déjà à terre, porter une
+arme qui n'engage aucun combat (bâton), ou se trouver hors de portée. Cette
+dernière a demandé une notion neuve, la **portée minimale**
+(`WeaponType.get_min_range`) : un arc vaut 2, donc un archer pris au contact ne
+rend rien. `LocalAIBrain` lit la même règle (`can_strike`), sans quoi l'IA aurait
+fui les archers au lieu de les charger — exactement le mauvais réflexe.
+
+`TacticsParticipantCombatService.attack_pawn()` a été durci au passage :
+l'assaillant peut désormais **mourir de son propre assaut**, cas qui n'existait
+pas et qui laissait interroger un pion sur le départ.
+
+**2. Les armes.** `WeaponDB` (14 armes) remplace les deux chiffres nus que
+portait chaque fiche. Une arme a une puissance, une portée, un modificateur de
+précision et de critique, un poids et un prix. Le fourreau tient 3 armes,
+l'arme en main s'applique aux stats (`Stats.equip`), s'achète à l'armurerie et se
+choisit au menu **Équipement** de l'écran de préparation. Le poids, amorti par la
+force, décide du second coup : la hache d'acier ralentit le mage et laisse le
+grand chevalier intact.
+
+Rétrocompatible par construction : une fiche qui ne déclare pas de `weapons`
+garde ses `weapon_type` / `weapon_might` bruts, et une sauvegarde d'avant le
+catalogue se recharge sans arsenal.
+
+**3. Le terrain choisi en préparation.** Le bonus défensif d'une case était
+calculé de bout en bout — jusqu'au pont CielAI — sans que personne puisse le
+choisir. `ChapterMap` lit la carte d'un chapitre **sans monter la bataille**,
+l'écran de préparation la montre case par case (terrain, bonus, occupant), et
+`ChapterRunner._apply_deployment_tiles()` pose les pions sur la case retenue.
+Contrairement à `DeploymentPhase`, ceci marche **aussi en headless** : c'est de la
+donnée, pas un clic.
+
+> **Piège 1 — hors de l'arbre, `global_position` rend l'identité.** Première
+> version : instancier la scène du niveau (sans l'ajouter à l'arbre, donc sans
+> `_ready`) et lire les positions des pions. Godot rend `Transform3D()` et le dit
+> par une erreur : les quatre unités de départ tombaient toutes sur la même case,
+> et la zone de déploiement était fausse. `ChapterMap` interroge maintenant le
+> `SceneState` de la scène empaquetée et compose les transformations à la main.
+> Rien n'est instancié, rien n'est libéré, et la console reste propre.
+
+> **Piège 2 — un pion se recentre sur la tuile que son rayon croit avoir sous
+> lui.** Le pion était bien posé sur sa case… et revenait à sa position d'éditeur
+> **une frame plus tard**. Le coupable n'est pas le serveur physique mais le
+> `RayCast3D` du pion : son collisionneur date de la frame précédente, et
+> `is_pawn_configured()` recentre chaque pion sur *cette* tuile-là à chaque frame.
+> D'où `_refresh_tile_sensor()` : `force_update_transform()` puis
+> `force_raycast_update()` juste après le déplacement. (`DeploymentPhase` y
+> échappait sans le savoir : elle suspend le niveau pendant le placement.)
+
+**4. Le menu d'actions en français.** Le piège annoncé n'existait pas tout à
+fait : la clé d'action était déjà le **nom du nœud** bouton, pas son libellé. Le
+libellé vit désormais dans une table séparée (`TacticsControlsResource.action_labels`),
+posée à l'ouverture par `TacticsControls._ready()`. Déplacer / Attaquer / Annuler
+le déplacement / Attendre / Retour, et Soigner pour un porteur de bâton. Un test
+vérifie que chaque clé désigne un bouton existant et qu'aucun bouton ne montre
+encore sa clé au joueur — c'est ce test qui garde les deux notions séparées.
+
+**Vérification.**
+
+```
+godot --headless --path . --script test_combat.gd    #  54 OK (31 avant)
+godot --headless --path . --script test_features.gd  # 446 OK (374 avant)
+godot --headless --path . --script test_battle.gd    #  76 OK (72 avant)
+godot --headless --path . --script test_map.gd       # ALL TESTS PASSED
+./scripts/test_net.sh                                # TEST RÉSEAU OK
+```
+
+`test_battle.gd` prouve le trajet complet du choix de terrain : une case
+défensive est retenue devant la carte, et l'unité s'y tient une fois la bataille
+ouverte, avec le bonus annoncé. Les nouveaux écrans ont été **regardés**, pas
+supposés : `shot.gd` accepte l'écran `prep` (`equip`, `positions`, `shop`).
+
+**Reste à faire, hérité :** l'équipement ne se change pas *en cours de bataille*
+(seulement en préparation), et le moteur ignore toujours l'usure des armes.

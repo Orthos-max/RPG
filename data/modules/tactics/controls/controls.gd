@@ -33,10 +33,13 @@ func _ready() -> void:
 	serv = TacticsControlsService.new(controls, t_cam, participant, arena, input_capture)
 	serv.setup(self)
 	
-	# Connect action buttons to their respective methods
+	# Connect action buttons to their respective methods, and pose leur libellé :
+	# la clé branche le bouton, la table de libellés l'habille.
 	for action: String in controls.actions.keys():
 		var str_name: StringName = controls.actions[action]
-		get_act(action).connect("pressed", Callable(self, str_name))
+		var button: Button = get_act(action)
+		button.connect("pressed", Callable(self, str_name))
+		button.text = controls.label_for(action)
 
 func _physics_process(delta: float) -> void:
 	# Handle physics-based processing

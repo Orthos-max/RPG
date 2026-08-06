@@ -1479,8 +1479,52 @@ func _test_ux_polish() -> void:
 			and UnitSheet.terrain_label("inconnu").is_empty(),
 		"terrains traduits, inconnu ignoré")
 
+	_test_action_labels()
 
 
+## Le menu d'actions : une clé qui branche, un libellé qui s'affiche.
+##
+## Le piège que ce test ferme : la clé d'action est le **nom du nœud** bouton.
+## Tant que le libellé servait de clé, traduire « Move » en « Déplacer » aurait
+## débranché le bouton de sa méthode sans que rien ne le signale.
+func _test_action_labels() -> void:
+	var controls: TacticsControlsResource = load("res://data/models/view/control/tactics/control.tres")
+	if not controls:
+		_check(false, "ressource de contrôles chargée")
+		return
+
+	var scene: PackedScene = load("res://data/modules/tactics/controls/controls.tscn")
+	var node: Node = scene.instantiate() if scene else null
+	if not node:
+		_check(false, "scène des contrôles instanciée")
+		return
+
+	var missing_label: String = ""
+	var missing_button: String = ""
+	var english: String = ""
+	for action: String in controls.actions.keys():
+		if not controls.action_labels.has(action):
+			missing_label = action
+		if not node.get_node_or_null("HBox/Actions/%s" % action):
+			missing_button = action
+		var button: Button = node.get_node_or_null("HBox/Actions/%s" % action) as Button
+		if button and button.text == action:
+			english = action
+
+	_check(missing_label.is_empty(), "chaque action a son libellé", missing_label)
+	_check(missing_button.is_empty(),
+		"chaque clé d'action désigne un bouton existant", missing_button)
+	_check(english.is_empty(), "aucun bouton ne montre encore sa clé au joueur", english)
+	_check(controls.label_for("Move") == "Déplacer"
+			and controls.label_for("Attack") == "Attaquer"
+			and controls.label_for("Wait") == "Attendre"
+			and controls.label_for("Cancel") == "Retour",
+		"menu d'actions en français")
+	_check(controls.LABEL_HEAL == "Soigner", "le porteur de bâton soigne, il n'attaque pas")
+	_check(controls.label_for("Inconnu") == "Inconnu",
+		"une action sans libellé reste lisible au lieu de disparaître")
+
+	node.free()
 #endregion
 
 

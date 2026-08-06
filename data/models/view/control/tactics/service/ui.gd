@@ -37,15 +37,15 @@ func set_actions_menu_visibility(v: bool, p_raw: Variant, ctrl: TacticsControls)
 		p.res.can_attack, p.is_alive()
 	)
 	
-	# For staff users: show "Heal" instead of "Attack"
+	# Porteur de bâton : le bouton d'attaque devient un bouton de soin.
 	const WT = preload("res://data/models/world/stats/weapon_type.gd")
 	var attack_btn: Button = ctrl.get_node("HBox/Actions/Attack")
 	if WT.is_magical(p.stats.weapon_type) and not WT.is_physical(p.stats.weapon_type):
-		attack_btn.text = "Heal"
+		attack_btn.text = controls.LABEL_HEAL
 		# Can heal if there's a wounded ally within range
 		attack_btn.disabled = not _has_wounded_ally_nearby(p)
 	else:
-		attack_btn.text = "Attack"
+		attack_btn.text = controls.label_for("Attack")
 		attack_btn.disabled = not p.res.can_attack
 
 

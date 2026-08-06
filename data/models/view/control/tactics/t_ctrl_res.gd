@@ -29,6 +29,11 @@ signal called_set_unit_sheet
 @export var input_hints_folded: bool
 
 ## Dictionary of available actions and their corresponding methods.
+##
+## La clé est un **identifiant** : c'est le nom du nœud bouton dans
+## `controls.tscn`, et il ne doit jamais être lu par un joueur. Le texte affiché
+## vit dans [member action_labels], séparément — sans quoi traduire le menu
+## reviendrait à débrancher les boutons de leurs méthodes.
 var actions: Dictionary = {
 	"Move": "_player_wants_to_move",
 	"Undo": "_player_wants_to_undo_move",
@@ -37,6 +42,25 @@ var actions: Dictionary = {
 	"Attack": "_player_wants_to_attack",
 	"Debug_next_turn": "_player_wants_to_skip_turn"
 }
+
+## Libellés affichés, par clé d'action. Le jeu est francophone : le menu aussi.
+var action_labels: Dictionary = {
+	"Move": "Déplacer",
+	"Undo": "Annuler le déplacement",
+	"Wait": "Attendre",
+	"Cancel": "Retour",
+	"Attack": "Attaquer",
+	"Debug_next_turn": "Debug : fin de tour",
+}
+
+## Libellé du bouton d'attaque quand l'unité porte un bâton : elle soigne.
+const LABEL_HEAL: String = "Soigner"
+
+
+## Libellé affichable d'une action. Retombe sur la clé si la table l'ignore —
+## un bouton sans traduction reste lisible plutôt que vide.
+func label_for(action: String) -> String:
+	return str(action_labels.get(action, action))
 
 
 ## Sets the visibility of the actions menu.

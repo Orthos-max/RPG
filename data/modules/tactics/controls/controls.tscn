@@ -79,14 +79,14 @@ custom_minimum_size = Vector2(196, 64)
 layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
-text = "Move"
+text = "Déplacer"
 
 [node name="Attack" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)
 layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
-text = "Attack"
+text = "Attaquer"
 
 [node name="Undo" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)
@@ -94,25 +94,25 @@ layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
 disabled = true
-text = "Undo move"
+text = "Annuler le déplacement"
 
 [node name="Wait" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)
 layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
-text = "Wait"
+text = "Attendre"
 
 [node name="Debug_next_turn" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)
 layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
-text = "Debug: End Turn"
+text = "Debug : fin de tour"
 
 [node name="Cancel" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)
 layout_mode = 2
 mouse_filter = 1
 mouse_default_cursor_shape = 2
-text = "Cancel"
+text = "Retour"
