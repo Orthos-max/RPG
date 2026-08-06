@@ -122,20 +122,14 @@ func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 	var tile: TacticsTile = _select_hovered_tile(ctrl)
 	var target: TacticsPawn = tile.get_tile_occupier() if tile else null
 	
-	# Heal targeting (staff users) — target allies only
-	# Attack targeting (others) — target enemies only
+	# Un soigneur ne vise que ses alliés, un combattant que ses ennemis.
+	# La règle vit dans [TacticsPawnCombatService.can_target] : la prévision de
+	# combat s'en sert aussi, et les deux doivent dire la même chose.
 	if target and participant.curr_pawn:
-		var is_staff_user: bool = WT.is_magical(participant.curr_pawn.stats.weapon_type)
 		var same_team: bool = target.get_parent() == participant.curr_pawn.get_parent()
-		
-		if is_staff_user:
-			# Staff users can ONLY target allies for healing
-			if not same_team:
-				target = null
-		else:
-			# Non-staff users can ONLY target enemies for attacking
-			if same_team:
-				target = null
+		if not TacticsPawnCombatService.can_target(
+				participant.curr_pawn.stats.weapon_type, same_team):
+			target = null
 	
 	participant.attackable_pawn = target
 	_update_unit_sheet(target if target else participant.curr_pawn)

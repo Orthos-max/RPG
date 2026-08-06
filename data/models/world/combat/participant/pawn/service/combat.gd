@@ -47,7 +47,8 @@ func attack_target_pawn(pawn: TacticsPawn, target_pawn: TacticsPawn, delta: floa
 func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 	# --- Check if this is healing (same team + staff/magic weapon) ---
 	var is_same_team := pawn.get_parent() == target_pawn.get_parent()
-	var is_healer := WT.is_magical(pawn.stats.weapon_type)
+	# Soigner est l'affaire du bâton seul : un grimoire est magique, pas curatif.
+	var is_healer := WT.is_healing(pawn.stats.weapon_type)
 	
 	if is_same_team and is_healer:
 		_resolve_heal(pawn, target_pawn)
@@ -323,6 +324,21 @@ func _show_victory_screen(tree: SceneTree) -> void:
 		print("Appuyez sur ESC pour revenir au menu.")
 
 
+## Une unité peut-elle viser cette cible ?
+##
+## Un soigneur ne vise que ses alliés, un combattant que ses ennemis — et c'est
+## bien **soigner** qui décide, pas « être magique ». Confondre les deux rendait
+## tout porteur de grimoire incapable d'attaquer : son bouton d'attaque devenait
+## « Soigner », ses ennemis cessaient d'être ciblables, et aucune prévision de
+## combat ne s'affichait plus.
+##
+## Règle unique, partagée par la prévision, le ciblage à la souris et le menu
+## d'actions : la laisser recopiée à trois endroits est ce qui a permis au bug
+## d'y survivre.
+static func can_target(weapon_type: int, same_team: bool) -> bool:
+	return WT.is_healing(weapon_type) == same_team
+
+
 ## Bonus de soutien apportés à `attacker` par ses alliés proches.
 ## Statique : la prévision d'avant-combat s'en sert sans instancier le service.
 static func collect_support_bonuses(attacker: TacticsPawn) -> Dictionary:
@@ -442,10 +458,7 @@ static func build_forecast(attacker: TacticsPawn, target: TacticsPawn) -> Dictio
 		return {}
 
 	var same_team: bool = attacker.get_parent() == target.get_parent()
-	var is_healer: bool = WT.is_magical(attacker.stats.weapon_type)
-	# Un soigneur ne vise que ses alliés, un combattant que ses ennemis :
-	# hors de ces cas, il n'y a rien à prévoir.
-	if same_team != is_healer:
+	if not can_target(attacker.stats.weapon_type, same_team):
 		return {}
 
 	return ForecastRef.build(attacker.stats, target.stats, {
@@ -454,5 +467,6 @@ static func build_forecast(attacker: TacticsPawn, target: TacticsPawn) -> Dictio
 		"terrain_defense": terrain_defense_of(target),
 		"attacker_terrain": terrain_defense_of(attacker),
 		"distance": grid_distance(attacker, target),
-		"is_heal": same_team and is_healer,
+		# `can_target` a déjà tranché : une cible alliée ne peut être qu'un soin.
+		"is_heal": same_team,
 	})

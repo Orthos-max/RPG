@@ -373,7 +373,7 @@ func _do_attack_setup(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: 
 
 func _do_heal_setup(opponent: TacticsOpponent, pawn: TacticsPawn, pr: TacticsParticipantResource,
 		arena: TacticsArena, target_name: String) -> bool:
-	if not WT.is_magical(pawn.stats.weapon_type):
+	if not WT.is_healing(pawn.stats.weapon_type):
 		_reject_runtime("heal", "%s ne porte pas de bâton" % EXECUTOR.display_name(pawn))
 		return false
 	if not pawn.res.can_attack:

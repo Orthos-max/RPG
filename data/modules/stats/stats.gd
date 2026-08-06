@@ -328,6 +328,10 @@ func equip(weapon_id: String) -> Dictionary:
 
 
 ## Repose l'arme : l'unité ne frappe plus que de ses poings.
+##
+## Elle retombe au contact (portée 1) et ne riposte plus — `Type.NONE` n'engage
+## aucun combat. Se battre à mains nues reste possible, mais ne vaut rien : c'est
+## ce qui donne un prix à revendre son arme.
 func unequip() -> void:
 	equipped_weapon = ""
 	weapon_type = WT.Type.NONE
@@ -335,6 +339,7 @@ func unequip() -> void:
 	weapon_hit = 0
 	weapon_crit = 0
 	weapon_weight = 0
+	attack_range = 1
 	attack_power = get_total_attack()
 
 

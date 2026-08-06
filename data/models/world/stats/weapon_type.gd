@@ -38,6 +38,13 @@ const RANGED_ONLY: Array[Type] = [Type.BOW]
 ## Armes qui n'engagent aucun combat (le bâton soigne, il ne riposte pas).
 const NON_COMBAT: Array[Type] = [Type.STAFF, Type.NONE]
 
+## Armes qui soignent au lieu de frapper. **Le bâton, et lui seul.**
+##
+## À ne pas confondre avec [method is_magical], qui répond à une tout autre
+## question : « cette attaque vise-t-elle la RÉS plutôt que la DÉF ? ». Un
+## grimoire est magique sans être un bâton — il brûle, il ne soigne pas.
+const HEALING_WEAPONS: Array[Type] = [Type.STAFF]
+
 ## Multiplicateur appliqué au might de l'arme sur une cible sensible
 const EFFECTIVE_MULTIPLIER: int = 3
 
@@ -94,6 +101,15 @@ static func get_min_range(type: Type) -> int:
 ## L'arme peut-elle engager un combat ? (un bâton, non)
 static func is_combat_weapon(type: Type) -> bool:
 	return not type in NON_COMBAT
+
+
+## L'arme soigne-t-elle au lieu de frapper ?
+##
+## C'est cette question — et non [method is_magical] — qui décide de ce qu'une
+## unité peut viser : un soigneur ne vise que ses alliés, un combattant que ses
+## ennemis.
+static func is_healing(type: Type) -> bool:
+	return type in HEALING_WEAPONS
 
 
 ## L'arme atteint-elle une cible située à `distance` cases ?

@@ -997,6 +997,36 @@ func _test_weapon_economy(campaign: Node) -> void:
 		str(campaign.get_unit(id)["weapon"]))
 	_check(not bool(campaign.sell_weapon(id, "steel_bow")["ok"]), "revente d'une arme absente refusée")
 
+	# Tout revendre doit vraiment désarmer : sans le marqueur `uses_arsenal`, un
+	# fourreau vide passait pour « fiche d'avant le catalogue » et le pion
+	# repartait au combat avec l'arme de son `.tres` — l'or était gratuit.
+	var stripped: Dictionary = campaign.get_unit(id)
+	for w in stripped["weapons"].duplicate():
+		campaign.sell_weapon(id, str(w))
+	_check(campaign.get_unit(id)["weapons"].is_empty()
+			and str(campaign.get_unit(id)["weapon"]).is_empty(),
+		"fourreau vidé par la revente")
+	_check(bool(campaign.get_unit(id).get("uses_arsenal", false)),
+		"l'unité reste marquée comme gérée par le catalogue")
+
+	var bare: CharStats = _live(str(campaign.get_unit(id)["source"]))
+	var runner := ChapterRunner.new()
+	runner._apply_arsenal(bare, campaign.get_unit(id))
+	_check(bare.equipped_weapon.is_empty() and bare.weapon_might == 0
+			and bare.weapon_type == WT.Type.NONE and bare.attack_range == 1,
+		"tout revendre envoie vraiment l'unité au combat à mains nues",
+		"arme : %s, puissance %d" % [bare.equipped_weapon, bare.weapon_might])
+
+	# Une unité d'avant le catalogue, elle, garde les valeurs brutes de sa fiche.
+	var legacy: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	var might_before: int = legacy.weapon_might
+	runner._apply_arsenal(legacy, {"weapons": [], "weapon": ""})
+	_check(legacy.weapon_might == might_before,
+		"une fiche sans arsenal conserve son arme d'origine")
+	runner.free()
+
+	campaign.buy_weapon(id, "iron_sword")
+
 	campaign.gold = 10
 	_check(not bool(campaign.buy_weapon(id, "steel_bow")["ok"]), "achat refusé sans or")
 

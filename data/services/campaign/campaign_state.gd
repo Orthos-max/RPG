@@ -129,6 +129,11 @@ func unit_from_resource(path: String) -> Dictionary:
 		"items": [],
 		"weapons": _weapons_of(res),
 		"weapon": _equipped_of(res),
+		# Cette unité est-elle gérée par le catalogue d'armes ? Sans ce marqueur,
+		# un fourreau vide serait indistinguable d'une fiche d'avant le catalogue,
+		# et revendre ses armes ne coûterait rien : le pion repartirait au combat
+		# avec l'arme écrite dans son `.tres`.
+		"uses_arsenal": not _weapons_of(res).is_empty(),
 	}
 
 
@@ -675,6 +680,8 @@ func _normalize_unit(raw: Dictionary) -> Dictionary:
 	u["weapons"] = arsenal
 	var equipped: String = WEAPONS.canonical_id(str(u.get("weapon", "")))
 	u["weapon"] = equipped if equipped in arsenal else ""
+	# Absent des sauvegardes d'avant le catalogue : elles gardent leurs valeurs brutes.
+	u["uses_arsenal"] = bool(u.get("uses_arsenal", false))
 	return u
 
 

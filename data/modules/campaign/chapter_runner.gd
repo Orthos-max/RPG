@@ -322,11 +322,15 @@ func _apply_unit(stats: Stats, unit: Dictionary) -> void:
 ## entrait en scène avec l'arme brute de sa fiche.
 func _apply_arsenal(stats: Stats, unit: Dictionary) -> void:
 	var arsenal: Array = unit.get("weapons", [])
-	if arsenal.is_empty():
-		return  # Unité d'avant le catalogue : ses valeurs brutes font foi.
+	# Un fourreau vide veut dire deux choses opposées selon l'unité : « fiche
+	# d'avant le catalogue, ses valeurs brutes font foi » ou « elle a tout
+	# revendu, elle part à mains nues ». Le marqueur du roster tranche — sans
+	# lui, revendre ses armes ne coûterait rien.
+	if arsenal.is_empty() and not bool(unit.get("uses_arsenal", false)):
+		return
 
 	stats.weapons = []
-	stats.equipped_weapon = ""
+	stats.unequip()
 	for id in arsenal:
 		stats.add_weapon(str(id))
 

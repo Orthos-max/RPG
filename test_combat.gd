@@ -363,6 +363,47 @@ func _test_counter_range() -> void:
 	else:
 		_ko("Arme de combat", "bâton : %s" % WT.is_combat_weapon(WT.Type.STAFF))
 
+	# Soigner est l'affaire du bâton seul. « Magique » répond à une autre question
+	# — viser la RÉS — et confondre les deux transformait tout porteur de grimoire
+	# en soigneur incapable d'attaquer.
+	if WT.is_healing(WT.Type.STAFF) and not WT.is_healing(WT.Type.TOME):
+		_ok("Le bâton soigne, le grimoire brûle")
+	else:
+		_ko("Arme curative", "bâton : %s, grimoire : %s" % [
+			WT.is_healing(WT.Type.STAFF), WT.is_healing(WT.Type.TOME)])
+
+	if WT.is_magical(WT.Type.TOME) and not WT.is_healing(WT.Type.TOME):
+		_ok("« Magique » et « curatif » restent deux questions distinctes")
+	else:
+		_ko("Magique ≠ curatif", "grimoire curatif : %s" % WT.is_healing(WT.Type.TOME))
+
+	var wrong: String = ""
+	for t: int in [WT.Type.SWORD, WT.Type.LANCE, WT.Type.AXE, WT.Type.BOW, WT.Type.NONE]:
+		if WT.is_healing(t):
+			wrong = WT.get_weapon_label(t)
+	if wrong.is_empty():
+		_ok("Aucune arme de combat ne soigne")
+	else:
+		_ko("Arme de combat curative", wrong)
+
+	# La règle de ciblage elle-même — celle que partagent la prévision, le clic
+	# et le menu d'actions. C'est ici que le bug vivait.
+	const PawnCombat = preload("res://data/models/world/combat/participant/pawn/service/combat.gd")
+	var targeting_ok: bool = (
+		PawnCombat.can_target(WT.Type.STAFF, true)        # bâton → allié
+		and not PawnCombat.can_target(WT.Type.STAFF, false)  # bâton → ennemi : non
+		and PawnCombat.can_target(WT.Type.TOME, false)       # grimoire → ennemi
+		and not PawnCombat.can_target(WT.Type.TOME, true)    # grimoire → allié : non
+		and PawnCombat.can_target(WT.Type.SWORD, false)
+		and not PawnCombat.can_target(WT.Type.SWORD, true)
+	)
+	if targeting_ok:
+		_ok("Ciblage : le bâton vise ses alliés, le grimoire et la lame leurs ennemis")
+	else:
+		_ko("Règle de ciblage", "grimoire → ennemi : %s, grimoire → allié : %s" % [
+			PawnCombat.can_target(WT.Type.TOME, false),
+			PawnCombat.can_target(WT.Type.TOME, true)])
+
 
 func _test_exchange() -> void:
 	print("\n⚔️ Test 10: L'échange — qui riposte, et dans quel ordre")
