@@ -12,7 +12,6 @@ signal hotseat_requested()
 signal host_requested()
 signal join_requested()
 signal editor_requested()
-signal fe2d_requested()
 signal quit_requested()
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
@@ -175,10 +174,6 @@ func _build() -> void:
 	var editor_btn := _make_button("🗺️  Éditeur de cartes")
 	editor_btn.pressed.connect(func() -> void: editor_requested.emit())
 	extras.add_child(editor_btn)
-
-	var fe2d_btn := _make_button("🧪  Prototype 2D")
-	fe2d_btn.pressed.connect(func() -> void: fe2d_requested.emit())
-	extras.add_child(fe2d_btn)
 
 	var quit_btn := _make_button("🚪  Quitter")
 	quit_btn.pressed.connect(func() -> void: quit_requested.emit())

@@ -49,8 +49,7 @@ for suite in "${SUITES[@]}"; do
     [ -z "$summary" ] && summary="(aucun résumé — la suite s'est-elle arrêtée en route ?)"
 
     # Les erreurs de script, que le compte de tests ignore.
-    # `fe_2d/` est un prototype mort et déjà cassé : hors du champ (§6.4 du spec).
-    parse_errors=$(grep -E "SCRIPT ERROR|Parse Error" "$log" | grep -v "fe_2d/" | head -5)
+    parse_errors=$(grep -E "SCRIPT ERROR|Parse Error" "$log" | head -5)
 
     if [ $code -ne 0 ] || [ -n "$parse_errors" ] || echo "$summary" | grep -qE "/ [1-9][0-9]* ÉCHECS|TESTS FAILED"; then
         failures=$((failures + 1))

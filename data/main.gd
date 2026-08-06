@@ -19,8 +19,6 @@ const MapEditorScene = preload("res://assets/maps/level/map_editor_level.tscn")
 const CustomBattleClass = preload("res://data/modules/campaign/custom_battle.gd")
 
 const SKIRMISH_SCENE: String = "res://assets/maps/level/map_level.tscn"
-const FE2D_SCENE: String = "res://fe_2d/fe_level.tscn"
-const FE2D_EDITOR_SCENE: String = "res://fe_2d/editor/map_editor.tscn"
 const SAVE_SLOT: int = 0
 
 ## Écran d'interface courant (titre, préparation, résultat)
@@ -76,7 +74,6 @@ func show_title() -> void:
 	screen.host_requested.connect(func() -> void: show_lobby(true))
 	screen.join_requested.connect(func() -> void: show_lobby(false))
 	screen.editor_requested.connect(func() -> void: show_editor())
-	screen.fe2d_requested.connect(func() -> void: _load_2d_scene(FE2D_SCENE))
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
 	_mount_ui(screen)
 
@@ -410,19 +407,6 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		_runner.setup(_level, _chapter)
 		_runner.chapter_finished.connect(_on_chapter_finished)
 		_level.add_child(_runner)
-
-
-func _load_2d_scene(scene_path: String) -> void:
-	_clear_ui()
-	unload_level()
-	_enable_3d_camera(false)
-	var scene: PackedScene = load(scene_path)
-	if not scene:
-		push_error("[Main] Scène introuvable : %s" % scene_path)
-		show_title()
-		return
-	_level = scene.instantiate()
-	add_child(_level)
 
 
 ## Décharge le niveau courant (appelé aussi par le service de combat).
