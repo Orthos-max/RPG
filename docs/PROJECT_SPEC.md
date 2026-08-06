@@ -622,7 +622,7 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 |---|---|
 | ✅ **La caméra du jeu** — orthographique, inclinaison fixe, posée sur le plateau (2026-08-05) | Fait : [`framing.gd`](../data/models/view/camera/tactics/framing.gd). Voir le journal ci-dessous |
 | ✅ **Décors posés sur les cases** — arbres, rochers, créneaux (2026-08-05) | Fait : [`props.gd`](../data/models/view/scenery/props.gd), en bataille **et** dans l'éditeur |
-| **Retravailler le surlignage de portée** | Les matériaux de portée remplacent le terrain d'un bloc : ils sont restés plats alors que tout le reste a gagné du grain |
+| ✅ **Surlignage de portée** — teinté, plus posé d'un bloc (2026-08-06) | Fait : [`tactics_scenery.gd`](../data/models/view/scenery/tactics_scenery.gd) `highlight_material()`. Le grain, la trame des cases et le terrain restent lisibles sous la teinte |
 
 ### ✅ 4. Supprimer `fe_2d/` — fait le 2026-08-06
 
@@ -1291,4 +1291,36 @@ après une attaque.
 
 ```
 bash scripts/test_all.sh --window   # 58 / 482 / 77 OK + test_map + 9 OK
+```
+
+
+---
+
+### Passe du 2026-08-06 (8) — le surlignage de portée
+
+Dernière ligne du §6.3. Les matériaux de portée posaient un aplat de couleur unie
+par-dessus la case (`material_override`) : à l'affichage d'une portée, tout le
+grain de la passe artistique disparaissait d'un coup, la trame des cases avec, et
+la zone se lisait comme une seule flaque bleue.
+
+`TacticsScenery.highlight_material(terrain_type, state)` repart du matériau de
+terrain de **cette case-là**, mélange la teinte de l'état à sa couleur (68 %) et
+ajoute une lueur discrète pour rester lisible dans une ombre portée. Le motif, sa
+projection en coordonnées monde et sa réponse à la lumière sont conservés.
+
+Effet de bord voulu : une forêt à portée reste une forêt, plus sombre que la
+plaine voisine — l'information de terrain survit au surlignage, alors qu'elle
+était effacée par l'aplat.
+
+Les matériaux sont mis en cache par couple (terrain, état) — au pire 49 — et
+chaque tuile garde les siens sous la main : `_process` passe par là 200 fois par
+image, il n'a pas à reconstruire une clé de cache à chaque fois.
+
+`shot.gd` gagne l'écran `range` (une unité en main, sa portée affichée), qui a
+servi à comparer l'avant et l'après. Marquer les tuiles à la main ne tient pas —
+la boucle de tour les remet à zéro à chaque frame ; il faut demander l'étape
+« choisir la case » et laisser le jeu surligner.
+
+```
+bash scripts/test_all.sh --window   # 58 / 489 / 77 OK + test_map + 9 OK
 ```

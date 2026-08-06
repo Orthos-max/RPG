@@ -37,6 +37,11 @@ func _init() -> void:
 			pass
 		"editor":
 			main.show_editor()
+		"range":
+			# Une unité en main, sa portée de déplacement affichée : c'est le seul
+			# moyen de juger le surlignage autrement qu'en lisant du code.
+			await _open_battle(main, int(args[2]) if args.size() > 2 and args[2].is_valid_int() else 1)
+			await _show_range(main)
 		"prep":
 			await _open_prep(main, args[2] if args.size() > 2 else "")
 		"saves":
@@ -91,6 +96,31 @@ func _open_prep(main: Node, panel: String) -> void:
 		_:
 			pass
 	for _i in 10:
+		await physics_frame
+
+
+## Sélectionne la première unité jouable et affiche sa portée de déplacement.
+func _show_range(main: Node) -> void:
+	var level: Node = _find_class(main, "TacticsLevel")
+	if not level:
+		printerr("[shot] niveau introuvable")
+		return
+	var controls: Node = _find_by_script(main, "controls.gd")
+	if not controls:
+		printerr("[shot] contrôles introuvables")
+		return
+
+	# Marquer les tuiles à la main ne tient pas : la boucle de tour les remet à
+	# zéro à chaque frame. On met l'unité en main et on demande l'étape « choisir
+	# la case » — c'est le jeu lui-même qui surligne alors sa portée.
+	for p in level.player.get_children():
+		if not (p is TacticsPawn and is_instance_valid(p) and p.can_act()):
+			continue
+		controls.curr_pawn = p
+		controls.participant.curr_pawn = p
+		controls.participant.stage = 2
+		break
+	for _i in 30:
 		await physics_frame
 
 

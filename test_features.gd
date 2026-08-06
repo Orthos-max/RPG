@@ -1657,6 +1657,7 @@ func _test_ux_polish() -> void:
 
 	_test_action_labels()
 	_test_menu_layout()
+	_test_range_highlight()
 
 
 
@@ -1672,6 +1673,42 @@ func _test_menu_layout() -> void:
 	_check(not Title.is_wide(Vector2(600, 400)),
 		"fenêtre minuscule → une seule colonne")
 	_check(Title.is_wide(Vector2(1920, 1080)), "plein écran → deux colonnes")
+
+
+## Le surlignage de portée doit teinter le terrain, pas l'effacer.
+func _test_range_highlight() -> void:
+	const SCENERY = preload("res://data/models/view/scenery/tactics_scenery.gd")
+	const MAPD = preload("res://data/models/world/map/map_data.gd")
+
+	var grass: StandardMaterial3D = SCENERY.terrain_material(MAPD.TerrainType.GRASS)
+	var reachable: StandardMaterial3D = SCENERY.highlight_material(
+		MAPD.TerrainType.GRASS, "reachable")
+
+	_check(reachable != null and reachable.albedo_texture != null,
+		"une case surlignée garde le grain du terrain")
+	_check(reachable.uv1_world_triplanar,
+		"le motif reste projeté en coordonnées monde (il traverse les cases)")
+	_check(reachable.albedo_color != grass.albedo_color,
+		"mais sa teinte a changé")
+	_check(reachable.emission_enabled,
+		"elle porte une lueur propre, lisible dans une ombre portée")
+
+	# Deux terrains différents ne se surlignent pas à l'identique : une forêt
+	# reste reconnaissable même à portée.
+	var forest: StandardMaterial3D = SCENERY.highlight_material(
+		MAPD.TerrainType.FOREST, "reachable")
+	_check(forest.albedo_color != reachable.albedo_color,
+		"la forêt surlignée se distingue de la plaine surlignée")
+
+	# Les états se distinguent entre eux.
+	var attackable: StandardMaterial3D = SCENERY.highlight_material(
+		MAPD.TerrainType.GRASS, "attackable")
+	_check(attackable.albedo_color != reachable.albedo_color,
+		"attaquable et atteignable ne se confondent pas")
+
+	# Le cache rend bien le même objet : 200 tuiles ne construisent pas 200 fois.
+	_check(SCENERY.highlight_material(MAPD.TerrainType.GRASS, "reachable") == reachable,
+		"les matériaux de surlignage sont mis en cache")
 
 ## Le menu d'actions : une clé qui branche, un libellé qui s'affiche.
 ##

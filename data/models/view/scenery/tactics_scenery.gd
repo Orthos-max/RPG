@@ -191,6 +191,56 @@ static func grain_texture(frequency: float, contrast: float, seed_value: int) ->
 	return texture
 
 
+## Teintes de surlignage, par état de tuile.
+##
+## Ce ne sont plus des couleurs de remplacement mais des **teintes** : le grain
+## du terrain reste visible dessous. Une case atteignable est de l'herbe vue à
+## travers un lavis bleu, pas un rectangle bleu.
+const HIGHLIGHT_TINTS: Dictionary = {
+	"hover": "#f2f4ff",
+	"reachable": "#2f7fd6",
+	"reachable_hover": "#5fb6ff",
+	"attackable": "#c62b2b",
+	"hover_attackable": "#ff5a5a",
+	"seize": "#f5c842",
+	"deploy": "#27d9c5",
+}
+
+## Part de la teinte dans le mélange avec la couleur du terrain (0 = terrain nu).
+const HIGHLIGHT_BLEND: float = 0.68
+## Lueur propre du surlignage : de quoi rester lisible dans une ombre portée.
+const HIGHLIGHT_GLOW: float = 0.22
+
+## Matériaux de surlignage déjà construits, par « terrain:état ».
+static var _highlight_cache: Dictionary = {}
+
+
+## Matériau de surlignage d'une case, grain du terrain compris.
+##
+## Le surlignage effaçait le terrain : `material_override` posait un aplat de
+## couleur unie, et une case atteignable perdait d'un coup le grain que toute la
+## passe artistique lui avait donné. On repart donc du matériau de terrain, on
+## mélange la teinte d'état à sa couleur et on ajoute une lueur — le motif, sa
+## projection en coordonnées monde et sa réponse à la lumière sont conservés.
+##
+## Les matériaux sont mis en cache par couple (terrain, état) : sept états pour
+## sept terrains font au pire 49 matériaux, construits une seule fois.
+static func highlight_material(terrain_type: int, state: String) -> StandardMaterial3D:
+	var key: String = "%d:%s" % [terrain_type, state]
+	var cached: Variant = _highlight_cache.get(key)
+	if cached is StandardMaterial3D:
+		return cached
+
+	var tint := Color(str(HIGHLIGHT_TINTS.get(state, "#ffffff")))
+	var mat: StandardMaterial3D = terrain_material(terrain_type).duplicate()
+	mat.albedo_color = mat.albedo_color.lerp(tint, HIGHLIGHT_BLEND)
+	mat.emission_enabled = true
+	mat.emission = tint
+	mat.emission_energy_multiplier = HIGHLIGHT_GLOW
+	_highlight_cache[key] = mat
+	return mat
+
+
 ## Tous les matériaux de terrain, prêts pour [TacticsConfig].
 static func terrain_materials() -> Dictionary:
 	var out: Dictionary = {}

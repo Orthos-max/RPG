@@ -31,20 +31,26 @@ var pf_root: TacticsTile
 ## The distance to cover.[br]Used by [TacticsArena]
 var pf_distance: float
 
-## Material for hover state
-var hover_mat: StandardMaterial3D = TacticsConfig.mat_color.hover
-## Material for reachable state
-var reachable_mat: StandardMaterial3D = TacticsConfig.mat_color.reachable
-## Material for hover and reachable state
-var hover_reachable_mat: StandardMaterial3D = TacticsConfig.mat_color.reachable_hover
-## Material for attackable state
-var attackable_mat: StandardMaterial3D = TacticsConfig.mat_color.attackable
-## Material for hover and attackable state
-var hover_attackable_mat: StandardMaterial3D = TacticsConfig.mat_color.hover_attackable
-## Matériau du point de commandement (objectif de chapitre)
-var seize_mat: StandardMaterial3D = TacticsConfig.mat_color.seize
-## Matériau d'une case de déploiement libre
-var deploy_mat: StandardMaterial3D = TacticsConfig.mat_color.deploy
+## Matériau de surlignage de cette case, pour un état donné.
+##
+## Les aplats de couleur unie d'avant effaçaient le terrain : une case
+## atteignable perdait d'un coup le grain que la passe artistique lui avait
+## donné. [TacticsScenery] rend maintenant un matériau **teinté par-dessus le
+## terrain de cette case-ci** — d'où le passage par `terrain_type`.
+## Matériaux de surlignage déjà résolus pour cette case.
+var _highlights: Dictionary = {}
+
+
+func highlight(state: String) -> StandardMaterial3D:
+	# `_process` passe ici à chaque frame, pour chaque tuile : on garde la
+	# réponse sous la main plutôt que de reconstruire une clé de cache 200 fois
+	# par image.
+	var known: Variant = _highlights.get(state)
+	if known is StandardMaterial3D:
+		return known
+	var built: StandardMaterial3D = TacticsScenery.highlight_material(terrain_type, state)
+	_highlights[state] = built
+	return built
 #endregion
 
 #region: --- Processing ---
@@ -62,9 +68,9 @@ func _process(_delta: float) -> void:
 	if not attackable and not reachable and not hover:
 		tile.visible = true
 		if deploy_point:
-			tile.material_override = deploy_mat
+			tile.material_override = highlight("deploy")
 		elif seize_point:
-			tile.material_override = seize_mat
+			tile.material_override = highlight("seize")
 		elif terrain_mat:
 			tile.material_override = terrain_mat
 		return
@@ -73,16 +79,16 @@ func _process(_delta: float) -> void:
 	match hover:
 		true: # If hover is true, decide which material to use based on the tile's state
 			if reachable:
-				tile.material_override = hover_reachable_mat
+				tile.material_override = highlight("reachable_hover")
 			elif attackable:
-				tile.material_override = hover_attackable_mat
+				tile.material_override = highlight("hover_attackable")
 			else:
-				tile.material_override = hover_mat
+				tile.material_override = highlight("hover")
 		false: # If hover is false, this block decides between two materials
 			if reachable:
-				tile.material_override = reachable_mat
+				tile.material_override = highlight("reachable")
 			elif attackable:
-				tile.material_override = attackable_mat
+				tile.material_override = highlight("attackable")
 #endregion
 
 #region: --- Methods ---
