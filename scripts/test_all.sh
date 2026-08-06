@@ -1,7 +1,12 @@
 #!/bin/bash
 # Lance toutes les suites headless, avec le bon binaire Godot.
 #
-# Usage : bash scripts/test_all.sh
+# Usage : bash scripts/test_all.sh [--window]
+#
+# `--window` ajoute `test_window.gd`, qui joue un tour à la souris dans une vraie
+# fenêtre. Elle ne peut pas tourner en `--headless` (rien n'y dessine ni ne
+# clique), donc elle reste optionnelle : la CI et les vérifications rapides s'en
+# passent, une passe sérieuse ne devrait pas.
 #
 # Pourquoi ce script existe — deux raisons, toutes deux payées comptant :
 #
@@ -29,6 +34,8 @@ if [ -z "$GODOT" ]; then
 fi
 
 SUITES=(test_combat test_features test_battle test_map)
+WINDOW_SUITE=""
+[ "${1:-}" = "--window" ] && WINDOW_SUITE="test_window"
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
 
@@ -62,6 +69,23 @@ for suite in "${SUITES[@]}"; do
         printf '  ✅ %-14s %s\n' "$suite" "$summary"
     fi
 done
+
+# La suite fenêtrée : même lecture, mais sans `--headless`.
+if [ -n "$WINDOW_SUITE" ]; then
+    log="$LOG_DIR/$WINDOW_SUITE.log"
+    "$GODOT" --path "$PROJECT_DIR" --resolution 1280x720 --script "$WINDOW_SUITE.gd" >"$log" 2>&1
+    code=$?
+    summary=$(grep -oE "RÉSULTATS: [0-9]+ OK / [0-9]+ ÉCHECS" "$log" | tail -1)
+    [ -z "$summary" ] && summary="(aucun résumé)"
+    parse_errors=$(grep -E "SCRIPT ERROR|Parse Error" "$log" | head -5)
+    if [ $code -ne 0 ] || [ -n "$parse_errors" ]; then
+        failures=$((failures + 1))
+        printf '  ❌ %-14s %s\n' "$WINDOW_SUITE" "$summary"
+        [ -n "$parse_errors" ] && echo "$parse_errors" | sed 's/^/       /'
+    else
+        printf '  ✅ %-14s %s\n' "$WINDOW_SUITE" "$summary"
+    fi
+fi
 
 echo ""
 if [ $failures -eq 0 ]; then

@@ -581,7 +581,30 @@ sur des nœuds `StaticBody3D`. Trois conséquences déjà payées :
 l'adjacence et l'occupation dans la donnée, et laisser les tuiles ne faire que de
 l'affichage.
 
-### 🥈 2. Prouver une bataille fenêtre ouverte — **remonté en tête (2026-08-05)**
+### ✅ 2. Prouver une bataille fenêtre ouverte — **fait le 2026-08-06**
+
+`test_window.gd` joue un tour complet **à la souris** : sélection d'une unité,
+ouverture du menu, déplacement sur une case surlignée, attaque d'un ennemi, mort
+de la cible, fin de tour. Neuf vérifications, dans une vraie fenêtre.
+
+Le piège du clic simulé, payé une seconde fois : `Input.parse_input_event` ne
+suffit pas. Sans `position` renseignée le viewport route le clic en (0,0) ; sans
+`Input.warp_mouse` le rayon de sélection part de l'ancien curseur. Il faut les
+deux, plus une frame entre les deux — la sélection lit
+`Input.is_action_just_pressed`, qui ne vaut qu'une frame.
+
+La suite s'ajoute au lanceur en option (`bash scripts/test_all.sh --window`) :
+elle ne peut pas tourner en `--headless`, rien n'y dessine ni ne clique.
+
+> **Ce qu'elle a appris dès son premier passage.** Une assertion « frapper ne
+> rend pas de PV à l'assaillant » est tombée : 20 → 21 PV. Ce n'était pas un bug
+> du jeu mais une lacune du test — achever une cible donne de l'XP, et une montée
+> de niveau augmente les PV maximum. L'invariant ne tient qu'à niveau constant.
+
+Restent hors de son champ : le déploiement à la souris (échange de deux unités),
+le tour adverse, et la caméra.
+
+### 🗂 2bis. L'argument d'origine, gardé pour mémoire
 
 > Les trois blocages remontés par Aurèle le 2026-08-05 (échange au déploiement,
 > changement d'unité, regard libre) sont **tous** passés au travers de la suite
@@ -1247,4 +1270,25 @@ et `docs/INSTALL.md` dit où les trouver.
 
 ```
 bash scripts/test_all.sh   # 58 / 482 / 77 OK + test_map
+```
+
+
+---
+
+### Passe du 2026-08-06 (7) — le tour à la souris, enfin prouvé
+
+Le §6.2 est fait : `test_window.gd`. Neuf vérifications qui jouent un tour comme
+un joueur — cliquer une unité, ouvrir son menu, la déplacer, frapper.
+
+C'était le plus gros trou de preuve du projet, et la journée l'avait démontré
+trois fois : un porteur de grimoire incapable d'attaquer, un arc qui tirait au
+contact, un bouton poussé hors de l'écran. Trois bugs qu'aucune des 617
+vérifications headless ne pouvait voir, parce qu'aucune ne tient une souris.
+
+La suite couvre aussi, au passage, deux correctifs du jour : le menu d'actions en
+français (le libellé lu sur le vrai bouton, pas dans la table) et la fin de tour
+après une attaque.
+
+```
+bash scripts/test_all.sh --window   # 58 / 482 / 77 OK + test_map + 9 OK
 ```
