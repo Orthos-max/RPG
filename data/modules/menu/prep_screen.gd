@@ -138,13 +138,22 @@ func _build() -> void:
 	_unit_rows.add_theme_constant_override("separation", 6)
 	scroll.add_child(_unit_rows)
 
+	# Barre du bas : les boutons se partagent la largeur disponible au lieu
+	# d'occuper chacun 240 px. À six, cette largeur fixe faisait 1520 px pour un
+	# écran logique de 1280 : « Lancer la bataille » sortait de l'écran et
+	# devenait inatteignable à la souris.
+	var bar := MarginContainer.new()
+	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.offset_top = -90
+	bar.offset_bottom = -30
+	bar.add_theme_constant_override("margin_left", 24)
+	bar.add_theme_constant_override("margin_right", 24)
+	add_child(bar)
+
 	var buttons := HBoxContainer.new()
-	buttons.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	buttons.offset_top = -90
-	buttons.offset_bottom = -30
-	buttons.add_theme_constant_override("separation", 16)
-	add_child(buttons)
+	buttons.add_theme_constant_override("separation", 10)
+	bar.add_child(buttons)
 
 	var back := _make_button("← Retour", false)
 	back.pressed.connect(func() -> void: back_requested.emit())
@@ -175,6 +184,13 @@ func _build() -> void:
 	_start_button = _make_button("⚔️  Lancer la bataille", true)
 	_start_button.pressed.connect(_on_start)
 	buttons.add_child(_start_button)
+
+	for child in buttons.get_children():
+		var btn: Button = child as Button
+		if btn:
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.custom_minimum_size = Vector2(120, 46)
+			btn.clip_text = true
 
 	_refresh()
 

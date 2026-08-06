@@ -81,7 +81,6 @@ scripts/
   ciel_game/     → PONT CielAI (_paths, launch, command, state)
   build/         → export.sh, package.sh
   test_net.sh    → test réseau à deux processus
-fe_2d/           → prototype 2D abandonné (voir backlog)
 test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
 ```
 
@@ -351,9 +350,13 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       L'éditeur de cartes emprunte le même décor et les mêmes matériaux.
       *Restent à faire : modèles ou sprites d'unités plus fins, et les décors
       posés sur la carte (arbres, murs, bâtiments).*
-- [ ] **Version `fe_2d/`** : prototype isolé (grille isométrique dessinée en
-      `_draw`, unités et stats dupliquées) — **caduc** depuis le choix de garder
-      la 3D et d'en soigner le rendu. À supprimer ou à reprendre de zéro.
+- [x] **Version `fe_2d/`** : **supprimée le 2026-08-06**. Prototype isolé (grille
+      isométrique en `_draw`, unités et stats dupliquées), caduc depuis le choix
+      de la 3D, et cassé depuis le refactor de la grille : son `class_name
+      BattleGrid` entrait en collision avec la vraie grille de bataille, si bien
+      que le bouton « Prototype 2D » de l'écran-titre menait à un écran inerte.
+      1 074 lignes qui dupliquaient les règles du jeu, et le piège qui allait
+      avec : corriger un bug de combat au mauvais endroit.
 - [x] **Aperçu des dégâts avant d'engager** : `BattleForecast` (logique pure) met en
       forme le calculateur — dégâts totaux, nombre de coups, précision, critique, PV
       restants, létalité (sûre ou « seulement si critique »), triangle/terrain/soutien/
@@ -598,11 +601,11 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 | ✅ **Décors posés sur les cases** — arbres, rochers, créneaux (2026-08-05) | Fait : [`props.gd`](../data/models/view/scenery/props.gd), en bataille **et** dans l'éditeur |
 | **Retravailler le surlignage de portée** | Les matériaux de portée remplacent le terrain d'un bloc : ils sont restés plats alors que tout le reste a gagné du grain |
 
-### 4. Supprimer `fe_2d/`
+### ✅ 4. Supprimer `fe_2d/` — fait le 2026-08-06
 
-1 074 lignes de code mort qui **dupliquent les règles** (ses propres unités, ses
-propres stats) et contredisent la direction prise. Le garder, c'est entretenir un
-piège pour la prochaine personne qui ouvre le dépôt.
+1 074 lignes de code mort qui dupliquaient les règles. Dossier, bouton
+d'écran-titre, chargeur de scène 2D et exclusion d'export : tout est parti.
+`scripts/test_all.sh` n'a plus à excluire ce dossier de sa détection d'erreurs.
 
 ### 5. Aligner les noms sur le lore
 
@@ -1163,4 +1166,44 @@ derniers boutons.
 
 ```
 bash scripts/test_all.sh   # 58 / 478 / 76 OK + test_map
+```
+
+
+---
+
+### Passe du 2026-08-06 (5) — retours de jeu, suite
+
+**Le prototype 2D est supprimé.** Voir §6.4. Il ne compilait plus depuis le
+refactor de la grille : son `class_name BattleGrid` entrait en collision avec la
+vraie grille de bataille, et le bouton de l'écran-titre menait à un écran inerte.
+
+**Un arc ne tire plus à bout portant.** La portée minimale n'existait que pour la
+riposte : `mark_attackable_tiles()` avait un plafond mais pas de plancher, si bien
+que Virion pouvait frapper la case d'à côté. Le plancher est maintenant appliqué
+partout où une portée d'attaque se calcule — marquage des cases pour les deux
+camps, décision de l'IA locale (`can_strike` au lieu d'un simple `dist > range`),
+et cases exportées à Ciel.
+
+**La grille d'une carte posée à la main.** `TacticsGrid.grid_size()` retombait sur
+un 16×10 de secours dès que l'arène ne déclarait pas de [MapData] — donc sur le
+chapitre 2, dont le plateau fait 10×20. Tout ce qui borne un calcul par cette
+taille travaillait sur une emprise qui n'existe pas : cases à portée, carte des
+terrains exportée à Ciel, zone de déploiement par défaut. `BattleGrid.dimensions()`
+rend maintenant l'emprise réellement indexée.
+
+**La barre de l'écran de préparation.** Six boutons à 240 px font 1520 px pour un
+écran logique de 1280 : « Lancer la bataille » sortait de l'écran et devenait
+inatteignable à la souris. Les boutons se partagent désormais la largeur
+disponible.
+
+> **Le crash du chapitre 2 n'est pas reproduit.** Quatre tentatives — headless,
+> fenêtré, par progression réelle depuis le chapitre 1, et avec la phase de
+> déploiement confirmée puis 900 frames de bataille — aucune n'a fait tomber le
+> jeu. Les trois correctifs ci-dessus touchent le chapitre 2 et peuvent l'avoir
+> emporté avec eux, mais **rien ne le prouve** : la cause reste à identifier, et
+> il faut savoir ce que « crash » veut dire ici (fenêtre qui se ferme ? gel ?
+> écran noir ?).
+
+```
+bash scripts/test_all.sh   # 58 / 482 / 76 OK + test_map
 ```
