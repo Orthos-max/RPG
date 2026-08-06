@@ -93,6 +93,11 @@ func _build() -> void:
 		hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
 		box.add_child(hint)
 
+		var renew := _make_button("🔄  Générer un nouveau code", false)
+		renew.tooltip_text = "Ferme la partie en cours et en rouvre une avec un code neuf."
+		renew.pressed.connect(_regenerate_code)
+		box.add_child(renew)
+
 		_map_picker = OptionButton.new()
 		_map_picker.custom_minimum_size = Vector2(0, 36)
 		for entry: Dictionary in MAPS:
@@ -172,6 +177,31 @@ func _start_hosting() -> void:
 	_status.text = "En attente d'un joueur… (adresse %s, port %d)" % [
 		str(result["ip"]), net.PORT
 	]
+	_refresh()
+
+
+## Rouvre le salon avec un code d'allure neuve.
+##
+## Le code est l'adresse de cette machine écrite en sept caractères : le bouton
+## rebat les cartes du salon (un invité déjà là est déconnecté) mais ne révoque
+## pas l'ancien code, et le statut le dit sans détour.
+func _regenerate_code() -> void:
+	var net: Node = _net()
+	if not net:
+		return
+
+	var selected_map: String = str(MAPS[0]["path"])
+	if _map_picker and _map_picker.selected >= 0:
+		selected_map = str(_map_picker.get_item_metadata(_map_picker.selected))
+
+	var result: Dictionary = net.renew_code(selected_map)
+	if not bool(result["ok"]):
+		_status.text = "Impossible de rouvrir la partie : %s" % str(result["reason"])
+		return
+
+	_code_label.text = str(result["code"])
+	_status.text = "Nouveau code : %s — le salon est reparti à zéro.\n" % str(result["code"]) \
+		+ "L'ancien code mène toujours à cette machine : il n'est pas révoqué."
 	_refresh()
 
 

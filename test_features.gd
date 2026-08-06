@@ -1252,6 +1252,26 @@ func _test_network_codes() -> void:
 		_check(code.length() == net.CODE_LENGTH and net.decode_code(code) == ip,
 			"%s ↔ %s" % [ip, code], "décodé : %s" % net.decode_code(code))
 
+	# Plusieurs écritures d'un même chemin : sept caractères de cinq bits font 35
+	# bits pour 32 bits d'adresse, et les trois qui restent servent à présenter un
+	# code d'allure neuve. Toutes doivent mener au même hôte.
+	var host_ip: String = "192.168.1.42"
+	var seen_codes: Array[String] = []
+	var all_decode: bool = true
+	for variant: int in range(net.CODE_VARIANTS):
+		var code: String = net.encode_code(host_ip, variant)
+		if net.decode_code(code) != host_ip or code.length() != net.CODE_LENGTH:
+			all_decode = false
+		if not code in seen_codes:
+			seen_codes.append(code)
+	_check(seen_codes.size() == net.CODE_VARIANTS,
+		"%d écritures distinctes du même code" % seen_codes.size())
+	_check(all_decode, "toutes mènent à la même machine")
+	_check(net.encode_code(host_ip, net.CODE_VARIANTS) == net.encode_code(host_ip, 0),
+		"le compteur d'écritures boucle")
+	_check(net.encode_code(host_ip, -1) == net.encode_code(host_ip, net.CODE_VARIANTS - 1),
+		"un compteur négatif ne casse pas le code")
+
 	# Le code est lisible à l'oral : ni I, ni O, ni 0, ni 1
 	var sample: String = net.encode_code("192.168.1.42")
 	var ambiguous: bool = sample.contains("I") or sample.contains("O") \

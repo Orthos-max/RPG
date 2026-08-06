@@ -35,6 +35,13 @@ const MAX_CLIENTS: int = 1
 const ALPHABET: String = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 ## 7 caractères de 5 bits couvrent les 32 bits d'une adresse IPv4
 const CODE_LENGTH: int = 7
+## Nombre d'écritures possibles d'un même code d'accès.
+##
+## 7 caractères de 5 bits font 35 bits pour 32 bits d'adresse : il reste **3 bits
+## libres en tête**, soit huit façons d'écrire le chemin vers le même hôte. Elles
+## se décodent toutes vers la même adresse, ce qui permet de présenter un code
+## d'allure neuve sans changer de machine.
+const CODE_VARIANTS: int = 8
 ## Durée pendant laquelle la place d'un invité déconnecté lui est gardée
 const SEAT_GRACE_SECONDS: float = 90.0
 ## Intervalle entre deux tentatives de reconnexion automatique (invité)
@@ -47,6 +54,8 @@ enum Role { NONE = 0, HOST = 1, CLIENT = 2 }
 var role: int = Role.NONE
 ## Code d'accès de la partie courante (hôte) ou saisi (client)
 var join_code: String = ""
+## Écriture courante du code (voir [constant CODE_VARIANTS])
+var code_variant: int = 0
 ## Pairs connus : id → {name, side, ready}
 var players: Dictionary = {}
 ## Dernier état reçu de l'hôte (client uniquement)
@@ -111,7 +120,7 @@ func _process(_delta: float) -> void:
 
 #region Code d'accès
 ## Encode une adresse IPv4 en code court lisible à l'oral.
-static func encode_code(ip: String) -> String:
+static func encode_code(ip: String, variant: int = 0) -> String:
 	var parts: PackedStringArray = ip.split(".")
 	if parts.size() != 4:
 		return ""
@@ -121,6 +130,10 @@ static func encode_code(ip: String) -> String:
 		if octet < 0 or octet > 255:
 			return ""
 		value = (value << 8) | octet
+
+	# Les trois bits de tête ne portent aucune adresse : ils distinguent deux
+	# écritures du même chemin (voir CODE_VARIANTS). `decode_code` les ignore.
+	value |= (posmod(variant, CODE_VARIANTS)) << 32
 
 	var code: String = ""
 	for i in CODE_LENGTH:
@@ -197,13 +210,29 @@ func host_game(map_path: String = "") -> Dictionary:
 	multiplayer.multiplayer_peer = _peer
 	role = Role.HOST
 	var ip: String = local_ip()
-	join_code = encode_code(ip)
+	join_code = encode_code(ip, code_variant)
 	players = {1: {"name": "Hôte", "side": TeamDataClass.Side.PLAYER, "ready": true}}
 
 	_apply_session_roles()
 	hosted.emit(join_code)
 	lobby_updated.emit()
 	return {"ok": true, "code": join_code, "ip": ip, "reason": ""}
+
+
+## Referme la partie et en rouvre une avec un code d'allure neuve.
+##
+## À réserver à l'hôte. Le salon repart à zéro : un invité déjà connecté est
+## déconnecté, et l'ancien code cesse d'être celui qu'on affiche.
+##
+## **Ce que ce bouton ne fait pas** : révoquer l'ancien code. Un code d'accès
+## n'est rien d'autre que l'adresse de cette machine, écrite en sept caractères ;
+## qui la connaît peut toujours frapper à la porte. Changer d'adresse — donc de
+## réseau — est le seul moyen de couper l'ancien chemin.
+##
+## [returns] Même dictionnaire que [method host_game].
+func renew_code(map_path: String = "") -> Dictionary:
+	code_variant = posmod(code_variant + 1, CODE_VARIANTS)
+	return host_game(map_path)
 
 
 ## Rejoint une partie à partir d'un code. [returns] {ok, ip, reason}
