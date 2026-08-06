@@ -12,6 +12,7 @@ const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
@@ -846,6 +847,178 @@ func _test_economy() -> void:
 	if campaign.available_recruits().size() > 0:
 		_check(not bool(campaign.hire(str(campaign.available_recruits()[0]["path"]))["ok"]),
 			"recrutement refusé sans or")
+
+	_test_weapons()
+	_test_weapon_economy(campaign)
+
+
+#region 12bis. Armes — catalogue, fourreau, équipement
+func _test_weapons() -> void:
+	print("\n⚔ Test 12bis: catalogue d'armes et équipement")
+
+	# --- Catalogue ---
+	var malformed: String = ""
+	for id: String in WEAPONS.all_weapons():
+		var w: Dictionary = WEAPONS.get_weapon(id)
+		for key: String in ["label", "type", "might", "range", "hit", "crit", "weight", "price"]:
+			if not w.has(key):
+				malformed = "%s manque %s" % [id, key]
+		if int(w.get("price", 0)) <= 0 or int(w.get("range", 0)) < 1:
+			malformed = "%s : prix ou portée invalide" % id
+	_check(malformed.is_empty(), "catalogue bien formé (%d armes)" % WEAPONS.all_weapons().size(),
+		malformed)
+	_check(WEAPONS.resale_price("iron_sword") == WEAPONS.price("iron_sword") / 2,
+		"revente d'une arme à moitié prix")
+	_check(WEAPONS.canonical_id("Iron_Sword") == "iron_sword" and WEAPONS.canonical_id("bidule").is_empty(),
+		"identifiants insensibles à la casse, inconnus rejetés")
+	_check(WEAPONS.is_staff("heal_staff") and not WEAPONS.is_staff("iron_axe"),
+		"le bâton est reconnu comme tel")
+	_check(WEAPONS.describe("iron_bow").contains("portée 2 uniquement"),
+		"la description d'un arc annonce qu'il ne sert pas au contact",
+		WEAPONS.describe("iron_bow"))
+	_check(WEAPONS.describe("javelin").contains("portée 1-2"),
+		"le javelot annonce ses deux portées", WEAPONS.describe("javelin"))
+
+	# --- Fourreau ---
+	var chrom: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	_check(chrom.equipped_weapon == "rapier" and chrom.weapons.size() == 2,
+		"la fiche de Chrom arrive rapière en main", chrom.equipped_weapon)
+	_check(chrom.weapon_might == 5 and chrom.weapon_crit == 5 and chrom.weapon_hit == 10,
+		"l'arme équipée impose puissance, précision et critique")
+	_check(chrom.attack_power == chrom.str + 5, "la puissance d'attaque suit l'arme en main")
+
+	var swap: Dictionary = chrom.equip("iron_sword")
+	_check(bool(swap["ok"]) and chrom.equipped_weapon == "iron_sword" and chrom.weapon_crit == 0,
+		"changer d'arme change les chiffres", str(swap))
+	_check(not bool(chrom.equip("steel_axe")["ok"]), "on n'équipe pas une arme qu'on ne porte pas")
+	_check(not bool(chrom.equip("bidule")["ok"]), "arme inconnue refusée")
+
+	# Plafond du fourreau
+	var mule: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	mule.weapons = []
+	mule.equipped_weapon = ""
+	_check(mule.add_weapon("iron_sword") and mule.equipped_weapon == "iron_sword",
+		"la première arme rangée est mise en main d'office")
+	_check(not mule.add_weapon("iron_sword"), "pas deux fois la même arme")
+	mule.add_weapon("iron_axe")
+	mule.add_weapon("iron_lance")
+	_check(not mule.add_weapon("fire") and mule.weapons.size() == WEAPONS.MAX_WEAPONS,
+		"fourreau plafonné à %d armes" % WEAPONS.MAX_WEAPONS)
+
+	# Reposer l'arme en main : la suivante prend le relais, puis les poings.
+	_check(mule.drop_weapon("iron_sword") and mule.equipped_weapon == "iron_axe",
+		"l'arme suivante prend le relais", mule.equipped_weapon)
+	mule.drop_weapon("iron_axe")
+	mule.drop_weapon("iron_lance")
+	_check(mule.equipped_weapon.is_empty() and mule.weapon_might == 0
+			and mule.weapon_type == WT.Type.NONE,
+		"fourreau vidé : l'unité se retrouve à mains nues")
+	_check(not mule.drop_weapon("iron_sword"), "on ne repose pas une arme absente")
+
+	# --- Poids et vitesse d'attaque ---
+	var brawn: CharStats = _live("res://data/models/world/stats/hero/great_knight.tres")
+	var frail: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	frail.weapons = []
+	frail.equipped_weapon = ""
+	frail.add_weapon("steel_axe")
+	frail.equip("steel_axe")
+	_check(brawn.speed_penalty() == 0,
+		"un bras solide porte l'acier sans ralentir (FOR %d)" % brawn.str)
+	_check(frail.speed_penalty() > 0 and frail.get_attack_speed() == frail.spd - frail.speed_penalty(),
+		"une hache d'acier ralentit qui n'a pas les bras (−%d)" % frail.speed_penalty())
+
+	# --- Portée : c'est l'arme qui la donne, et elle décide de la riposte ---
+	var lancer: CharStats = _live("res://data/models/world/stats/hero/cavalier.tres")
+	lancer.equip("javelin")
+	_check(lancer.attack_range == 2, "le javelot porte à deux cases")
+	var brig: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	var duel: Dictionary = Calc.calculate_exchange(lancer, brig, {"distance": 2})
+	_check(not bool(duel["can_counter"]),
+		"frappé au javelot, le porteur de hache ne rend rien", str(duel["counter_reason"]))
+	lancer.equip("iron_lance")
+	_check(lancer.attack_range == 1, "la lance de fer ramène l'unité au contact")
+
+	# --- La fiche montre l'arme réellement tenue, en français ---
+	var sheet: Dictionary = UnitSheet.build(lancer)
+	_check(str(sheet["weapon"]) == "Lance de fer",
+		"la fiche nomme l'arme en main", str(sheet["weapon"]))
+	var bare: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	_check(str(UnitSheet.build(bare)["weapon"]) == "Hache",
+		"sans arsenal, la fiche montre le type d'arme traduit",
+		str(UnitSheet.build(bare)["weapon"]))
+
+
+## L'armurerie : acheter, équiper, revendre, et que ça survive à la sauvegarde.
+func _test_weapon_economy(campaign: Node) -> void:
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	campaign.gold = 5000
+	var id: String = str(campaign.roster[0]["id"])
+
+	_check(campaign.get_unit(id).get("weapons", []).size() == 2
+			and str(campaign.get_unit(id).get("weapon", "")) == "rapier",
+		"le roster hérite du fourreau de la fiche")
+
+	# Achat : débité, rangé, et mis en main si les mains étaient vides.
+	var gold_before: int = campaign.gold
+	var bought: Dictionary = campaign.buy_weapon(id, "killing_edge")
+	_check(bool(bought["ok"]) and campaign.gold == gold_before - WEAPONS.price("killing_edge"),
+		"arme achetée et débitée", str(bought))
+	_check("killing_edge" in campaign.get_unit(id)["weapons"], "arme rangée au fourreau")
+	_check(not bool(campaign.buy_weapon(id, "killing_edge")["ok"]), "pas deux fois la même arme")
+	_check(not bool(campaign.buy_weapon(id, "iron_axe")["ok"]),
+		"fourreau plein : achat refusé")
+
+	# Équiper
+	var equipped: Dictionary = campaign.equip_weapon(id, "killing_edge")
+	_check(bool(equipped["ok"]) and str(campaign.get_unit(id)["weapon"]) == "killing_edge",
+		"arme mise en main", str(equipped))
+	_check(not bool(campaign.equip_weapon(id, "steel_axe")["ok"]),
+		"on n'équipe pas une arme absente du fourreau")
+
+	var listed: Array = campaign.unit_arsenal(id)
+	var marked: int = 0
+	for w: Dictionary in listed:
+		if bool(w["equipped"]):
+			marked += 1
+	_check(listed.size() == 3 and marked == 1, "le menu voit 3 armes, une seule en main")
+
+	# Revendre celle qui est en main : une autre la remplace, jamais les poings nus
+	# tant qu'il reste quelque chose au fourreau.
+	var gold_mid: int = campaign.gold
+	var sold: Dictionary = campaign.sell_weapon(id, "killing_edge")
+	_check(bool(sold["ok"]) and campaign.gold == gold_mid + WEAPONS.resale_price("killing_edge"),
+		"revente créditée à moitié prix")
+	_check(not str(campaign.get_unit(id)["weapon"]).is_empty(),
+		"l'unité ne se retrouve pas désarmée sans le savoir",
+		str(campaign.get_unit(id)["weapon"]))
+	_check(not bool(campaign.sell_weapon(id, "steel_bow")["ok"]), "revente d'une arme absente refusée")
+
+	campaign.gold = 10
+	_check(not bool(campaign.buy_weapon(id, "steel_bow")["ok"]), "achat refusé sans or")
+
+	# --- Sauvegarde ---
+	campaign.gold = 3000
+	campaign.equip_weapon(id, "iron_sword")
+	var expected: Array = campaign.get_unit(id)["weapons"].duplicate()
+	_check(campaign.save_game(99), "partie sauvegardée")
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	_check(campaign.load_game(99), "partie rechargée")
+	_check(campaign.get_unit(id)["weapons"] == expected
+			and str(campaign.get_unit(id)["weapon"]) == "iron_sword",
+		"le fourreau et l'arme en main survivent à la sauvegarde",
+		str(campaign.get_unit(id).get("weapons", [])))
+
+	# Une arme disparue du catalogue ne doit pas ressusciter par le JSON : on
+	# sauvegarde un fourreau trafiqué et on vérifie ce qui en revient.
+	var tampered: Dictionary = campaign.get_unit(id)
+	tampered["weapons"] = ["iron_sword", "arme_fantome"]
+	tampered["weapon"] = "arme_fantome"
+	campaign.save_game(99)
+	campaign.load_game(99)
+	var restored: Dictionary = campaign.get_unit(id)
+	_check(restored["weapons"] == ["iron_sword"] and str(restored["weapon"]).is_empty(),
+		"une arme inconnue de la sauvegarde est écartée", str(restored.get("weapons", [])))
+	campaign.delete_save(99)
 #endregion
 
 
@@ -1172,6 +1345,9 @@ func _test_ux_polish() -> void:
 	_check(UnitSheet.terrain_label("forest") == "Forêt"
 			and UnitSheet.terrain_label("inconnu").is_empty(),
 		"terrains traduits, inconnu ignoré")
+
+
+
 #endregion
 
 

@@ -6,6 +6,7 @@ extends Node
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ClassDataDB = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SkillDB = preload("res://data/models/world/stats/skill_db.gd")
 
 #region Identity
@@ -36,6 +37,20 @@ var jump: int         ## Jump height
 var attack_range: int ## Attack range
 var weapon_type: int  ## WT.Type enum
 var weapon_might: int ## Base weapon damage
+## Modificateur de précision apporté par l'arme équipée
+var weapon_hit: int = 0
+## Modificateur de critique apporté par l'arme équipée
+var weapon_crit: int = 0
+## Poids de l'arme équipée (freine la vitesse d'attaque, amorti par la force)
+var weapon_weight: int = 0
+#endregion
+
+
+#region Arsenal
+## Armes transportées (identifiants connus de [WeaponDB]), au plus MAX_WEAPONS
+var weapons: Array = []
+## Arme actuellement en main ("" = les valeurs brutes de la fiche font foi)
+var equipped_weapon: String = ""
 #endregion
 
 #region Legacy (for template compatibility)
@@ -118,12 +133,28 @@ func import_stats(stats: StatsResource) -> void:
 			if items.size() < ITEMS.MAX_ITEMS:
 				items.append(str(i))
 
+	# Arsenal : une fiche muette garde ses `weapon_type` / `weapon_might` bruts,
+	# ce qui laisse intactes toutes les unités écrites avant le catalogue d'armes.
+	weapons = []
+	weapon_hit = 0
+	weapon_crit = 0
+	weapon_weight = 0
+	equipped_weapon = ""
+	var res_weapons: Variant = stats.get("weapons")
+	if res_weapons is Array:
+		for w in res_weapons:
+			add_weapon(str(w))
+	var res_equipped: Variant = stats.get("equipped_weapon")
+	if res_equipped is String and not str(res_equipped).is_empty():
+		equip(str(res_equipped))
+
 	# Croissances de classe : par défaut, class_data.gd fait autorité (P1).
 	if stats.get("use_class_growths") == null or bool(stats.use_class_growths):
 		apply_class_growths(character_class)
 
-	# Legacy compat
-	attack_power = stats.get_total_attack()
+	# Legacy compat — depuis l'arsenal, c'est l'arme en main qui décide, pas la
+	# fiche : `get_total_attack()` doit être lu sur l'unité vivante.
+	attack_power = get_total_attack()
 
 
 ## Aligne les taux de croissance sur ceux de la classe donnée.
@@ -170,9 +201,9 @@ func get_total_attack() -> int:
 	return get_attack_stat() + weapon_might
 
 
-## Get base hit rate
+## Get base hit rate (arme comprise)
 func get_base_hit() -> int:
-	return skl * 2 + int(lck / 2.0)
+	return skl * 2 + int(lck / 2.0) + weapon_hit
 
 
 ## Get avoid rate
@@ -180,9 +211,9 @@ func get_avoid() -> int:
 	return spd * 2 + lck
 
 
-## Get critical hit rate
+## Get critical hit rate (arme comprise)
 func get_crit() -> int:
-	return int(skl / 2.0)
+	return int(skl / 2.0) + weapon_crit
 
 
 ## Get critical evade (reduces enemy crit rate)
@@ -190,9 +221,18 @@ func get_crit_evade() -> int:
 	return lck
 
 
-## Get attack speed
+## Get attack speed — la vitesse, moins ce que l'arme coûte à porter.
 func get_attack_speed() -> int:
-	return spd
+	return spd - speed_penalty()
+
+
+## Malus de vitesse d'attaque dû au poids de l'arme.
+##
+## La force amortit le poids : à bras égal, une hache d'acier ralentit un mage et
+## laisse un guerrier intact. C'est ce qui empêche « la plus grosse arme » d'être
+## toujours le bon choix, et donne son intérêt au menu d'équipement.
+func speed_penalty() -> int:
+	return maxi(0, weapon_weight - str)
 
 
 #region Compétences
@@ -222,6 +262,106 @@ func skill_context(attacking: bool, terrain_def: int = 0, vs_flying: bool = fals
 		"terrain_def": terrain_def,
 		"vs_flying": vs_flying,
 	}
+#endregion
+
+
+#region Arsenal
+## Ajoute une arme au fourreau.
+##
+## La première arme rangée est aussi équipée : une unité qui vient d'acheter son
+## épée ne doit pas partir au combat les mains vides parce qu'elle a oublié de
+## l'empoigner.
+##
+## [returns] false si l'arme est inconnue, déjà portée, ou le fourreau plein.
+func add_weapon(weapon_id: String) -> bool:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	if key.is_empty() or key in weapons or weapons.size() >= WEAPONS.MAX_WEAPONS:
+		return false
+	weapons.append(key)
+	if equipped_weapon.is_empty():
+		equip(key)
+	return true
+
+
+## L'unité porte-t-elle cette arme ?
+func has_weapon(weapon_id: String) -> bool:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	return not key.is_empty() and key in weapons
+
+
+## Retire une arme du fourreau. Si c'était celle en main, l'unité empoigne la
+## suivante — ou revient à mains nues, ce que la prévision de combat dira.
+func drop_weapon(weapon_id: String) -> bool:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	if key.is_empty() or not key in weapons:
+		return false
+	weapons.erase(key)
+	if equipped_weapon == key:
+		equipped_weapon = ""
+		if weapons.is_empty():
+			unequip()
+		else:
+			equip(str(weapons[0]))
+	return true
+
+
+## Prend une arme en main : type, puissance, portée, précision, critique, poids.
+##
+## [returns] {ok: bool, weapon: String, reason: String}
+func equip(weapon_id: String) -> Dictionary:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	if key.is_empty():
+		return {"ok": false, "weapon": "", "reason": "arme inconnue : %s" % weapon_id}
+	if not key in weapons:
+		return {"ok": false, "weapon": key, "reason": "%s ne porte pas cette arme" % display_name()}
+
+	var w: Dictionary = WEAPONS.get_weapon(key)
+	equipped_weapon = key
+	weapon_type = int(w["type"])
+	weapon_might = int(w["might"])
+	attack_range = int(w["range"])
+	weapon_hit = int(w["hit"])
+	weapon_crit = int(w["crit"])
+	weapon_weight = int(w["weight"])
+	attack_power = get_total_attack()
+	return {"ok": true, "weapon": key, "reason": ""}
+
+
+## Repose l'arme : l'unité ne frappe plus que de ses poings.
+func unequip() -> void:
+	equipped_weapon = ""
+	weapon_type = WT.Type.NONE
+	weapon_might = 0
+	weapon_hit = 0
+	weapon_crit = 0
+	weapon_weight = 0
+	attack_power = get_total_attack()
+
+
+## Armes portées, décrites pour l'affichage :
+## [{id, label, description, equipped, might, range, hit, crit, weight}]
+func arsenal() -> Array:
+	var out: Array = []
+	for id: String in weapons:
+		var w: Dictionary = WEAPONS.get_weapon(id)
+		out.append({
+			"id": id,
+			"label": WEAPONS.label(id),
+			"description": WEAPONS.describe(id),
+			"equipped": id == equipped_weapon,
+			"might": int(w.get("might", 0)),
+			"range": int(w.get("range", 1)),
+			"hit": int(w.get("hit", 0)),
+			"crit": int(w.get("crit", 0)),
+			"weight": int(w.get("weight", 0)),
+			"speed_penalty": maxi(0, int(w.get("weight", 0)) - str),
+		})
+	return out
+
+
+## Nom lisible de l'unité (le même que partout ailleurs).
+func display_name() -> String:
+	return override_name if override_name else expertise
 #endregion
 
 

@@ -844,6 +844,12 @@ func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: Tact
 		"weapon_type": s.weapon_type,
 		"weapon_name": WT.get_weapon_name(s.weapon_type),
 		"weapon_might": s.weapon_might,
+		# Portée minimale et arsenal : sans eux, Ciel ne peut pas savoir qu'un
+		# archer pris au contact ne riposte pas — ni qu'une unité a mieux au
+		# fourreau que ce qu'elle tient.
+		"min_range": WT.get_min_range(s.weapon_type),
+		"equipped_weapon": s.equipped_weapon,
+		"weapons": s.weapons.duplicate(),
 		"is_magical": WT.is_magical(s.weapon_type),
 		"items": s.items.duplicate(),
 		"skills": s.get_skills(),

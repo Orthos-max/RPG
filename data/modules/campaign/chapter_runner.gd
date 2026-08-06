@@ -253,5 +253,24 @@ func _apply_unit(stats: Stats, unit: Dictionary) -> void:
 	stats.res = int(unit.get("res", stats.res))
 	stats.movement = int(unit.get("movement", stats.movement))
 	stats.apply_class_growths(stats.character_class)
+	_apply_arsenal(stats, unit)
 	stats.attack_power = stats.get_total_attack()
+
+
+## Reporte l'arsenal du roster sur le pion : sans cela, l'arme achetée et
+## équipée à l'écran de préparation restait dans la sauvegarde et le pion
+## entrait en scène avec l'arme brute de sa fiche.
+func _apply_arsenal(stats: Stats, unit: Dictionary) -> void:
+	var arsenal: Array = unit.get("weapons", [])
+	if arsenal.is_empty():
+		return  # Unité d'avant le catalogue : ses valeurs brutes font foi.
+
+	stats.weapons = []
+	stats.equipped_weapon = ""
+	for id in arsenal:
+		stats.add_weapon(str(id))
+
+	var equipped: String = str(unit.get("weapon", ""))
+	if not equipped.is_empty():
+		stats.equip(equipped)
 #endregion

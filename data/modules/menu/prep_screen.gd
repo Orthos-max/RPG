@@ -17,6 +17,7 @@ const C_BUTTON := Color("#0f3460")
 var chapter: ChapterData = null
 
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
 
@@ -25,6 +26,10 @@ var _slots_label: Label
 var _unit_rows: VBoxContainer
 var _start_button: Button
 var _shop_panel: Control = null
+var _equip_panel: Control = null
+## Unité affichée au menu d'équipement — retenue pour que changer d'arme ne
+## renvoie pas le joueur en tête de liste à chaque clic.
+var _equip_unit: String = ""
 
 
 func _ready() -> void:
@@ -121,6 +126,10 @@ func _build() -> void:
 	shop.pressed.connect(_toggle_shop)
 	buttons.add_child(shop)
 
+	var equip := _make_button("⚔  Équipement", false)
+	equip.pressed.connect(_toggle_equipment)
+	buttons.add_child(equip)
+
 	_start_button = _make_button("⚔️  Lancer la bataille", true)
 	_start_button.pressed.connect(_on_start)
 	buttons.add_child(_start_button)
@@ -171,13 +180,19 @@ func _make_unit_row(unit: Dictionary, campaign: Node) -> Control:
 	for skill_id in CDB.unlocked_skills(int(unit.get("class_id", 0)), int(unit.get("level", 1))):
 		skills.append(SKILLS.get_skill_name(str(skill_id)))
 
-	row.text = "%s  %-14s Lv.%-3d %-14s PV %d/%d  MOV %d  %s" % [
+	# L'arme en main se lit sur la ligne : c'est elle qui décide de la moitié d'un
+	# échange, et on la choisit juste à côté, au menu d'équipement.
+	var weapon: String = str(unit.get("weapon", ""))
+	var weapon_text: String = "⚔ %s" % WEAPONS.label(weapon) if not weapon.is_empty() else "⚔ —"
+
+	row.text = "%s  %-14s Lv.%-3d %-14s PV %d/%d  MOV %d  %-18s %s" % [
 		"🔒" if required else ("✔" if row.button_pressed else "  "),
 		str(unit.get("name", "?")),
 		int(unit.get("level", 1)),
 		campaign.unit_class_name(unit),
 		int(unit.get("hp", 0)), int(unit.get("max_hp", 0)),
 		int(unit.get("movement", 0)),
+		weapon_text,
 		("✨ " + ", ".join(skills)) if not skills.is_empty() else "",
 	]
 	row.add_theme_font_size_override("font_size", 14)
@@ -343,6 +358,51 @@ func _build_shop() -> Control:
 
 		shop_list.add_child(row)
 
+	# --- Armurerie ---
+	var forge := Label.new()
+	forge.text = "⚔  ARMURERIE  (fourreau : %d armes max — l'arme en main se choisit au menu Équipement)" % WEAPONS.MAX_WEAPONS
+	forge.add_theme_font_size_override("font_size", 13)
+	forge.add_theme_color_override("font_color", C_GOLD)
+	shop_list.add_child(forge)
+
+	for weapon_id: String in WEAPONS.shop_stock():
+		var w_row := HBoxContainer.new()
+		w_row.add_theme_constant_override("separation", 8)
+
+		var w_label := Label.new()
+		w_label.text = "%-20s %-34s %5d or" % [
+			WEAPONS.label(weapon_id), WEAPONS.describe(weapon_id), WEAPONS.price(weapon_id)
+		]
+		w_label.add_theme_font_size_override("font_size", 13)
+		w_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		w_row.add_child(w_label)
+
+		var buy_weapon := _make_button("Acheter", false)
+		buy_weapon.custom_minimum_size = Vector2(120, 30)
+		buy_weapon.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.buy_weapon(selected_id.call(), weapon_id)
+			if bool(r.get("ok", false)):
+				status.text = "%s acheté (%d or)%s." % [
+					WEAPONS.label(weapon_id), int(r.get("cost", 0)),
+					" et mis en main" if bool(r.get("equipped", false)) else "",
+				]
+			else:
+				status.text = str(r.get("reason", ""))
+			_rebuild_shop())
+		w_row.add_child(buy_weapon)
+
+		var sell_weapon := _make_button("Revendre", false)
+		sell_weapon.custom_minimum_size = Vector2(120, 30)
+		sell_weapon.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.sell_weapon(selected_id.call(), weapon_id)
+			status.text = ("%s revendu (+%d or)." % [
+				WEAPONS.label(weapon_id), int(r.get("earned", 0))
+			]) if bool(r.get("ok", false)) else str(r.get("reason", ""))
+			_rebuild_shop())
+		w_row.add_child(sell_weapon)
+
+		shop_list.add_child(w_row)
+
 	# --- Recrutement ---
 	for recruit: Dictionary in campaign.available_recruits():
 		var row := HBoxContainer.new()
@@ -370,6 +430,154 @@ func _build_shop() -> Control:
 	box.add_child(close)
 
 	return panel
+
+
+## Ouvre/ferme le menu d'équipement : quelle arme chaque unité prend en main.
+func _toggle_equipment() -> void:
+	if _equip_panel and is_instance_valid(_equip_panel):
+		_equip_panel.queue_free()
+		_equip_panel = null
+		_refresh()
+		return
+	_equip_panel = _build_equipment()
+	add_child(_equip_panel)
+
+
+## Menu d'équipement — une unité, son fourreau, et l'arme qu'elle empoigne.
+##
+## Le fourreau se remplit à l'intendance ; ici on n'achète rien, on décide.
+## Chaque arme annonce ce qu'elle change (puissance, portée, précision, critique)
+## et ce qu'elle coûte en vitesse d'attaque pour cette unité-là — une hache
+## d'acier ne pèse pas le même poids sur un mage et sur un guerrier.
+func _build_equipment() -> Control:
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(dim)
+
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 140
+	box.offset_right = -140
+	box.offset_top = 70
+	box.offset_bottom = -70
+	box.add_theme_constant_override("separation", 8)
+	panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "⚔  ÉQUIPEMENT"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", C_GOLD)
+	box.add_child(title)
+
+	if not campaign:
+		return panel
+
+	var target := OptionButton.new()
+	target.custom_minimum_size = Vector2(0, 34)
+	for u: Dictionary in campaign.available_units():
+		var held: String = str(u.get("weapon", ""))
+		target.add_item("%s — %s" % [
+			str(u["name"]), WEAPONS.label(held) if not held.is_empty() else "mains nues"
+		])
+		target.set_item_metadata(target.item_count - 1, str(u["id"]))
+		if str(u["id"]) == _equip_unit:
+			target.select(target.item_count - 1)
+	if target.item_count > 0 and target.selected < 0:
+		target.select(0)
+	box.add_child(target)
+
+	var status := Label.new()
+	status.add_theme_font_size_override("font_size", 13)
+	status.add_theme_color_override("font_color", C_ACCENT)
+	status.text = "Choisis une unité, puis l'arme qu'elle porte au combat."
+	box.add_child(status)
+
+	var list := VBoxContainer.new()
+	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 4)
+	box.add_child(list)
+
+	var fill := func() -> void:
+		for child in list.get_children():
+			child.queue_free()
+		if target.item_count == 0 or target.selected < 0:
+			return
+		var unit_id: String = str(target.get_item_metadata(target.selected))
+		_equip_unit = unit_id
+		var arsenal: Array = campaign.unit_arsenal(unit_id)
+		if arsenal.is_empty():
+			var empty := Label.new()
+			empty.text = "Fourreau vide — achète une arme à l'intendance."
+			empty.add_theme_font_size_override("font_size", 14)
+			empty.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+			list.add_child(empty)
+			return
+
+		var unit: Dictionary = campaign.get_unit(unit_id)
+		for weapon: Dictionary in arsenal:
+			list.add_child(_make_weapon_row(campaign, unit, weapon, status))
+
+	target.item_selected.connect(func(_i: int) -> void: fill.call())
+	fill.call()
+
+	var close := _make_button("Fermer", true)
+	close.pressed.connect(_toggle_equipment)
+	box.add_child(close)
+
+	return panel
+
+
+## Une ligne du menu d'équipement : l'arme, ce qu'elle vaut, et le bouton qui la
+## met en main (grisé si elle y est déjà).
+func _make_weapon_row(campaign: Node, unit: Dictionary, weapon: Dictionary,
+		status: Label) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var penalty: int = maxi(0, int(WEAPONS.get_weapon(str(weapon["id"])).get("weight", 0))
+		- int(unit.get("str", 0)))
+
+	var label := Label.new()
+	label.text = "%s %-20s %s%s" % [
+		"▶" if bool(weapon["equipped"]) else "  ",
+		str(weapon["label"]),
+		str(weapon["description"]),
+		("   ⏳ VIT −%d" % penalty) if penalty > 0 else "",
+	]
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", C_GOLD if bool(weapon["equipped"]) else C_TEXT)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+
+	var equip := _make_button("Équiper", false)
+	equip.custom_minimum_size = Vector2(120, 30)
+	equip.disabled = bool(weapon["equipped"])
+	equip.pressed.connect(func() -> void:
+		var r: Dictionary = campaign.equip_weapon(str(unit.get("id", "")), str(weapon["id"]))
+		status.text = ("%s prend %s en main." % [
+			str(unit.get("name", "")), str(weapon["label"])
+		]) if bool(r.get("ok", false)) else str(r.get("reason", ""))
+		_rebuild_equipment())
+	row.add_child(equip)
+
+	return row
+
+
+## Reconstruit le menu d'équipement après un changement d'arme.
+func _rebuild_equipment() -> void:
+	if not _equip_panel or not is_instance_valid(_equip_panel):
+		return
+	var old: Control = _equip_panel
+	_equip_panel = _build_equipment()
+	add_child(_equip_panel)
+	old.queue_free()
+	_refresh()
 
 
 ## Reconstruit le panneau après un achat (les prix et l'or ont changé).

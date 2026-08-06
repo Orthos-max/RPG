@@ -11,6 +11,7 @@ extends RefCounted
 ## différence entre une fiche décorative et une fiche qui aide à jouer.
 
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const CD = preload("res://data/models/world/stats/class_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 
@@ -58,7 +59,7 @@ static func build(stats: Stats, opts: Dictionary = {}) -> Dictionary:
 			{"label": "Crit", "value": stats.get_crit()},
 			{"label": "VitAtt", "value": stats.get_attack_speed()},
 		],
-		"weapon": WT.get_weapon_name(stats.weapon_type),
+		"weapon": _weapon_label(stats),
 		"weapon_might": stats.weapon_might,
 		"movement": stats.movement,
 		"range": stats.attack_range,
@@ -67,6 +68,15 @@ static func build(stats: Stats, opts: Dictionary = {}) -> Dictionary:
 		"skills": _skill_names(stats),
 		"items": _item_names(stats),
 	}
+
+
+## Nom de l'arme montrée sur la fiche : celle qui est réellement en main quand
+## l'unité en porte une, sinon le type d'arme brut de sa fiche.
+static func _weapon_label(stats: Stats) -> String:
+	var equipped: Variant = stats.get("equipped_weapon")
+	if equipped is String and not str(equipped).is_empty():
+		return WEAPONS.label(str(equipped))
+	return WT.get_weapon_label(stats.weapon_type)
 
 
 ## Nom lisible d'un terrain, depuis la clé technique de [TacticsGrid].

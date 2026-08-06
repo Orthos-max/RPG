@@ -10,6 +10,7 @@ const ChapterDataClass = preload("res://data/models/campaign/chapter_data.gd")
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 const ClassDataDBClass = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 
 signal roster_changed()
 signal chapter_completed(chapter_id: String, bonuses: Array)
@@ -115,7 +116,30 @@ func unit_from_resource(path: String) -> Dictionary:
 		"is_promoted": res.is_promoted,
 		"alive": true,
 		"items": [],
+		"weapons": _weapons_of(res),
+		"weapon": _equipped_of(res),
 	}
+
+
+## Armes déclarées par une fiche, filtrées sur celles que le catalogue connaît.
+func _weapons_of(res: Resource) -> Array:
+	var out: Array = []
+	var declared: Variant = res.get("weapons")
+	if declared is Array:
+		for w in declared:
+			var key: String = WEAPONS.canonical_id(str(w))
+			if not key.is_empty() and not key in out and out.size() < WEAPONS.MAX_WEAPONS:
+				out.append(key)
+	return out
+
+
+## Arme en main déclarée par une fiche ("" si aucune, ou si elle n'est pas portée).
+func _equipped_of(res: Resource) -> String:
+	var declared: Variant = res.get("equipped_weapon")
+	if not declared is String:
+		return ""
+	var key: String = WEAPONS.canonical_id(str(declared))
+	return key if key in _weapons_of(res) else ""
 
 
 ## Ajoute une unité au roster (ignorée si déjà présente).
@@ -349,6 +373,105 @@ func use_booster(unit_id: String, item_name: String) -> Dictionary:
 	return {"ok": true, "stat": stat, "amount": amount, "reason": ""}
 
 
+#region Armes
+## Achète une arme et la range dans le fourreau d'une unité.
+##
+## L'arme achetée par une unité qui n'en portait aucune lui est mise en main
+## d'office — sinon l'achat n'aurait aucun effet en bataille.
+## [returns] {ok, cost, equipped, reason}
+func buy_weapon(unit_id: String, weapon_id: String) -> Dictionary:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	if key.is_empty():
+		return {"ok": false, "reason": "arme inconnue : %s" % weapon_id}
+	var unit: Dictionary = get_unit(unit_id)
+	if unit.is_empty():
+		return {"ok": false, "reason": "unité inconnue"}
+
+	var arsenal: Array = unit.get("weapons", [])
+	if key in arsenal:
+		return {"ok": false, "reason": "%s porte déjà %s" % [
+			str(unit.get("name", "")), WEAPONS.label(key)
+		]}
+	if arsenal.size() >= WEAPONS.MAX_WEAPONS:
+		return {"ok": false, "reason": "%s ne peut porter que %d armes" % [
+			str(unit.get("name", "")), WEAPONS.MAX_WEAPONS
+		]}
+
+	var cost: int = WEAPONS.price(key)
+	if gold < cost:
+		return {"ok": false, "reason": "il manque %d or" % (cost - gold)}
+
+	gold -= cost
+	arsenal.append(key)
+	unit["weapons"] = arsenal
+	var equipped: bool = false
+	if str(unit.get("weapon", "")).is_empty():
+		unit["weapon"] = key
+		equipped = true
+	roster_changed.emit()
+	return {"ok": true, "cost": cost, "equipped": equipped, "reason": ""}
+
+
+## Revend une arme (moitié prix). Celle qui était en main est remplacée par la
+## suivante du fourreau, faute de quoi l'unité partirait désarmée sans le savoir.
+func sell_weapon(unit_id: String, weapon_id: String) -> Dictionary:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	var unit: Dictionary = get_unit(unit_id)
+	if key.is_empty() or unit.is_empty():
+		return {"ok": false, "reason": "arme ou unité inconnue"}
+
+	var arsenal: Array = unit.get("weapons", [])
+	if not key in arsenal:
+		return {"ok": false, "reason": "%s ne porte pas %s" % [
+			str(unit.get("name", "")), WEAPONS.label(key)
+		]}
+
+	arsenal.erase(key)
+	unit["weapons"] = arsenal
+	if str(unit.get("weapon", "")) == key:
+		unit["weapon"] = str(arsenal[0]) if not arsenal.is_empty() else ""
+
+	var earned: int = WEAPONS.resale_price(key)
+	gold += earned
+	roster_changed.emit()
+	return {"ok": true, "earned": earned, "reason": ""}
+
+
+## Met une arme du fourreau en main.
+func equip_weapon(unit_id: String, weapon_id: String) -> Dictionary:
+	var key: String = WEAPONS.canonical_id(weapon_id)
+	var unit: Dictionary = get_unit(unit_id)
+	if key.is_empty() or unit.is_empty():
+		return {"ok": false, "reason": "arme ou unité inconnue"}
+	if not key in unit.get("weapons", []):
+		return {"ok": false, "reason": "%s ne porte pas %s" % [
+			str(unit.get("name", "")), WEAPONS.label(key)
+		]}
+
+	unit["weapon"] = key
+	roster_changed.emit()
+	return {"ok": true, "weapon": key, "reason": ""}
+
+
+## Armes d'une unité, décrites pour le menu d'équipement :
+## [{id, label, description, equipped}]
+func unit_arsenal(unit_id: String) -> Array:
+	var unit: Dictionary = get_unit(unit_id)
+	if unit.is_empty():
+		return []
+	var equipped: String = str(unit.get("weapon", ""))
+	var out: Array = []
+	for id in unit.get("weapons", []):
+		out.append({
+			"id": str(id),
+			"label": WEAPONS.label(str(id)),
+			"description": WEAPONS.describe(str(id)),
+			"equipped": str(id) == equipped,
+		})
+	return out
+#endregion
+
+
 ## Unités recrutables encore absentes du roster : [{path, cost, name, class}]
 func available_recruits() -> Array:
 	var out: Array = []
@@ -475,6 +598,17 @@ func _normalize_unit(raw: Dictionary) -> Dictionary:
 			u[key] = int(u[key])
 	u["alive"] = bool(u.get("alive", true))
 	u["is_promoted"] = bool(u.get("is_promoted", false))
+
+	# Arsenal : une sauvegarde d'avant le catalogue d'armes n'en contient pas, et
+	# une arme retirée du catalogue ne doit pas ressusciter par le JSON.
+	var arsenal: Array = []
+	for w in u.get("weapons", []):
+		var key: String = WEAPONS.canonical_id(str(w))
+		if not key.is_empty() and not key in arsenal:
+			arsenal.append(key)
+	u["weapons"] = arsenal
+	var equipped: String = WEAPONS.canonical_id(str(u.get("weapon", "")))
+	u["weapon"] = equipped if equipped in arsenal else ""
 	return u
 
 

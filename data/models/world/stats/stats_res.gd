@@ -53,6 +53,12 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 @export var weapon_type: int = 0
 ## Weapon might (base damage added to Str or Mag)
 @export var weapon_might: int = 5
+## Armes transportées (identifiants de [WeaponDB]), au plus WeaponDB.MAX_WEAPONS.
+## Laisser vide conserve les deux valeurs brutes ci-dessus : toutes les fiches
+## écrites avant le catalogue d'armes restent valables telles quelles.
+@export var weapons: Array[String] = []
+## Arme prise en main à l'entrée en scène ("" = aucune, donc valeurs brutes).
+@export var equipped_weapon: String = ""
 #endregion
 
 #region Growth Rates

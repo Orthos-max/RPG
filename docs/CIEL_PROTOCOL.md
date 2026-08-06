@@ -86,6 +86,10 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
   "str": 7, "mag": 0, "skl": 4, "spd": 5, "lck": 2, "def": 3, "res": 0,
   "movement": 5, "attack_range": 1,
   "weapon_type": 2, "weapon_name": "Axe", "weapon_might": 5, "is_magical": false,
+  "min_range": 1,               // Portée MINIMALE : un arc vaut 2, et ne riposte
+                                // donc pas au contact (voir « Riposte » plus bas)
+  "equipped_weapon": "iron_axe",// Arme en main (identifiant WeaponDB), "" si aucune
+  "weapons": ["iron_axe"],      // Fourreau : ce que l'unité pourrait équiper
   "items": ["Vulnerary"],
   "buffs": [{"stat": "def", "amount": 2, "turns": 1}],
   "terrain": "forest", "terrain_def": 1,
