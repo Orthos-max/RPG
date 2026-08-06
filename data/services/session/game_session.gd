@@ -3,7 +3,7 @@ extends Node
 ##
 ## Point d'entrée unique pour savoir comment un camp est piloté. La boucle de tour
 ## interroge [method controller_for] au lieu de coder en dur « joueur local vs IA »,
-## ce qui prépare le hotseat (M2) et le réseau (M3) sans redéfaire le gameplay.
+## ce qui prépare le réseau (M3) sans redéfaire le gameplay.
 
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 const ArmySplitClass = preload("res://data/models/world/combat/team/army_split.gd")
@@ -15,7 +15,10 @@ signal teams_changed()
 enum Mode {
 	SOLO = 0,     ## Campagne solo : joueur local vs IA locale
 	CIEL = 1,     ## Le camp adverse est piloté par Ciel
-	HOTSEAT = 2,  ## Deux humains sur la même machine (M2)
+	## 2 était le duel local (deux humains sur la même machine), retiré le
+	## 2026-08-06 : personne ne s'en servait. La valeur reste vacante — elle
+	## voyage jusqu'à Ciel dans `ai_state.json`, renuméroter changerait le
+	## protocole pour rien.
 	NETWORK = 3,  ## Un humain distant via code d'accès (M3)
 }
 
@@ -174,7 +177,6 @@ func _default_opponent_controller() -> int:
 		return TeamDataClass.Controller.CIEL_AI
 	match mode:
 		Mode.CIEL: return TeamDataClass.Controller.CIEL_AI
-		Mode.HOTSEAT: return TeamDataClass.Controller.LOCAL_PLAYER
 		Mode.NETWORK: return TeamDataClass.Controller.REMOTE_PLAYER
 		_: return TeamDataClass.Controller.LOCAL_AI
 
@@ -182,5 +184,4 @@ func _default_opponent_controller() -> int:
 func _default_guest_controller() -> int:
 	match mode:
 		Mode.NETWORK: return TeamDataClass.Controller.REMOTE_PLAYER
-		Mode.HOTSEAT: return TeamDataClass.Controller.LOCAL_PLAYER
 		_: return TeamDataClass.Controller.LOCAL_AI

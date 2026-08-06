@@ -8,10 +8,10 @@ signal new_game_requested(difficulty: int, permadeath: bool)
 signal continue_requested()
 signal load_requested()
 signal ciel_mode_requested()
-signal hotseat_requested()
 signal host_requested()
 signal join_requested()
 signal editor_requested()
+signal character_editor_requested()
 signal quit_requested()
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
@@ -141,10 +141,6 @@ func _build() -> void:
 	ciel_btn.pressed.connect(func() -> void: ciel_mode_requested.emit())
 	play.add_child(ciel_btn)
 
-	var hotseat_btn := _make_button("🪑  Duel local (2 joueurs)")
-	hotseat_btn.pressed.connect(func() -> void: hotseat_requested.emit())
-	play.add_child(hotseat_btn)
-
 	var host_btn := _make_button("🌐  Créer une partie en ligne")
 	host_btn.pressed.connect(func() -> void: host_requested.emit())
 	play.add_child(host_btn)
@@ -174,6 +170,10 @@ func _build() -> void:
 	var editor_btn := _make_button("🗺️  Éditeur de cartes")
 	editor_btn.pressed.connect(func() -> void: editor_requested.emit())
 	extras.add_child(editor_btn)
+
+	var chars_btn := _make_button("🧑  Éditeur de personnages")
+	chars_btn.pressed.connect(func() -> void: character_editor_requested.emit())
+	extras.add_child(chars_btn)
 
 	var quit_btn := _make_button("🚪  Quitter")
 	quit_btn.pressed.connect(func() -> void: quit_requested.emit())

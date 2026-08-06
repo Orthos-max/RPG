@@ -14,7 +14,7 @@ extends Node3D
 ## Service handling participant logic and operations
 var serv: TacticsParticipantService
 ## Service des actions « humaines » (sélection, portées, ciblage).
-## Porté par la classe de base : en hotseat (M2), les deux camps peuvent être
+## Porté par la classe de base : en réseau, les deux camps peuvent être
 ## joués par un humain, donc les deux ont besoin de ces actions.
 var player_serv: TacticsPlayerService
 ## Reference to the TacticsArena node
@@ -48,7 +48,7 @@ func _ready() -> void:
 	serv = TacticsParticipantService.new(res, camera, controls)
 	# Set up the service with this node as context
 	serv.setup(self)
-	# Actions humaines, disponibles pour les deux camps (hotseat)
+	# Actions humaines, disponibles pour les deux camps (réseau)
 	player_serv = TacticsPlayerService.new(res, camera, controls, arena)
 	# Connect the skip_turn signal to the skip_turn method
 	res.connect("called_skip_turn", skip_turn)
@@ -95,13 +95,13 @@ func reset_turn(parent: Node3D) -> void:
 
 
 ## Skips the participant's turn
-## Le camp qui passe est celui qui joue (en hotseat, ce n'est pas toujours le joueur 1).
+## Le camp qui passe est celui qui joue (en réseau, ce n'est pas toujours le joueur local).
 func skip_turn() -> void:
 	var camp: Node3D = res.acting_camp if res.acting_camp and is_instance_valid(res.acting_camp) else player
 	serv.skip_turn(camp)
 
 
-#region Actions humaines (partagées par les deux camps — hotseat)
+#region Actions humaines (partagées par les deux camps — réseau)
 ## Displays the available actions for the current pawn
 func show_available_pawn_actions() -> void:
 	player_serv.show_available_pawn_actions()

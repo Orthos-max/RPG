@@ -3,7 +3,7 @@ extends Resource
 ## Un camp de la bataille et la façon dont il est piloté (M1 du chantier multijoueur).
 ##
 ## Le gameplay ne doit plus supposer « joueur humain local vs IA » : il demande à
-## [GameSession] quel [enum Controller] pilote un camp. Ajouter le hotseat (M2) ou
+## [GameSession] quel [enum Controller] pilote un camp. Ajouter un contrôleur ou
 ## le réseau (M3) revient alors à changer le contrôleur, pas la boucle de tour.
 
 enum Side {

@@ -33,7 +33,7 @@ func _init(_res: TacticsParticipantResource, _camera: TacticsCameraResource, _co
 ## @param delta: Time elapsed since the last frame
 ## @param player: The TacticsPlayer node
 ## @param participant: The TacticsParticipant node
-## [param camp] Camp joué à la main : le joueur 1, ou l'adversaire en hotseat.
+## [param camp] Camp joué à la main : le joueur local, ou un camp tenu à distance.
 func handle_player_turn(delta: float, camp: TacticsParticipant, participant: TacticsParticipant) -> void:
 	if res.turn_just_started:
 		camera.target = camp.get_children().front()

@@ -1027,7 +1027,6 @@ func _mode_name() -> String:
 	match session.mode:
 		0: return "solo"
 		1: return "ciel"
-		2: return "hotseat"
 		3: return "network"
 		_: return "inconnu"
 

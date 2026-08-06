@@ -12,6 +12,7 @@ const ChapterRunnerClass = preload("res://data/modules/campaign/chapter_runner.g
 const TurnBanner = preload("res://data/modules/ui/turn_banner.gd")
 const LobbyScreen = preload("res://data/modules/menu/lobby_screen.gd")
 const SaveScreen = preload("res://data/modules/menu/save_screen.gd")
+const CharacterEditor = preload("res://data/modules/menu/character_editor.gd")
 const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
@@ -70,10 +71,10 @@ func show_title() -> void:
 	screen.continue_requested.connect(_on_continue)
 	screen.load_requested.connect(func() -> void: show_saves(false))
 	screen.ciel_mode_requested.connect(_on_ciel_skirmish)
-	screen.hotseat_requested.connect(_on_hotseat)
 	screen.host_requested.connect(func() -> void: show_lobby(true))
 	screen.join_requested.connect(func() -> void: show_lobby(false))
 	screen.editor_requested.connect(func() -> void: show_editor())
+	screen.character_editor_requested.connect(show_character_editor)
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
 	_mount_ui(screen)
 
@@ -105,6 +106,15 @@ func show_prep() -> void:
 	screen.battle_requested.connect(_on_battle_requested)
 	screen.back_requested.connect(show_title)
 	screen.save_requested.connect(func() -> void: show_saves(true))
+	_mount_ui(screen)
+
+
+## Éditeur de personnages : créer une recrue, l'enregistrer, l'enrôler.
+func show_character_editor() -> void:
+	unload_level()
+	_clear_ui()
+	var screen := CharacterEditor.new()
+	screen.back_requested.connect(show_title)
 	_mount_ui(screen)
 
 
@@ -287,15 +297,6 @@ func _on_ciel_skirmish() -> void:
 	_load_level(SKIRMISH_SCENE)
 
 
-## Duel local : les deux camps sont joués à la main, sur la même machine (M2).
-func _on_hotseat() -> void:
-	var session: Node = _session()
-	if session:
-		session.set_mode(session.Mode.HOTSEAT)
-	_chapter = null
-	_load_level(SKIRMISH_SCENE)
-
-
 func _on_battle_requested() -> void:
 	if not _chapter:
 		show_title()
@@ -385,7 +386,7 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 			"chapter": _chapter.id if _chapter else "skirmish",
 		})
 
-	# Bandeau « à qui de jouer » — vital en hotseat, informatif ailleurs.
+	# Bandeau « à qui de jouer » — vital en réseau, informatif ailleurs.
 	if _level is TacticsLevel:
 		var banner: CanvasLayer = TurnBanner.new()
 		banner.name = "TurnBanner"

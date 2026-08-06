@@ -3,7 +3,7 @@ extends TacticsParticipant
 ## Handles player-specific actions and logic in the tactics game
 ##
 ## Les actions humaines (sélection, portées, ciblage, déplacement) vivent
-## désormais dans [TacticsParticipant] : en hotseat (M2), le camp adverse peut
+## désormais dans [TacticsParticipant] : en réseau, le camp adverse peut
 ## lui aussi être joué par un humain et a besoin des mêmes actions.
 ## Ce nœud ne garde que ce qui est propre au camp du joueur 1.
 ## Service: [TacticsPlayerService]

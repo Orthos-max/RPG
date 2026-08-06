@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Bandeau indiquant quel camp joue — indispensable en hotseat, utile ailleurs.
+## Bandeau indiquant quel camp joue — indispensable en réseau, utile ailleurs.
 ##
 ## Lit l'état du niveau chaque frame plutôt que d'écouter des signaux : la boucle
 ## de tour n'en émet pas, et le coût est négligeable devant le rendu.

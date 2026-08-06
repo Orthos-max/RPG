@@ -23,7 +23,7 @@ func _apply_difficulty_handicap() -> void:
 	var session: Node = get_node_or_null("/root/GameSession")
 	if not session:
 		return
-	# Le handicap est un réglage d'IA : une armée tenue par un humain (hotseat,
+	# Le handicap est un réglage d'IA : une armée tenue par un humain (réseau,
 	# invité distant, troisième camp de M5) n'a pas à en hériter.
 	var team = session.get_team(TeamDataClass.side_for_camp_node(self))
 	if team and team.is_human():
