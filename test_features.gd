@@ -13,6 +13,8 @@ const CDB = preload("res://data/models/world/stats/class_data.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
+const CMAP = preload("res://data/models/campaign/chapter_map.gd")
+const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
@@ -850,6 +852,8 @@ func _test_economy() -> void:
 
 	_test_weapons()
 	_test_weapon_economy(campaign)
+	_test_chapter_map()
+	_test_deployment_tiles(campaign)
 
 
 #region 12bis. Armes — catalogue, fourreau, équipement
@@ -1019,6 +1023,135 @@ func _test_weapon_economy(campaign: Node) -> void:
 	_check(restored["weapons"] == ["iron_sword"] and str(restored["weapon"]).is_empty(),
 		"une arme inconnue de la sauvegarde est écartée", str(restored.get("weapons", [])))
 	campaign.delete_save(99)
+#endregion
+
+
+#region 12ter. Lecture de carte et choix du terrain en préparation
+func _test_chapter_map() -> void:
+	print("\n🗺 Test 12ter: lecture de la carte d'un chapitre")
+
+	var chapter: ChapterData = CAMPAIGN_DB.get_chapter(0)
+	var map: Dictionary = CMAP.read(chapter)
+	_check(bool(map["ok"]), "carte du chapitre 1 lue sans monter la bataille",
+		str(map.get("reason", "")))
+	if not bool(map["ok"]):
+		return
+
+	_check(map["grid_size"] == Vector2i(16, 10), "grille de la carte (%s)" % str(map["grid_size"]))
+	_check(map["terrain"].size() == 16 * 10, "terrain complet (%d cases)" % map["terrain"].size())
+
+	# Le piège qui a coûté une réécriture : hors de l'arbre, `global_position`
+	# rend l'identité, et les quatre pions de départ tombaient sur la même case.
+	_check(map["starts"].size() >= 3,
+		"les unités de départ occupent des cases distinctes (%d)" % map["starts"].size(),
+		str(map["starts"]))
+
+	# Aucune case ouverte ne doit être infranchissable : on ne déploie pas dans un lac.
+	var walkable: bool = true
+	var forest_slots: int = 0
+	for pos: Vector2i in map["slots"]:
+		if not MAP_DATA.is_walkable(CMAP.terrain_at(map, pos)):
+			walkable = false
+		if CMAP.defense_at(map, pos) > 0:
+			forest_slots += 1
+	_check(walkable, "toutes les cases ouvertes sont praticables (%d)" % map["slots"].size())
+	_check(forest_slots > 0,
+		"la zone contient des cases défensives — il y a donc un choix à faire (%d)" % forest_slots)
+
+	# Le bonus lu ici doit être celui que le combat appliquera.
+	var forest: int = MAP_DATA.get_defense_bonus(MAP_DATA.TerrainType.FOREST)
+	var found: bool = false
+	for pos: Vector2i in map["slots"]:
+		if CMAP.terrain_at(map, pos) == MAP_DATA.TerrainType.FOREST:
+			found = CMAP.defense_at(map, pos) == forest
+			break
+	_check(found, "le bonus annoncé est celui du calculateur (+%d en forêt)" % forest)
+
+	# Hors bornes : la lecture ne doit pas exploser, juste répondre platement.
+	_check(CMAP.defense_at(map, Vector2i(-5, -5)) == 0
+			and CMAP.defense_at(map, Vector2i(999, 999)) == 0,
+		"une case hors carte ne rapporte rien plutôt que de faire dérailler la lecture")
+
+	# Une carte sans terrain déclaré doit le dire, pas se taire.
+	var handmade: Dictionary = CMAP.read(CAMPAIGN_DB.get_chapter(1))
+	_check(not bool(handmade["ok"]) and not str(handmade["reason"]).is_empty(),
+		"une carte écrite à la main annonce qu'elle ne se lit pas d'avance",
+		str(handmade["reason"]))
+	_check(not CMAP.read(null)["ok"], "aucun chapitre : lecture refusée proprement")
+
+
+func _test_deployment_tiles(campaign: Node) -> void:
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	var ids: Array = campaign.deployment.duplicate()
+	if ids.size() < 2:
+		_ko("Cases de départ", "pas assez d'unités déployées")
+		return
+	var first: String = str(ids[0])
+	var second: String = str(ids[1])
+
+	_check(campaign.deployment_tile(first) == Vector2i(-1, -1),
+		"aucune case choisie au départ")
+
+	campaign.set_deployment_tile(first, Vector2i(5, 2))
+	_check(campaign.deployment_tile(first) == Vector2i(5, 2), "case retenue pour l'unité")
+
+	# Deux unités sur la même case échangent, comme au déploiement en jeu.
+	campaign.set_deployment_tile(second, Vector2i(7, 3))
+	campaign.set_deployment_tile(second, Vector2i(5, 2))
+	_check(campaign.deployment_tile(second) == Vector2i(5, 2)
+			and campaign.deployment_tile(first) == Vector2i(7, 3),
+		"poser sur une case prise fait échanger les deux unités",
+		"%s / %s" % [campaign.deployment_tile(first), campaign.deployment_tile(second)])
+
+	# Une unité qui n'était pas encore posée chasse l'occupante au lieu d'échanger.
+	var third: String = str(ids[2]) if ids.size() > 2 else ""
+	if not third.is_empty():
+		campaign.set_deployment_tile(third, Vector2i(5, 2))
+		_check(campaign.deployment_tile(third) == Vector2i(5, 2)
+				and campaign.deployment_tile(second) == Vector2i(-1, -1),
+			"l'unité délogée par une nouvelle venue perd sa case")
+		campaign.set_deployment_tile(second, Vector2i(9, 4))
+
+	# Sauvegarde : le JSON ne connaît pas Vector2i.
+	var expected: Vector2i = campaign.deployment_tile(first)
+	_check(campaign.save_game(98), "partie sauvegardée avec ses positions")
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	_check(campaign.deployment_tiles.is_empty(), "une nouvelle partie repart sans positions")
+	_check(campaign.load_game(98), "partie rechargée")
+	_check(campaign.deployment_tile(first) == expected,
+		"les cases de départ survivent à la sauvegarde (%s)" % campaign.deployment_tile(first))
+
+	# Une entrée corrompue est écartée au chargement, pas propagée : on trafique
+	# le fichier lui-même plutôt que d'appeler la conversion en douce.
+	var corrupt := FileAccess.open(campaign.save_path(98), FileAccess.WRITE)
+	corrupt.store_string(JSON.stringify({
+		"version": campaign.SAVE_VERSION,
+		"chapter_index": 0, "gold": 0, "difficulty": DIFF.Level.NORMAL,
+		"permadeath": true, "deployment": [first, second], "roster": campaign.roster,
+		"deployment_tiles": {first: [3, 4], second: "pas une case", "vide": [1]},
+	}, "\t"))
+	corrupt.close()
+	_check(campaign.load_game(98), "sauvegarde aux positions douteuses tout de même lue")
+	_check(campaign.deployment_tile(first) == Vector2i(3, 4)
+			and campaign.deployment_tile(second) == Vector2i(-1, -1)
+			and campaign.deployment_tile("vide") == Vector2i(-1, -1),
+		"les positions mal formées sont écartées au chargement",
+		str(campaign.deployment_tiles))
+	campaign.save_game(98)
+
+	# Écarter une unité du déploiement doit lui retirer sa case.
+	campaign.load_game(98)
+	campaign.set_deployment([second])
+	_check(campaign.deployment_tile(first) == Vector2i(-1, -1),
+		"une unité retirée du déploiement perd sa case")
+
+	# Changer de chapitre remet les positions à zéro : elles parlaient d'une
+	# carte qu'on ne joue plus.
+	campaign.set_deployment_tile(second, Vector2i(6, 6))
+	campaign.complete_chapter([])
+	_check(campaign.deployment_tiles.is_empty(),
+		"le chapitre suivant repart sans positions héritées")
+	campaign.delete_save(98)
 #endregion
 
 

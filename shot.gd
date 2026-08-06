@@ -9,7 +9,10 @@ extends SceneTree
 ## Lancer :
 ##   godot --path . --resolution 1600x900 --script shot.gd -- battle out.png
 ##
-## Écrans : title, battle, editor.
+## Écrans : title, battle, editor, prep.
+##
+## `prep` accepte un troisième argument — `equip`, `positions` ou `shop` — pour
+## ouvrir directement le panneau à regarder.
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 
@@ -34,6 +37,8 @@ func _init() -> void:
 			pass
 		"editor":
 			main.show_editor()
+		"prep":
+			await _open_prep(main, args[2] if args.size() > 2 else "")
 		_:
 			await _open_battle(main)
 
@@ -51,6 +56,45 @@ func _init() -> void:
 	else:
 		printerr("[shot] échec de l'enregistrement : %d" % error)
 	quit(0 if error == OK else 1)
+
+
+## Nouvelle partie → écran de préparation, panneau demandé ouvert.
+##
+## L'équipement d'armes et le choix des cases de départ ne se jugent pas en
+## lisant du code : ils se regardent.
+func _open_prep(main: Node, panel: String) -> void:
+	main._on_new_game(DIFF.Level.NORMAL, true)
+	for _i in 10:
+		await physics_frame
+
+	var prep: Node = _find_by_script(main, "prep_screen.gd")
+	if not prep:
+		printerr("[shot] écran de préparation introuvable")
+		return
+
+	match panel:
+		"equip":
+			prep._toggle_equipment()
+		"positions":
+			prep._toggle_positions()
+		"shop":
+			prep._toggle_shop()
+		_:
+			pass
+	for _i in 10:
+		await physics_frame
+
+
+## Premier nœud portant un script donné.
+func _find_by_script(node: Node, suffix: String) -> Node:
+	var script: Script = node.get_script()
+	if script and str(script.resource_path).ends_with(suffix):
+		return node
+	for child: Node in node.get_children():
+		var found: Node = _find_by_script(child, suffix)
+		if found:
+			return found
+	return null
 
 
 ## Nouvelle partie → chapitre 1 → déploiement confirmé.

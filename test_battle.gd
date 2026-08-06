@@ -7,6 +7,8 @@ extends SceneTree
 ## → commande invalide rejetée → commande valide acquittée.
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
+const CMAP = preload("res://data/models/campaign/chapter_map.gd")
+const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 
 const STATE_FILE: String = "user://ai_state.json"
 const CMD_FILE: String = "user://ai_command.json"
@@ -72,6 +74,19 @@ func _run() -> void:
 	campaign.set_deployment([ids[0], ids[1]])
 	_check(campaign.deployment.size() == 2, "déploiement forcé à 2 unités")
 
+	# --- Choix du terrain, fait devant la carte comme le ferait le joueur ---
+	# On vise une case défensive : si le choix se propage jusqu'en bataille, c'est
+	# tout le trajet préparation → sauvegarde → pion posé qui tient.
+	var map: Dictionary = CMAP.read(CAMPAIGN_DB.get_chapter(0))
+	var chosen := Vector2i(-1, -1)
+	for pos: Vector2i in map.get("slots", []):
+		if CMAP.defense_at(map, pos) > 0:
+			chosen = pos
+			break
+	_check(chosen.x >= 0, "case défensive repérée en préparation : %s" % chosen)
+	if chosen.x >= 0:
+		campaign.set_deployment_tile(str(ids[0]), chosen)
+
 	# --- Chargement du chapitre ---
 	main._on_battle_requested()
 	# Le niveau s'initialise sur plusieurs frames (arène, pions, roster).
@@ -92,6 +107,28 @@ func _run() -> void:
 	_check(player_pawns == 2, "roster appliqué : %d pions joueur (déployés)" % player_pawns,
 		"attendu 2")
 	_check(enemy_pawns > 0, "camp adverse peuplé : %d pions" % enemy_pawns)
+
+	# --- La case choisie devant la carte est bien celle occupée en bataille ---
+	if chosen.x >= 0:
+		var posted: Node = _find_pawn_by_id(level.player, str(ids[0]))
+		var target_tile: Node3D = TacticsGrid.find_tile(level.arena, chosen.x, chosen.y)
+		_check(posted != null and target_tile != null,
+			"unité et case retrouvées en scène (%s)" % chosen)
+		if posted and target_tile:
+			# On compare au sol : le moteur recentre le pion sur sa tuile et lui
+			# reprend la hauteur du déploiement, ce qui ne regarde pas la case.
+			var here := Vector2(posted.global_position.x, posted.global_position.z)
+			var there := Vector2(target_tile.global_position.x, target_tile.global_position.z)
+			var gap: float = here.distance_to(there)
+			_check(gap < 0.05,
+				"l'unité se tient sur la case choisie en préparation (écart %.3f)" % gap,
+				"pion %s en %s, tuile en %s" % [
+					posted.display_name(), posted.global_position, target_tile.global_position])
+			# Et le bonus promis devant la carte est celui que la tuile porte.
+			_check(TacticsGrid.terrain_defense(target_tile) == CMAP.defense_at(map, chosen),
+				"le bonus de terrain annoncé en préparation (+%d) est celui de la tuile" % \
+					CMAP.defense_at(map, chosen),
+				"tuile : +%d" % TacticsGrid.terrain_defense(target_tile))
 
 	if runner:
 		var snapshot: Dictionary = runner.build_snapshot()
@@ -561,6 +598,18 @@ func _legacy_tile_to_grid(_arena: Node, tile: Node3D, gs: Vector2i) -> Vector2i:
 	var col: int = int(round(pos.x + (float(gs.x) / 2.0) - 0.5))
 	var row: int = int(round(pos.z + (float(gs.y) / 2.0) - 0.5))
 	return Vector2i(clampi(col, 0, gs.x - 1), clampi(row, 0, gs.y - 1))
+
+
+## Pion d'un camp portant l'identifiant de roster donné (null s'il est absent).
+func _find_pawn_by_id(team: Node, unit_id: String) -> Node:
+	if not team or not is_instance_valid(team):
+		return null
+	for p in team.get_children():
+		if not (p is TacticsPawn and is_instance_valid(p)):
+			continue
+		if p.display_name().to_lower().replace(" ", "_") == unit_id:
+			return p
+	return null
 
 
 func _count_pawns(team: Node) -> int:

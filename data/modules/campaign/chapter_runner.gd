@@ -40,6 +40,7 @@ func _ready() -> void:
 	# Le niveau finit de s'initialiser sur la frame suivante : on attend.
 	await get_tree().process_frame
 	_apply_roster()
+	await _apply_deployment_tiles()
 	_mark_seize_point()
 	_start_deployment()
 
@@ -215,6 +216,65 @@ func _check_protected_present() -> void:
 	push_warning("[ChapterRunner] %s doit être protégée mais n'est pas déployée — "
 		% target + "ajoute son identifiant à `required_units` du chapitre %s."
 		% (chapter.id if chapter else "?"))
+
+
+## Pose chaque unité sur la case choisie à l'écran de préparation.
+##
+## C'est le pendant en scène du choix de terrain : sans cela, la case sélectionnée
+## devant la carte serait restée une intention dans la sauvegarde, et le pion
+## serait entré en jeu là où l'éditeur l'avait laissé.
+##
+## Contrairement à [DeploymentPhase], ceci marche **aussi en headless** : poser un
+## pion sur une tuile connue ne demande ni collision ni rayon, juste sa position.
+##
+## Un pion sait sur quelle case il se tient par un `RayCast3D` dirigé vers le bas,
+## dont le résultat date de la frame précédente. Le téléporter ne suffit donc pas :
+## à la frame suivante, il se recentrait sur l'ancienne tuile — celle que le rayon
+## croyait encore avoir sous lui — et revenait exactement à l'endroit où l'éditeur
+## l'avait laissé. D'où la mise à jour forcée du rayon, juste après le déplacement.
+func _apply_deployment_tiles() -> void:
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	if not campaign or not level or not level.player or not level.arena:
+		return
+	var plan: Dictionary = campaign.deployment_tiles
+	if plan.is_empty():
+		return
+
+	await get_tree().physics_frame
+	if not is_instance_valid(level) or not is_instance_valid(level.player):
+		return
+
+	var placed: int = 0
+	for p in level.player.get_children():
+		if not p is TacticsPawn or not is_instance_valid(p) or p.is_queued_for_deletion():
+			continue
+		var id: String = EXECUTOR.display_name(p).to_lower().replace(" ", "_")
+		if not plan.has(id):
+			continue
+		var pos: Vector2i = plan[id]
+		var tile: Node3D = TacticsGrid.find_tile(level.arena, pos.x, pos.y)
+		if not tile:
+			push_warning("[ChapterRunner] Case de départ (%d, %d) absente de la carte." % [pos.x, pos.y])
+			continue
+		p.res.pathfinding_tilestack = []
+		p.velocity = Vector3.ZERO
+		p.global_position = tile.global_position + Vector3(0, DEPLOYMENT.PAWN_LIFT, 0)
+		_refresh_tile_sensor(p)
+		placed += 1
+
+	if placed > 0:
+		print_rich("[color=cyan]⚑ %d unité(s) posée(s) sur la case choisie en préparation[/color]" % placed)
+
+
+## Fait relire au pion la case sous ses pieds, tout de suite.
+##
+## Sans cela, son rayon garde le collisionneur de la frame précédente : le pion
+## se recentrerait sur la tuile qu'il vient de quitter, annulant le placement.
+func _refresh_tile_sensor(pawn: Node3D) -> void:
+	pawn.force_update_transform()
+	var sensor: RayCast3D = pawn.get_node_or_null("Tile") as RayCast3D
+	if sensor:
+		sensor.force_raycast_update()
 
 
 ## Ouvre le placement des unités avant le premier tour.

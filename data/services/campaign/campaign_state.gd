@@ -32,6 +32,13 @@ var difficulty: int = DIFF.Level.NORMAL
 var permadeath: bool = true
 ## Identifiants des unités sélectionnées pour la mission
 var deployment: Array = []
+## Case de départ choisie par unité : id → Vector2i.
+##
+## Choisir sa case, c'est choisir son terrain — donc le bonus défensif que le
+## calculateur applique déjà de bout en bout. Ce plan est établi à l'écran de
+## préparation, avant tout chargement de niveau, et [ChapterRunner] le pose sur
+## les pions au démarrage.
+var deployment_tiles: Dictionary = {}
 ## Objectifs secondaires réussis, par chapitre
 var bonus_history: Dictionary = {}
 ## Nombre de tours du chapitre en cours
@@ -55,6 +62,7 @@ func new_game(diff: int = DIFF.Level.NORMAL, with_permadeath: bool = true) -> vo
 	difficulty = diff
 	permadeath = with_permadeath
 	deployment = _default_deployment()
+	deployment_tiles.clear()
 	bonus_history.clear()
 	turn_count = 1
 	roster_changed.emit()
@@ -87,6 +95,9 @@ func complete_chapter(bonuses: Array = []) -> void:
 	chapter_index += 1
 	turn_count = 1
 	deployment = _default_deployment()
+	# Les cases appartenaient à la carte précédente : elles ne veulent plus rien
+	# dire sur la suivante.
+	deployment_tiles.clear()
 #endregion
 
 
@@ -209,6 +220,37 @@ func set_deployment(ids: Array) -> void:
 			continue
 		if not get_unit(str(id)).is_empty():
 			deployment.append(str(id))
+
+	# Une unité écartée du déploiement n'a plus de case : la garder ferait
+	# réapparaître son pion à un endroit choisi pour une bataille qu'elle ne fera pas.
+	for id in deployment_tiles.keys():
+		if not id in deployment:
+			deployment_tiles.erase(id)
+
+
+## Fixe la case de départ d'une unité. Une case déjà prise fait échanger les deux
+## unités — c'est la règle de [DeploymentPlan], et le geste attendu quand on
+## réarrange une ligne de départ.
+func set_deployment_tile(unit_id: String, pos: Vector2i) -> void:
+	for other: String in deployment_tiles.keys():
+		if other != unit_id and deployment_tiles[other] == pos:
+			var previous: Variant = deployment_tiles.get(unit_id)
+			if previous == null:
+				deployment_tiles.erase(other)
+			else:
+				deployment_tiles[other] = previous
+			break
+	deployment_tiles[unit_id] = pos
+
+
+## Case de départ d'une unité — (-1, -1) si elle n'en a pas choisi.
+func deployment_tile(unit_id: String) -> Vector2i:
+	return deployment_tiles.get(unit_id, Vector2i(-1, -1))
+
+
+## Oublie toutes les cases choisies (changement de carte, ou remise à plat).
+func clear_deployment_tiles() -> void:
+	deployment_tiles.clear()
 
 
 ## Reporte l'état d'une unité après une bataille (PV, XP, niveau, mort).
@@ -532,6 +574,7 @@ func save_game(slot: int = 0) -> bool:
 		"difficulty": difficulty,
 		"permadeath": permadeath,
 		"deployment": deployment,
+		"deployment_tiles": _tiles_to_json(),
 		"bonus_history": bonus_history,
 		"roster": roster,
 	}
@@ -568,6 +611,7 @@ func load_game(slot: int = 0) -> bool:
 	difficulty = int(data.get("difficulty", DIFF.Level.NORMAL))
 	permadeath = bool(data.get("permadeath", true))
 	deployment = data.get("deployment", [])
+	_tiles_from_json(data.get("deployment_tiles", {}))
 	bonus_history = data.get("bonus_history", {})
 	turn_count = 1
 
@@ -588,6 +632,28 @@ func delete_save(slot: int = 0) -> void:
 
 
 #region Internes
+## Les cases de départ, sous une forme que le JSON sait écrire : id → [col, row].
+func _tiles_to_json() -> Dictionary:
+	var out: Dictionary = {}
+	for id: String in deployment_tiles:
+		var pos: Vector2i = deployment_tiles[id]
+		out[id] = [pos.x, pos.y]
+	return out
+
+
+## Relecture des cases de départ. Les entrées mal formées sont écartées plutôt
+## que de faire réapparaître un pion hors de la carte.
+func _tiles_from_json(raw: Variant) -> void:
+	deployment_tiles.clear()
+	if typeof(raw) != TYPE_DICTIONARY:
+		return
+	for id in raw:
+		var pair: Variant = raw[id]
+		if typeof(pair) != TYPE_ARRAY or pair.size() != 2:
+			continue
+		deployment_tiles[str(id)] = Vector2i(int(pair[0]), int(pair[1]))
+
+
 ## Le JSON ne connaît que les floats : on remet les entiers d'aplomb au chargement.
 func _normalize_unit(raw: Dictionary) -> Dictionary:
 	var u: Dictionary = raw.duplicate(true)
