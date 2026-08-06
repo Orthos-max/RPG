@@ -27,6 +27,18 @@ static func grid_size(arena: Node) -> Vector2i:
 	var md: Resource = _map_data(arena)
 	if md:
 		return md.grid_size
+
+	# Carte posée à la main : elle ne déclare pas ses dimensions, mais l'index de
+	# bataille sait ce qu'il a inscrit. Sans cela, le 10×20 du chapitre 2 était
+	# annoncé 16×10 — et tout ce qui borne un calcul par cette taille (cases à
+	# portée, carte des terrains exportée à Ciel, zone de déploiement) travaillait
+	# sur une emprise qui n'existe pas.
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.size() > 0:
+		var dims: Vector2i = grid.dimensions()
+		if dims.x > 0 and dims.y > 0:
+			return dims
+
 	return FALLBACK_GRID
 
 

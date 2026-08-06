@@ -131,6 +131,23 @@ func height_at(coord: Vector2i) -> float:
 	return _height_at.get(coord, 0.0)
 
 
+## Emprise réelle de la grille, en (colonnes, lignes).
+##
+## Une carte générée depuis [MapData] connaît ses dimensions d'avance ; une carte
+## posée à la main, non — et [TacticsGrid.grid_size] retombait alors sur un
+## 16×10 de secours, faux pour le 10×20 du chapitre 2. L'index, lui, sait ce
+## qu'il a inscrit.
+func dimensions() -> Vector2i:
+	if _tile_at.is_empty():
+		return Vector2i.ZERO
+	var span := Vector2i.ZERO
+	for coord: Vector2i in _tile_at:
+		var cell: Vector2i = coord - _origin
+		span.x = maxi(span.x, cell.x)
+		span.y = maxi(span.y, cell.y)
+	return span + Vector2i.ONE
+
+
 ## Nombre de cases inscrites.
 func size() -> int:
 	return _tile_at.size()
