@@ -32,8 +32,16 @@ const FEEDBACK_FILE: String = "user://ai_feedback.json"
 
 ## Sans pion capable d'agir, on termine le tour au bout de ~4 s
 const MAX_WAIT_FRAMES: int = 240
-## Sans ordre valide de Ciel, l'IA locale prend la main (~10 s à 60 ips)
+## Sans ordre valide de Ciel, l'IA locale prend la main (~10 s à 60 ips).
+## C'est la patience accordée à un client qui réfléchit.
 const FALLBACK_AFTER_FRAMES: int = 600
+## Patience réduite (~0,5 s) une fois qu'on sait que personne ne répond.
+##
+## Attendre dix secondes par décision quand aucun client Ciel n'est branché fige
+## le jeu à chaque tour adverse — remonté par Aurèle : « il ne se passe rien
+## durant son tour ». On laisse sa chance à Ciel **une fois** ; s'il ne répond
+## pas, on cesse de l'attendre jusqu'à ce qu'il se manifeste.
+const FALLBACK_AFTER_FRAMES_SILENT: int = 30
 ## Cadence d'export de l'état hors tour adverse (1 frame sur N)
 const EXPORT_EVERY_FRAMES: int = 3
 
@@ -41,6 +49,8 @@ var _level_ref: WeakRef = weakref(null)
 var _frame: int = 0
 var _wait_frames: int = 0
 var _idle_frames: int = 0
+## Ciel a-t-il répondu depuis le dernier repli ? Tant que non, on ne l'attend plus.
+var _ciel_responsive: bool = true
 var _last_state_hash: int = 0
 var _seq: int = 0
 var _turn_number: int = 1
@@ -180,8 +190,13 @@ func handle_opponent_turn(delta: float, opponent: TacticsOpponent, participant: 
 	# Verrou anti-blocage : sans ordre valide, l'IA locale joue à la place de Ciel.
 	if pr.stage in CMD.INTERACTIVE_STAGES:
 		_idle_frames += 1
-		if _idle_frames >= FALLBACK_AFTER_FRAMES:
+		if _idle_frames >= fallback_delay():
 			_idle_frames = 0
+			# Un silence de plus : on cesse de l'attendre jusqu'à son retour.
+			if _ciel_responsive:
+				print_rich("[color=yellow]⏱ Aucun ordre de Ciel — "
+					+ "l'IA locale prend la main sans plus l'attendre.[/color]")
+			_ciel_responsive = false
 			_play_local_fallback(opponent, participant, arena, pr)
 			return
 
@@ -553,6 +568,22 @@ func _play_local_fallback(opponent: TacticsOpponent, participant: TacticsPartici
 # Lecture & validation des commandes
 # ---------------------------------------------------------------------------
 ## Lit le prochain ordre valide. Renvoie {} si aucun ordre, ou si l'ordre a été rejeté.
+## Combien de frames attendre un ordre de Ciel avant que l'IA locale ne joue.
+##
+## Pleine patience tant qu'il répond ; réduite dès qu'il s'est tu une fois. Un
+## seul ordre suffit à la lui rendre — brancher un client en cours de partie
+## fonctionne donc sans rien redémarrer.
+func fallback_delay() -> int:
+	return FALLBACK_AFTER_FRAMES if _ciel_responsive else FALLBACK_AFTER_FRAMES_SILENT
+
+
+## Ciel vient de se manifester : on lui rend toute sa patience.
+func _note_ciel_answered() -> void:
+	if not _ciel_responsive:
+		print_rich("[color=green]🤖 Ciel répond de nouveau — patience rendue.[/color]")
+	_ciel_responsive = true
+
+
 func _next_command(pr: TacticsParticipantResource) -> Dictionary:
 	# Les ordres réseau sont déjà validés à la réception : ils passent devant.
 	if not _external_queue.is_empty():
@@ -562,12 +593,15 @@ func _next_command(pr: TacticsParticipantResource) -> Dictionary:
 				"reçu à l'étape %s, ignoré" % _stage_name(pr.stage))
 			return {}
 		_idle_frames = 0
+		_note_ciel_answered()
 		_cmd = queued
 		return queued
 
 	var raw: String = _consume_command_file()
 	if raw.is_empty():
 		return {}
+	# Un fichier d'ordre écrit, même invalide, prouve qu'un client est branché.
+	_note_ciel_answered()
 
 	var level: TacticsLevel = _resolve_level()
 	var acting: String = TeamData.state_team_name(acting_side())
