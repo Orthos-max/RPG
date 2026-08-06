@@ -11,6 +11,7 @@ const PrepScreen = preload("res://data/modules/menu/prep_screen.gd")
 const ChapterRunnerClass = preload("res://data/modules/campaign/chapter_runner.gd")
 const TurnBanner = preload("res://data/modules/ui/turn_banner.gd")
 const LobbyScreen = preload("res://data/modules/menu/lobby_screen.gd")
+const SaveScreen = preload("res://data/modules/menu/save_screen.gd")
 const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
@@ -69,6 +70,7 @@ func show_title() -> void:
 	var screen := TitleScreen.new()
 	screen.new_game_requested.connect(_on_new_game)
 	screen.continue_requested.connect(_on_continue)
+	screen.load_requested.connect(func() -> void: show_saves(false))
 	screen.ciel_mode_requested.connect(_on_ciel_skirmish)
 	screen.hotseat_requested.connect(_on_hotseat)
 	screen.host_requested.connect(func() -> void: show_lobby(true))
@@ -105,7 +107,32 @@ func show_prep() -> void:
 	screen.chapter = _chapter
 	screen.battle_requested.connect(_on_battle_requested)
 	screen.back_requested.connect(show_title)
+	screen.save_requested.connect(func() -> void: show_saves(true))
 	_mount_ui(screen)
+
+
+## Écran de sauvegarde (`saving`) ou de chargement.
+##
+## Charger depuis l'écran-titre enchaîne sur la préparation du chapitre repris ;
+## sauvegarder depuis la préparation y revient une fois l'écriture faite.
+func show_saves(saving: bool) -> void:
+	_clear_ui()
+	var screen := SaveScreen.new()
+	screen.saving = saving
+	screen.back_requested.connect(show_prep if saving else show_title)
+	screen.slot_loaded.connect(_on_save_loaded)
+	_mount_ui(screen)
+
+
+## Une partie vient d'être chargée depuis l'écran de chargement.
+func _on_save_loaded() -> void:
+	var campaign: Node = _campaign()
+	var session: Node = _session()
+	if campaign and session:
+		session.difficulty = campaign.difficulty
+		session.chapter_index = campaign.chapter_index
+		session.set_mode(session.Mode.SOLO)
+	show_prep()
 
 
 ## Salon de partie en ligne : hôte (génère un code) ou invité (saisit un code).

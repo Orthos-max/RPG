@@ -852,6 +852,53 @@ func _test_economy() -> void:
 
 	_test_weapons()
 	_test_weapon_economy(campaign)
+	_test_save_slots(campaign)
+
+
+#region 12quater. Emplacements de sauvegarde
+## Décrire un emplacement ne doit jamais coûter la partie en cours : c'est tout
+## l'intérêt de relire l'en-tête du JSON au lieu de charger.
+func _test_save_slots(campaign: Node) -> void:
+	print("\n💾 Test 12quater: emplacements de sauvegarde")
+
+	for slot: int in range(campaign.SAVE_SLOTS):
+		campaign.delete_save(slot)
+
+	campaign.new_game(DIFF.Level.BRUTAL, false)
+	campaign.gold = 777
+	campaign.chapter_index = 2
+	_check(campaign.save_game(1), "écriture dans l'emplacement 2")
+
+	var info: Dictionary = campaign.slot_info(1)
+	_check(bool(info["exists"]) and int(info["gold"]) == 777,
+		"emplacement décrit sans être chargé (%d or)" % int(info["gold"]))
+	_check(int(info["chapter_index"]) == 2 and not str(info["chapter_title"]).is_empty(),
+		"chapitre nommé : %s" % str(info["chapter_title"]))
+	_check(int(info["difficulty"]) == DIFF.Level.BRUTAL and not bool(info["permadeath"]),
+		"difficulté et mort permanente relues")
+	_check(int(info["units"]) == campaign.roster.size(),
+		"effectif compté (%d)" % int(info["units"]))
+	_check(not str(info["saved_at"]).is_empty(), "date de sauvegarde renseignée")
+
+	# Décrire ne charge pas : l'or courant doit être resté intact.
+	campaign.gold = 5
+	var _again: Dictionary = campaign.slot_info(1)
+	_check(campaign.gold == 5, "décrire un emplacement ne recharge pas la partie")
+
+	var empty: Dictionary = campaign.slot_info(3)
+	_check(not bool(empty["exists"]) and int(empty["gold"]) == 0,
+		"un emplacement vide se décrit sans mentir")
+
+	var slots: Array = campaign.all_slots()
+	_check(slots.size() == campaign.SAVE_SLOTS,
+		"%d emplacements proposés" % slots.size())
+	_check(bool(slots[campaign.AUTO_SLOT]["auto"]) and not bool(slots[1]["auto"]),
+		"l'emplacement automatique est signalé comme tel")
+
+	campaign.delete_save(1)
+	_check(not campaign.slot_info(1)["exists"], "emplacement supprimé")
+
+#endregion
 	_test_chapter_map()
 	_test_deployment_tiles(campaign)
 

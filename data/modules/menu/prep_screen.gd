@@ -6,6 +6,7 @@ extends Control
 
 signal battle_requested()
 signal back_requested()
+signal save_requested()
 
 const C_BG := Color("#141026")
 const C_PANEL := Color("#16213e")
@@ -160,6 +161,16 @@ func _build() -> void:
 	var positions := _make_button("🗺  Positions", false)
 	positions.pressed.connect(_toggle_positions)
 	buttons.add_child(positions)
+
+	# Sauvegarder avant un chapitre risqué : c'est ici que ça se décide, la
+	# bataille commencée on ne revient plus en arrière.
+	var save := _make_button("💾  Sauvegarder", false)
+	save.pressed.connect(func() -> void:
+		var campaign: Node = get_node_or_null("/root/Campaign")
+		if campaign:
+			campaign.set_deployment(_selected)
+		save_requested.emit())
+	buttons.add_child(save)
 
 	_start_button = _make_button("⚔️  Lancer la bataille", true)
 	_start_button.pressed.connect(_on_start)

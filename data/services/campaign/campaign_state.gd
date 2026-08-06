@@ -17,6 +17,14 @@ signal chapter_completed(chapter_id: String, bonuses: Array)
 
 const SAVE_DIR: String = "user://saves"
 const SAVE_VERSION: int = 1
+## Emplacements de sauvegarde proposés au joueur.
+##
+## Le slot 0 est celui que le jeu écrit tout seul (nouvelle partie, fin de
+## chapitre) et que « Continuer » relit ; les suivants n'appartiennent qu'au
+## joueur, qui y sauvegarde et recharge à la main.
+const SAVE_SLOTS: int = 4
+## Emplacement écrit automatiquement par la campagne.
+const AUTO_SLOT: int = 0
 ## Coût en or d'un point de vie rendu à l'intendance
 const HEAL_COST_PER_HP: int = 6
 
@@ -627,6 +635,63 @@ func load_game(slot: int = 0) -> bool:
 
 	roster_changed.emit()
 	return true
+
+
+## Ce que contient un emplacement, sans charger la partie.
+##
+## L'écran de sauvegarde a besoin de décrire quatre emplacements d'un coup :
+## les charger pour les lire écraserait la partie en cours. On relit donc
+## l'en-tête du JSON et on n'en garde que de quoi remplir une ligne.
+##
+## [returns] {exists, slot, auto, saved_at, chapter_index, chapter_title,
+##            gold, units, fallen, difficulty, permadeath}
+func slot_info(slot: int) -> Dictionary:
+	var out: Dictionary = {
+		"exists": false, "slot": slot, "auto": slot == AUTO_SLOT,
+		"saved_at": "", "chapter_index": 0, "chapter_title": "",
+		"gold": 0, "units": 0, "fallen": 0,
+		"difficulty": DIFF.Level.NORMAL, "permadeath": true,
+	}
+	if not has_save(slot):
+		return out
+
+	var f := FileAccess.open(save_path(slot), FileAccess.READ)
+	if not f:
+		return out
+	var raw: String = f.get_as_text()
+	f.close()
+
+	var json := JSON.new()
+	if json.parse(raw) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return out
+
+	var data: Dictionary = json.data
+	out["exists"] = true
+	out["saved_at"] = str(data.get("saved_at", ""))
+	out["chapter_index"] = int(data.get("chapter_index", 0))
+	out["gold"] = int(data.get("gold", 0))
+	out["difficulty"] = int(data.get("difficulty", DIFF.Level.NORMAL))
+	out["permadeath"] = bool(data.get("permadeath", true))
+
+	var chapter: ChapterData = CampaignDBClass.get_chapter(out["chapter_index"])
+	out["chapter_title"] = chapter.title if chapter else "Campagne terminée"
+
+	for u in data.get("roster", []):
+		if typeof(u) != TYPE_DICTIONARY:
+			continue
+		if bool(u.get("alive", true)):
+			out["units"] = int(out["units"]) + 1
+		else:
+			out["fallen"] = int(out["fallen"]) + 1
+	return out
+
+
+## Résumé de tous les emplacements, dans l'ordre.
+func all_slots() -> Array:
+	var out: Array = []
+	for slot: int in range(SAVE_SLOTS):
+		out.append(slot_info(slot))
+	return out
 
 
 ## Supprime une sauvegarde.
