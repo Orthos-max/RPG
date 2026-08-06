@@ -37,16 +37,20 @@ func attack_pawn(delta: float, is_player: bool) -> void:
 			return
 		# Hide actions menu and focus camera on attacking pawn
 		controls.set_actions_menu_visibility(false, res.attackable_pawn)
-		camera.target = res.curr_pawn
-	
+		# Depuis la riposte, l'assaillant peut ne pas survivre à son propre assaut :
+		# la caméra ne se cale sur lui que s'il est encore debout.
+		if is_instance_valid(res.curr_pawn) and res.curr_pawn.is_alive():
+			camera.target = res.curr_pawn
+
 	# Reset attackable pawn
 	res.attackable_pawn = null
 	# Reset opponent stats display
 	if res.display_opponent_stats:
 		res.display_opponent_stats = false
-	
+
 	# Determine next stage based on current pawn's ability to act and whether it's a player pawn
-	if not res.curr_pawn.can_act() or not is_player:
+	var still_standing: bool = is_instance_valid(res.curr_pawn) and res.curr_pawn.is_alive()
+	if not still_standing or not res.curr_pawn.can_act() or not is_player:
 		res.stage = res.STAGE_SELECT_PAWN
-	elif res.curr_pawn.can_act() and is_player:
+	else:
 		res.stage = res.STAGE_SHOW_ACTIONS

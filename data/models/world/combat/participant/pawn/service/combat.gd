@@ -59,67 +59,142 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 		_check_death(target_pawn)
 		return
 	
-	var attacker_name = _get_name(pawn)
-	var defender_name = _get_name(target_pawn)
-	
-	# --- Support bonuses ---
-	var support_bonuses := _get_support_bonuses(pawn, target_pawn)
-	
-	# --- Terrain defense bonus ---
-	var terrain_def: int = terrain_defense_of(target_pawn)
+	# --- L'échange : assaut, riposte, et second coup du plus rapide ---
+	var exchange: Dictionary = CombatCalc.calculate_exchange(pawn.stats, target_pawn.stats, {
+		"attacker_support": collect_support_bonuses(pawn),
+		"defender_support": collect_support_bonuses(target_pawn),
+		"attacker_terrain": terrain_defense_of(pawn),
+		"defender_terrain": terrain_defense_of(target_pawn),
+		"distance": grid_distance(pawn, target_pawn),
+	})
+	var rolled: Dictionary = CombatCalc.roll_exchange(exchange, pawn.stats.hp, target_pawn.stats.hp)
+	_apply_exchange(pawn, target_pawn, exchange, rolled)
 
-	# --- Run combat calculation ---
-	var preview: CombatCalc.CombatResult = CombatCalc.calculate(pawn.stats, target_pawn.stats, support_bonuses, terrain_def)
-	var outcome: Dictionary = CombatCalc.roll_combat(preview)
-	
-	if outcome["hit"]:
-		var total_damage: int = outcome["total_damage"]
-		target_pawn.stats.apply_to_curr_health(-total_damage)
-		
-		var log_msg = "%s → %s | %d dmg" % [attacker_name, defender_name, total_damage]
-		if outcome["crit"]:
-			log_msg += " 💥CRITICAL!"
-		if outcome["double"]:
-			log_msg += " ⚔️×2"
-		if preview.triangle_bonus != 0:
-			log_msg += " | Triangle %+d" % preview.triangle_bonus
-		if support_bonuses.get("hit", 0) > 0:
-			log_msg += " | Support 💬"
-		if terrain_def > 0:
-			log_msg += " | Terrain 🛡️+%d" % terrain_def
-		if not preview.triggered.is_empty():
-			var names: Array = []
-			for skill_id in preview.triggered:
-				names.append(SkillDBRef.get_skill_name(str(skill_id)))
-			log_msg += " | ✨ %s" % ", ".join(names)
-		
-		print(log_msg)
-		
-		_record(&"record_attack", [attacker_name, defender_name, total_damage,
-			true, bool(outcome["crit"]), bool(outcome["double"]), target_pawn.stats.hp])
 
-		var dmg_type: String = "magical" if preview.is_magical else "physical"
-		print_rich("[color=pink]%s → %s: %d %s dmg [Hit: %d%% | Crit: %d%% | Double: %s] | %s HP: %d/%d[/color]" % [
-			attacker_name, defender_name,
-			total_damage, dmg_type,
-			preview.hit_rate, preview.crit_rate,
-			"Yes" if outcome["double"] else "No",
-			defender_name, target_pawn.stats.hp, target_pawn.stats.max_hp
+## Reporte un échange déjà tiré sur les deux pions : PV, journal, XP, morts.
+##
+## Les deux sens sont traités symétriquement : le défenseur gagne son XP, ses
+## alliés leurs points de soutien, et il peut tuer l'assaillant.
+##
+## Les morts sont constatées une fois l'échange entièrement tiré : c'est
+## [method FECombatCalculator.roll_exchange] qui a déjà refusé les coups portés
+## après la chute de l'un des deux. Ici, on ne fait que retirer les pions.
+func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
+		exchange: Dictionary, rolled: Dictionary) -> void:
+	var attacker_name: String = _get_name(pawn)
+	var defender_name: String = _get_name(target_pawn)
+	var attack: CombatCalc.CombatResult = exchange["attack"]
+	var counter: Variant = exchange["counter"]
+
+	var dealt: int = int(rolled["defender_damage_taken"])
+	var taken: int = int(rolled["attacker_damage_taken"])
+	if dealt > 0:
+		target_pawn.stats.apply_to_curr_health(-dealt)
+	if taken > 0:
+		pawn.stats.apply_to_curr_health(-taken)
+
+	var atk_side: Dictionary = _side_summary(rolled, "attack")
+	var def_side: Dictionary = _side_summary(rolled, "counter")
+
+	# --- Journal de l'assaut ---
+	if bool(atk_side["hit"]):
+		print(_blow_line(attacker_name, defender_name, dealt, atk_side, attack,
+			terrain_defense_of(target_pawn)))
+		print_rich("[color=pink]%s → %s: %d %s dmg [Hit: %d%% | Crit: %d%%] | %s HP: %d/%d[/color]" % [
+			attacker_name, defender_name, dealt,
+			"magical" if attack.is_magical else "physical",
+			attack.hit_rate, attack.crit_rate,
+			defender_name, target_pawn.stats.hp, target_pawn.stats.max_hp,
 		])
-		
-		# --- Check death ---
-		if not target_pawn.is_alive():
-			award_exp(pawn, target_pawn, true)
-			_check_death(target_pawn)
-		else:
-			award_exp(pawn, target_pawn, false)
-		
-		# --- Support Point Gains ---
-		_award_support_points(pawn)
 	else:
-		_record(&"record_attack", [attacker_name, defender_name, 0, false, false, false,
-			target_pawn.stats.hp])
-		print(attacker_name, " missed! (roll avg: ", outcome["hit_rate"], " vs ", preview.hit_rate, "% hit)")
+		print("%s missed! (%d%% hit)" % [attacker_name, attack.hit_rate])
+	_record(&"record_attack", [attacker_name, defender_name, dealt,
+		bool(atk_side["hit"]), bool(atk_side["crit"]), int(atk_side["strikes"]) > 1,
+		target_pawn.stats.hp])
+
+	# --- Journal de la riposte ---
+	if bool(rolled["countered"]) and counter:
+		var counter_result: CombatCalc.CombatResult = counter
+		if bool(def_side["hit"]):
+			print_rich("[color=orange]↩ %s riposte → %s : %d dégâts | %s PV %d/%d[/color]" % [
+				defender_name, attacker_name, taken,
+				attacker_name, pawn.stats.hp, pawn.stats.max_hp,
+			])
+		else:
+			print("↩ %s riposte et manque son coup (%d%%)" % [defender_name, counter_result.hit_rate])
+		_record(&"record_attack", [defender_name, attacker_name, taken,
+			bool(def_side["hit"]), bool(def_side["crit"]), int(def_side["strikes"]) > 1,
+			pawn.stats.hp])
+	elif not str(exchange["counter_reason"]).is_empty():
+		print("↩ pas de riposte de %s : %s" % [defender_name, exchange["counter_reason"]])
+
+	# --- XP et soutiens, dans les deux sens ---
+	var defender_fell: bool = not target_pawn.is_alive()
+	var attacker_fell: bool = not pawn.is_alive()
+	if bool(atk_side["hit"]):
+		award_exp(pawn, target_pawn, defender_fell)
+		_award_support_points(pawn)
+	if bool(def_side["hit"]):
+		award_exp(target_pawn, pawn, attacker_fell)
+		_award_support_points(target_pawn)
+
+	# --- Morts ---
+	if defender_fell:
+		_check_death(target_pawn)
+	if attacker_fell:
+		_check_death(pawn)
+
+
+## Résumé d'un camp dans un échange : a-t-il touché, critiqué, combien de coups.
+func _side_summary(rolled: Dictionary, side: String) -> Dictionary:
+	var out: Dictionary = {"strikes": 0, "hit": false, "crit": false, "skills": []}
+	for blow: Dictionary in rolled["strikes"]:
+		if str(blow["side"]) != side:
+			continue
+		out["strikes"] = int(out["strikes"]) + 1
+		if bool(blow["hit"]):
+			out["hit"] = true
+		if bool(blow["crit"]):
+			out["crit"] = true
+		for skill_id in blow["skills"]:
+			out["skills"].append(skill_id)
+	return out
+
+
+## Ligne de journal d'un assaut réussi (triangle, soutien, terrain, compétences).
+func _blow_line(attacker_name: String, defender_name: String, damage: int,
+		side: Dictionary, result: CombatCalc.CombatResult, terrain_def: int) -> String:
+	var line: String = "%s → %s | %d dmg" % [attacker_name, defender_name, damage]
+	if bool(side["crit"]):
+		line += " 💥CRITICAL!"
+	if int(side["strikes"]) > 1:
+		line += " ⚔️×%d" % int(side["strikes"])
+	if result.triangle_bonus != 0:
+		line += " | Triangle %+d" % result.triangle_bonus
+	if terrain_def > 0:
+		line += " | Terrain 🛡️+%d" % terrain_def
+	if not side["skills"].is_empty():
+		var names: Array = []
+		for skill_id in side["skills"]:
+			names.append(SkillDBRef.get_skill_name(str(skill_id)))
+		line += " | ✨ %s" % ", ".join(names)
+	return line
+
+
+## Distance de grille (Manhattan) entre deux pions.
+##
+## L'index de bataille répond sans rayon ni tuile ; sans lui (scène isolée,
+## test headless), les positions monde suffisent — les cases font une unité.
+static func grid_distance(a: TacticsPawn, b: TacticsPawn) -> int:
+	if not a or not b or not is_instance_valid(a) or not is_instance_valid(b):
+		return 1
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.size() > 0:
+		var ca: Vector2i = grid.coord_at_position(a.global_position)
+		var cb: Vector2i = grid.coord_at_position(b.global_position)
+		return absi(ca.x - cb.x) + absi(ca.y - cb.y)
+	var delta: Vector3 = a.global_position - b.global_position
+	return int(round(absf(delta.x))) + int(round(absf(delta.z)))
 
 
 ## Resolve healing on an ally (staff users only)
@@ -246,11 +321,6 @@ func _show_victory_screen(tree: SceneTree) -> void:
 		main_node._show_menu()
 	else:
 		print("Appuyez sur ESC pour revenir au menu.")
-
-
-## Get support bonuses for the attacker from nearby allies
-func _get_support_bonuses(attacker: TacticsPawn, _defender: TacticsPawn) -> Dictionary:
-	return collect_support_bonuses(attacker)
 
 
 ## Bonus de soutien apportés à `attacker` par ses alliés proches.
@@ -380,6 +450,9 @@ static func build_forecast(attacker: TacticsPawn, target: TacticsPawn) -> Dictio
 
 	return ForecastRef.build(attacker.stats, target.stats, {
 		"support": collect_support_bonuses(attacker),
+		"defender_support": collect_support_bonuses(target),
 		"terrain_defense": terrain_defense_of(target),
+		"attacker_terrain": terrain_defense_of(attacker),
+		"distance": grid_distance(attacker, target),
 		"is_heal": same_team and is_healer,
 	})

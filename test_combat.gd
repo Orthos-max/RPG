@@ -34,6 +34,10 @@ func _init() -> void:
 	_test_support()
 	_test_triangle()
 	_test_forecast()
+	_test_counter_range()
+	_test_exchange()
+	_test_exchange_rolls()
+	_test_forecast_counter()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -325,3 +329,222 @@ func _test_forecast() -> void:
 		_ok("Résumé sur une ligne : %s" % Forecast.summary(f))
 	else:
 		_ko("Résumé", Forecast.summary(f))
+
+
+func _test_counter_range() -> void:
+	print("\n🏹 Test 9: Portées d'arme et riposte")
+
+	# Un arc ne sert à rien au contact ; une lame ne porte pas à deux cases.
+	if WT.get_min_range(WT.Type.BOW) == 2 and WT.get_min_range(WT.Type.SWORD) == 1:
+		_ok("Portée minimale : arc 2, épée 1")
+	else:
+		_ko("Portée minimale", "arc=%d épée=%d" % [
+			WT.get_min_range(WT.Type.BOW), WT.get_min_range(WT.Type.SWORD)])
+
+	if not WT.reaches(WT.Type.BOW, 2, 1) and WT.reaches(WT.Type.BOW, 2, 2):
+		_ok("L'arc (portée 2) touche à 2, pas à 1")
+	else:
+		_ko("Portée de l'arc", "à 1 : %s, à 2 : %s" % [
+			WT.reaches(WT.Type.BOW, 2, 1), WT.reaches(WT.Type.BOW, 2, 2)])
+
+	if WT.reaches(WT.Type.SWORD, 1, 1) and not WT.reaches(WT.Type.SWORD, 1, 2):
+		_ok("L'épée (portée 1) touche à 1, pas à 2")
+	else:
+		_ko("Portée de l'épée", "à 2 : %s" % WT.reaches(WT.Type.SWORD, 1, 2))
+
+	# Un grimoire de portée 2 couvre bien les deux distances.
+	if WT.reaches(WT.Type.TOME, 2, 1) and WT.reaches(WT.Type.TOME, 2, 2):
+		_ok("Le grimoire (portée 2) couvre 1 et 2")
+	else:
+		_ko("Portée du grimoire", "à 1 : %s" % WT.reaches(WT.Type.TOME, 2, 1))
+
+	if not WT.is_combat_weapon(WT.Type.STAFF) and WT.is_combat_weapon(WT.Type.AXE):
+		_ok("Le bâton n'engage aucun combat, la hache si")
+	else:
+		_ko("Arme de combat", "bâton : %s" % WT.is_combat_weapon(WT.Type.STAFF))
+
+
+func _test_exchange() -> void:
+	print("\n⚔️ Test 10: L'échange — qui riposte, et dans quel ordre")
+
+	var chrom: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	var brig: CharStats = _live(load("res://data/models/world/stats/mob/skeleton.tres"))
+
+	# Au contact, une hache rend coup pour coup.
+	var melee: Dictionary = Calc.calculate_exchange(chrom, brig, {"distance": 1})
+	if bool(melee["can_counter"]) and melee["counter"] != null:
+		_ok("Riposte au contact : %d dégâts à %d%%" % [
+			melee["counter"].damage, melee["counter"].hit_rate])
+	else:
+		_ko("Riposte au contact", str(melee["counter_reason"]))
+
+	# La riposte est bien calculée dans l'autre sens : le défenseur devient l'attaquant.
+	var reversed: Calc.CombatResult = Calc.calculate(brig, chrom)
+	if melee["counter"].damage == reversed.damage and melee["counter"].hit_rate == reversed.hit_rate:
+		_ok("La riposte reprend le calculateur en sens inverse")
+	else:
+		_ko("Sens de la riposte", "%d/%d vs %d/%d" % [
+			melee["counter"].damage, melee["counter"].hit_rate,
+			reversed.damage, reversed.hit_rate])
+
+	# Hors de portée du défenseur : personne ne rend le coup.
+	var sniped: Dictionary = Calc.calculate_exchange(chrom, brig, {"distance": 2})
+	if not bool(sniped["can_counter"]) and str(sniped["counter_reason"]) == "hors de portée de riposte":
+		_ok("Frappé à 2 cases, le porteur de hache ne riposte pas")
+	else:
+		_ko("Riposte hors de portée", str(sniped["counter_reason"]))
+
+	# Un archer pris au contact est désarmé — c'est sa faiblesse de classe.
+	var virion: CharStats = _live(load("res://data/models/world/stats/hero/archer.tres"))
+	var rushed: Dictionary = Calc.calculate_exchange(brig, virion, {"distance": 1})
+	if not bool(rushed["can_counter"]):
+		_ok("L'archer pris au contact ne riposte pas (%s)" % rushed["counter_reason"])
+	else:
+		_ko("Archer au contact", "riposte accordée à tort")
+
+	# Un bâton soigne, il ne rend pas les coups.
+	var lissa: CharStats = _live(load("res://data/models/world/stats/hero/cleric.tres"))
+	var struck: Dictionary = Calc.calculate_exchange(brig, lissa, {"distance": 1})
+	if not bool(struck["can_counter"]) and str(struck["counter_reason"]) == "arme sans riposte":
+		_ok("Le bâton ne riposte pas")
+	else:
+		_ko("Riposte au bâton", str(struck["counter_reason"]))
+
+	# Une cible déjà à terre ne riposte pas.
+	var downed: CharStats = _live(load("res://data/models/world/stats/mob/skeleton.tres"))
+	downed.hp = 0
+	var corpse: Dictionary = Calc.calculate_exchange(chrom, downed, {"distance": 1})
+	if not bool(corpse["can_counter"]) and str(corpse["counter_reason"]) == "hors de combat":
+		_ok("Un mort ne riposte pas")
+	else:
+		_ko("Riposte d'un mort", str(corpse["counter_reason"]))
+
+	# L'ordre : l'assaut d'abord, la riposte ensuite, le second coup au plus rapide.
+	if melee["order"][0] == "attack" and melee["order"][1] == "counter":
+		_ok("Ordre des coups : assaut puis riposte (%s)" % ", ".join(melee["order"]))
+	else:
+		_ko("Ordre des coups", ", ".join(melee["order"]))
+
+	var doubles: int = melee["order"].count("attack") + melee["order"].count("counter") - 2
+	if doubles == (1 if (melee["attack"].can_double or melee["counter"].can_double) else 0):
+		_ok("Un seul second coup, pour le plus rapide (%d)" % doubles)
+	else:
+		_ko("Second coup", "%d coups en trop" % doubles)
+
+	# Sans riposte, l'ordre ne contient jamais de coup du défenseur.
+	if not "counter" in sniped["order"]:
+		_ok("Sans riposte, le défenseur ne figure pas dans l'ordre")
+	else:
+		_ko("Ordre sans riposte", ", ".join(sniped["order"]))
+
+
+func _test_exchange_rolls() -> void:
+	print("\n🎲 Test 11: Le déroulé d'un échange")
+
+	var chrom: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	var brig: CharStats = _live(load("res://data/models/world/stats/mob/skeleton.tres"))
+	var exchange: Dictionary = Calc.calculate_exchange(chrom, brig, {"distance": 1})
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260806
+
+	# Les PV suivis ne descendent jamais sous zéro, et les dégâts rapportés sont
+	# ceux réellement encaissés — c'est ce que le journal affichera.
+	var clean: bool = true
+	var countered_once: bool = false
+	for i in 200:
+		var r: Dictionary = Calc.roll_exchange(exchange, chrom.hp, brig.hp, rng)
+		if int(r["attacker_hp"]) < 0 or int(r["defender_hp"]) < 0:
+			clean = false
+		if int(r["defender_damage_taken"]) > brig.hp or int(r["attacker_damage_taken"]) > chrom.hp:
+			clean = false
+		if int(r["attacker_hp"]) != chrom.hp - int(r["attacker_damage_taken"]):
+			clean = false
+		if int(r["defender_hp"]) != brig.hp - int(r["defender_damage_taken"]):
+			clean = false
+		if bool(r["countered"]):
+			countered_once = true
+	if clean:
+		_ok("200 échanges : PV et dégâts restent cohérents")
+	else:
+		_ko("Cohérence des PV", "un échange a dérapé")
+
+	if countered_once:
+		_ok("La riposte se produit réellement au jet")
+	else:
+		_ko("Riposte au jet", "aucune riposte sur 200 échanges")
+
+	# Une cible à 1 PV tombe au premier coup porté : l'échange s'arrête là.
+	brig.hp = 1
+	var lethal_exchange: Dictionary = Calc.calculate_exchange(chrom, brig, {"distance": 1})
+	var stopped: bool = true
+	var killed: int = 0
+	for i in 200:
+		var r: Dictionary = Calc.roll_exchange(lethal_exchange, chrom.hp, 1, rng)
+		var first: Dictionary = r["strikes"][0]
+		if not bool(first["hit"]) or int(first["damage"]) == 0:
+			continue
+		killed += 1
+		if r["strikes"].size() != 1 or int(r["defender_hp"]) != 0 or bool(r["countered"]):
+			stopped = false
+	if stopped and killed > 0:
+		_ok("Le coup fatal clôt l'échange (%d cas sur 200)" % killed)
+	else:
+		_ko("Arrêt sur mort", "stopped=%s tués=%d" % [stopped, killed])
+
+
+func _test_forecast_counter() -> void:
+	print("\n🔮 Test 12: La prévision montre les deux camps")
+
+	var chrom: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	var brig: CharStats = _live(load("res://data/models/world/stats/mob/skeleton.tres"))
+
+	var f: Dictionary = Forecast.build(chrom, brig, {"distance": 1})
+	var exchange: Dictionary = Calc.calculate_exchange(chrom, brig, {"distance": 1})
+
+	if bool(f["can_counter"]) and f["counter_damage"] == exchange["counter"].damage \
+			and f["counter_hit"] == exchange["counter"].hit_rate:
+		_ok("Riposte annoncée : %d dégâts à %d%%" % [f["counter_damage"], f["counter_hit"]])
+	else:
+		_ko("Riposte dans la prévision", str(f["counter_reason"]))
+
+	if f["attacker_hp_after"] == max(0, chrom.hp - int(f["counter_total"])):
+		_ok("PV de l'assaillant après riposte : %d → %d" % [f["attacker_hp"], f["attacker_hp_after"]])
+	else:
+		_ko("PV de l'assaillant", str(f["attacker_hp_after"]))
+
+	# À deux cases, la prévision doit annoncer l'absence de riposte.
+	var safe: Dictionary = Forecast.build(chrom, brig, {"distance": 2})
+	if not bool(safe["can_counter"]) and safe["attacker_hp_after"] == chrom.hp \
+			and not str(safe["counter_reason"]).is_empty():
+		_ok("Attaque sans risque annoncée comme telle (%s)" % safe["counter_reason"])
+	else:
+		_ko("Prévision sans riposte", str(safe["counter_reason"]))
+
+	# Une riposte mortelle doit se voir avant d'engager.
+	var weakened: CharStats = _live(load("res://data/models/world/stats/hero/lord.tres"))
+	weakened.hp = 1
+	var risky: Dictionary = Forecast.build(weakened, brig, {"distance": 1})
+	if int(risky["counter_total"]) > 0:
+		if bool(risky["counter_lethal"]):
+			_ok("Riposte mortelle signalée (assaillant à 1 PV)")
+		else:
+			_ko("Riposte mortelle", "non signalée")
+	else:
+		_ok("Riposte mortelle : cas non applicable (riposte à 0 dégât)")
+
+	# Quand le coup tue à coup sûr, la riposte n'est plus « attendue ».
+	brig.hp = 1
+	var overkill: Dictionary = Forecast.build(chrom, brig, {"distance": 1})
+	if bool(overkill["lethal"]) and not bool(overkill["counter_expected"]):
+		_ok("Coup létal : la riposte cesse d'être attendue")
+	else:
+		_ko("Riposte attendue", "lethal=%s expected=%s" % [
+			overkill["lethal"], overkill["counter_expected"]])
+
+	# Le résumé d'une ligne dit désormais ce que ça coûte.
+	var line: String = Forecast.summary(f)
+	if line.contains("riposte"):
+		_ok("Résumé avec riposte : %s" % line)
+	else:
+		_ko("Résumé avec riposte", line)

@@ -31,6 +31,13 @@ const MAGICAL_WEAPONS: Array[Type] = [
 ## Armes efficaces contre les unités volantes (dégâts d'arme triplés, façon FE)
 const EFFECTIVE_VS_FLYING: Array[Type] = [Type.BOW]
 
+## Armes qui ne frappent jamais au contact : un arc a besoin de recul.
+## C'est ce qui rend un archer vulnérable à qui vient le chercher.
+const RANGED_ONLY: Array[Type] = [Type.BOW]
+
+## Armes qui n'engagent aucun combat (le bâton soigne, il ne riposte pas).
+const NON_COMBAT: Array[Type] = [Type.STAFF, Type.NONE]
+
 ## Multiplicateur appliqué au might de l'arme sur une cible sensible
 const EFFECTIVE_MULTIPLIER: int = 3
 
@@ -79,6 +86,27 @@ static func get_effective_multiplier(type: Type, defender_flying: bool) -> int:
 	return 1
 
 
+## Portée minimale d'une arme : 1 si elle sert au contact, 2 pour un arc.
+static func get_min_range(type: Type) -> int:
+	return 2 if type in RANGED_ONLY else 1
+
+
+## L'arme peut-elle engager un combat ? (un bâton, non)
+static func is_combat_weapon(type: Type) -> bool:
+	return not type in NON_COMBAT
+
+
+## L'arme atteint-elle une cible située à `distance` cases ?
+##
+## [param max_range] Portée de l'unité ([member StatsResource.attack_range]).
+## Un arc de portée 2 ne touche qu'à 2 ; une lame de portée 1, qu'à 1 ; un
+## grimoire de portée 2 couvre 1 et 2.
+static func reaches(type: Type, max_range: int, distance: int) -> bool:
+	if distance <= 0:
+		return false
+	return distance >= get_min_range(type) and distance <= maxi(1, max_range)
+
+
 ## Check if a weapon type deals magical damage (targets RES)
 static func is_magical(type: Type) -> bool:
 	return type in MAGICAL_WEAPONS
@@ -87,6 +115,24 @@ static func is_magical(type: Type) -> bool:
 ## Check if a weapon type is physical (uses STR stat for damage, targets DEF)
 static func is_physical(type: Type) -> bool:
 	return type in PHYSICAL_WEAPONS
+
+
+## Nom français d'un type d'arme — ce que lit un joueur.
+##
+## [method get_weapon_name] reste en anglais : ce nom-là part dans `ai_state.json`
+## et le pont CielAI en dépend.
+static func get_weapon_label(type: Type) -> String:
+	match type:
+		Type.SWORD: return "Épée"
+		Type.LANCE: return "Lance"
+		Type.AXE: return "Hache"
+		Type.BOW: return "Arc"
+		Type.TOME: return "Grimoire"
+		Type.STAFF: return "Bâton"
+		Type.DRAGONSTONE: return "Pierre de dragon"
+		Type.BEASTSTONE: return "Pierre de bête"
+		Type.BREATH: return "Souffle"
+		_: return "Mains nues"
 
 
 ## Get the display name for a weapon type

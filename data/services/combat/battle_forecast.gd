@@ -7,8 +7,10 @@ extends RefCounted
 ## l'affichage (nombre de coups, total, PV restants, létalité). Logique pure,
 ## sans le moindre nœud, donc testable en headless.
 ##
-## Note de fidélité : le moteur ne gère pas la riposte — un échange se résout
-## dans un seul sens. La prévision n'affiche donc qu'un camp, celui qui engage.
+## Les deux camps sont affichés : depuis que le moteur résout un échange complet
+## ([method FECombatCalculator.calculate_exchange]), la riposte de la cible est
+## une donnée d'avant-combat comme une autre — et c'est elle qui dit si engager
+## coûte quelque chose.
 
 const CombatCalc = preload("res://data/services/combat/fe_combat.gd")
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
@@ -23,7 +25,9 @@ const HEAL_MAG_DIVIDER: float = 3.0
 ##
 ## @param attacker: Stats de l'unité qui engage
 ## @param defender: Stats de la cible
-## @param opts: {"support": Dictionary, "terrain_defense": int, "is_heal": bool}
+## @param opts: {"support": Dictionary (assaillant), "terrain_defense": int (cible),
+##               "defender_support": Dictionary, "attacker_terrain": int,
+##               "distance": int, "is_heal": bool}
 ## @return: dictionnaire d'affichage (voir `_empty()` pour les clés)
 static func build(attacker: Stats, defender: Stats, opts: Dictionary = {}) -> Dictionary:
 	var out: Dictionary = _empty()
@@ -35,6 +39,9 @@ static func build(attacker: Stats, defender: Stats, opts: Dictionary = {}) -> Di
 	out["target_hp"] = defender.hp
 	out["target_max_hp"] = defender.max_hp
 	out["target_hp_after"] = defender.hp
+	out["attacker_hp"] = attacker.hp
+	out["attacker_max_hp"] = attacker.max_hp
+	out["attacker_hp_after"] = attacker.hp
 
 	# Un soigneur qui vise un allié ne calcule pas de dégâts.
 	if bool(opts.get("is_heal", false)):
@@ -42,7 +49,14 @@ static func build(attacker: Stats, defender: Stats, opts: Dictionary = {}) -> Di
 
 	var support: Dictionary = opts.get("support", {})
 	var terrain: int = int(opts.get("terrain_defense", 0))
-	var result: CombatCalc.CombatResult = CombatCalc.calculate(attacker, defender, support, terrain)
+	var exchange: Dictionary = CombatCalc.calculate_exchange(attacker, defender, {
+		"attacker_support": support,
+		"defender_support": opts.get("defender_support", {}),
+		"attacker_terrain": int(opts.get("attacker_terrain", 0)),
+		"defender_terrain": terrain,
+		"distance": int(opts.get("distance", 1)),
+	})
+	var result: CombatCalc.CombatResult = exchange["attack"]
 
 	out["kind"] = "attack"
 	out["hit"] = result.hit_rate
@@ -75,6 +89,37 @@ static func build(attacker: Stats, defender: Stats, opts: Dictionary = {}) -> Di
 			"chance": int(proc["chance"]),
 		})
 
+	_fill_counter(exchange, attacker, out)
+	return out
+
+
+## Volet « riposte » de la prévision : ce que l'engagement coûte à l'assaillant.
+##
+## `counter_expected` distingue deux silences : la cible ne peut pas riposter
+## (portée, bâton), ou elle ne devrait pas en avoir l'occasion parce que le coup
+## la tue à coup sûr. Le second reste une prévision, pas une garantie — un coup
+## manqué lui rend sa riposte.
+static func _fill_counter(exchange: Dictionary, attacker: Stats, out: Dictionary) -> Dictionary:
+	out["counter_reason"] = str(exchange.get("counter_reason", ""))
+	if not bool(exchange.get("can_counter", false)):
+		return out
+
+	var counter: CombatCalc.CombatResult = exchange["counter"]
+	var hits: int = 2 if counter.can_double else 1
+	var total: int = counter.damage * hits
+
+	out["can_counter"] = true
+	out["counter_expected"] = not bool(out["lethal"])
+	out["counter_hit"] = counter.hit_rate
+	out["counter_crit"] = counter.crit_rate
+	out["counter_damage"] = counter.damage
+	out["counter_hits"] = hits
+	out["counter_double"] = counter.can_double
+	out["counter_total"] = total
+	out["counter_crit_total"] = counter.crit_damage + (counter.damage if counter.can_double else 0)
+	out["attacker_hp_after"] = maxi(0, attacker.hp - total)
+	out["counter_lethal"] = total >= attacker.hp
+	out["counter_crit_lethal"] = int(out["counter_crit_total"]) >= attacker.hp
 	return out
 
 
@@ -106,6 +151,16 @@ static func summary(forecast: Dictionary) -> String:
 		line += " | ☠ LÉTAL"
 	elif bool(forecast["crit_lethal"]):
 		line += " | ☠ si crit"
+
+	if bool(forecast.get("can_counter", false)):
+		line += " | riposte %d" % forecast["counter_total"]
+		if bool(forecast["counter_double"]):
+			line += " (%d ×2)" % forecast["counter_damage"]
+		line += " à %d%%" % forecast["counter_hit"]
+		if bool(forecast["counter_lethal"]):
+			line += " ☠"
+	else:
+		line += " | sans riposte"
 	return line
 
 
@@ -139,6 +194,22 @@ static func _empty() -> Dictionary:
 		"lethal": false,
 		"crit_lethal": false,
 		"procs": [],
+		# --- Riposte de la cible ---
+		"attacker_hp": 0,
+		"attacker_max_hp": 0,
+		"attacker_hp_after": 0,
+		"can_counter": false,
+		"counter_expected": false,
+		"counter_reason": "",
+		"counter_hit": 0,
+		"counter_crit": 0,
+		"counter_damage": 0,
+		"counter_hits": 0,
+		"counter_double": false,
+		"counter_total": 0,
+		"counter_crit_total": 0,
+		"counter_lethal": false,
+		"counter_crit_lethal": false,
 	}
 
 

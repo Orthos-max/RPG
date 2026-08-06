@@ -32,7 +32,7 @@ static func make_unit(data: Dictionary = {}) -> Dictionary:
 		"col": 0, "row": 0,
 		"hp": 10, "max_hp": 10,
 		"atk": 5, "def": 0, "res": 0,
-		"movement": 4, "attack_range": 1,
+		"movement": 4, "attack_range": 1, "min_range": 1,
 		"is_magical": false, "terrain_def": 0,
 	}
 	u.merge(data, true)
@@ -78,7 +78,9 @@ static func score_target(actor: Dictionary, enemy: Dictionary, difficulty: int, 
 	score += expected_damage(enemy, actor) * W_THREAT
 
 	# Riposte : si l'ennemi nous atteint à cette distance, on encaisse.
-	if dist <= int(enemy.get("attack_range", 1)):
+	# La portée minimale compte autant que la maximale — charger un archer, c'est
+	# précisément le moyen de lui retirer sa riposte.
+	if can_strike(enemy, dist):
 		var counter: float = expected_damage(enemy, actor)
 		score -= counter * W_COUNTER * (2.0 - float(profile["aggression"]))
 		# Se faire tuer en ripostant est rédhibitoire.
@@ -86,6 +88,16 @@ static func score_target(actor: Dictionary, enemy: Dictionary, difficulty: int, 
 			score -= W_KILL
 
 	return score
+
+
+## L'unité atteint-elle une cible située à `dist` cases ?
+##
+## Même règle que le moteur de combat ([method WeaponType.reaches]), mais exprimée
+## sur le dictionnaire que manipule l'IA : elle n'a pas accès aux ressources.
+static func can_strike(unit: Dictionary, dist: int) -> bool:
+	if dist <= 0:
+		return false
+	return dist >= int(unit.get("min_range", 1)) and dist <= int(unit.get("attack_range", 1))
 
 
 ## Nombre d'ennemis pouvant frapper cette case au tour suivant (mouvement + portée).

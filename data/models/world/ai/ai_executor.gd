@@ -26,6 +26,7 @@ static func pawn_to_unit(arena: Node, pawn: Node, team: String) -> Dictionary:
 		"def": stats.def, "res": stats.res,
 		"movement": stats.movement,
 		"attack_range": stats.attack_range,
+		"min_range": WT.get_min_range(stats.weapon_type),
 		"is_magical": WT.is_magical(stats.weapon_type),
 		"terrain_def": TacticsGrid.terrain_defense(tile),
 	})

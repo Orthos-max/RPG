@@ -107,6 +107,18 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
 | 3 | `select_location` | Oui — attaquer/soigner après déplacement |
 | 4 | `move_pawn` | Non — résolution du combat |
 
+### Riposte
+
+Attaquer n'est plus gratuit : le moteur résout un **échange**, pas un coup. La
+cible rend le sien si elle est encore debout, si son arme engage un combat (un
+bâton, non) et si l'assaillant se tient à sa portée — entre `min_range` et
+`attack_range` **inclus**. Le second coup revient ensuite au plus rapide des
+deux, et à lui seul.
+
+Concrètement, pour décider d'un assaut, Ciel doit lire les deux sens : un archer
+(`min_range: 2`) abordé au contact ne rend rien, et une unité affaiblie peut
+mourir de sa propre attaque.
+
 ---
 
 ## 3. `ai_command.json` — ordres acceptés

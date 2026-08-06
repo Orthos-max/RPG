@@ -124,6 +124,173 @@ static func calculate(attacker: Stats, defender: Stats, support_bonuses: Diction
 	return result
 
 
+#region Échange (attaque + riposte)
+## Un échange complet entre deux unités : l'assaut, la riposte, et l'ordre des coups.
+##
+## Fire Emblem ne résout pas un combat dans un seul sens. L'assaillant frappe, le
+## défenseur riposte s'il en a encore les moyens, puis le plus rapide des deux
+## porte un second coup. Le moteur ne connaissait que le premier temps : attaquer
+## ne coûtait rien, et l'aperçu d'avant-combat n'avait qu'un camp à montrer.
+##
+## [param opts] {attacker_support, defender_support: Dictionary,
+##               attacker_terrain, defender_terrain, distance: int}
+## [returns] {attack: CombatResult, counter: CombatResult|null, can_counter: bool,
+##            counter_reason: String, order: Array[String]}
+static func calculate_exchange(attacker: Stats, defender: Stats, opts: Dictionary = {}) -> Dictionary:
+	var out: Dictionary = {
+		"attack": null,
+		"counter": null,
+		"can_counter": false,
+		"counter_reason": "",
+		"order": [],
+	}
+	if not attacker or not defender:
+		out["counter_reason"] = "combattant manquant"
+		return out
+
+	var distance: int = int(opts.get("distance", 1))
+	var atk_terrain: int = int(opts.get("attacker_terrain", 0))
+	var def_terrain: int = int(opts.get("defender_terrain", 0))
+
+	# L'assaut : la cible se défend depuis son terrain.
+	var attack: CombatResult = calculate(
+		attacker, defender, opts.get("attacker_support", {}), def_terrain
+	)
+	out["attack"] = attack
+	out["order"] = ["attack"]
+
+	# La riposte : les rôles s'inversent, terrain compris.
+	var refusal: String = counter_refusal(defender, distance)
+	var counter: CombatResult = null
+	if refusal.is_empty():
+		counter = calculate(defender, attacker, opts.get("defender_support", {}), atk_terrain)
+		out["counter"] = counter
+		out["can_counter"] = true
+		out["order"].append("counter")
+	else:
+		out["counter_reason"] = refusal
+
+	# Le second coup revient au plus rapide, et à un seul des deux : les deux
+	# `can_double` se calculent sur le même écart de vitesse, en sens inverse.
+	if attack.can_double:
+		out["order"].append("attack")
+	elif counter and counter.can_double:
+		out["order"].append("counter")
+
+	return out
+
+
+## Pourquoi le défenseur ne riposte pas — chaîne vide s'il riposte.
+##
+## Trois raisons, toutes de règle : il est déjà à terre, son arme n'engage aucun
+## combat (bâton), ou l'assaillant se tient hors de sa portée — c'est le cas d'un
+## archer pris au contact, comme d'un bretteur visé de loin.
+static func counter_refusal(defender: Stats, distance: int) -> String:
+	if not defender:
+		return "défenseur manquant"
+	if defender.hp <= 0:
+		return "hors de combat"
+	if not WT.is_combat_weapon(defender.weapon_type):
+		return "arme sans riposte"
+	if not WT.reaches(defender.weapon_type, defender.attack_range, distance):
+		return "hors de portée de riposte"
+	return ""
+
+
+## Un seul coup porté : jet de précision, jet de critique, jets de compétences.
+##
+## [method roll_combat] résout tout un assaut d'un bloc, double compris. Un
+## échange, lui, a besoin de coups séparés : entre deux frappes, quelqu'un peut
+## tomber, et le coup suivant n'a alors plus lieu d'être.
+##
+## [param rng] Générateur optionnel — une graine fixe rend le coup reproductible.
+static func roll_strike(result: CombatResult, rng: RandomNumberGenerator = null) -> Dictionary:
+	if not rng:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+
+	var out: Dictionary = {
+		"hit": false,
+		"crit": false,
+		"damage": 0,
+		"hit_rate": result.hit_rate,
+		"crit_rate": result.crit_rate,
+		"skills": [],
+	}
+
+	# Même système 2-RN que `roll_combat` : la moyenne de deux jets.
+	var rn1: int = rng.randi_range(1, 100)
+	var rn2: int = rng.randi_range(1, 100)
+	var true_hit: float = (rn1 + rn2) / 2.0
+	out["hit"] = true_hit <= result.hit_rate
+	if not out["hit"]:
+		out["hit_rate"] = int(true_hit)
+		return out
+
+	out["crit"] = rng.randi_range(1, 100) <= result.crit_rate
+	out["damage"] = result.crit_damage if out["crit"] else result.damage
+
+	for proc: Dictionary in result.procs:
+		if rng.randi_range(1, 100) > int(proc["chance"]):
+			continue
+		out["skills"].append(proc["id"])
+		match str(proc["proc"]):
+			"pierce":
+				out["damage"] += int(floor(float(result.defense_used) / 2.0))
+			"extra_hit":
+				out["damage"] += result.damage
+
+	return out
+
+
+## Déroule un échange coup par coup et renvoie ce qu'il en reste.
+##
+## Les PV sont suivis ici, pas dans la scène : dès que l'un des deux tombe,
+## l'échange s'arrête. Les dégâts rapportés sont ceux réellement encaissés
+## (jamais plus que les PV restants), pour que le journal dise vrai.
+##
+## [returns] {strikes: Array, attacker_hp, defender_hp, attacker_damage_taken,
+##            defender_damage_taken, countered: bool}
+static func roll_exchange(exchange: Dictionary, attacker_hp: int, defender_hp: int,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	var out: Dictionary = {
+		"strikes": [],
+		"attacker_hp": attacker_hp,
+		"defender_hp": defender_hp,
+		"attacker_damage_taken": 0,
+		"defender_damage_taken": 0,
+		"countered": false,
+	}
+
+	for side: String in exchange.get("order", []):
+		# Un mort ne frappe plus, et ne se fait plus frapper.
+		if int(out["attacker_hp"]) <= 0 or int(out["defender_hp"]) <= 0:
+			break
+
+		var result: CombatResult = exchange.get("attack" if side == "attack" else "counter")
+		if not result:
+			continue
+
+		var blow: Dictionary = roll_strike(result, rng)
+		blow["side"] = side
+		out["strikes"].append(blow)
+		# Riposter, c'est avoir porté le coup — qu'il touche ou non.
+		if side == "counter":
+			out["countered"] = true
+		if not bool(blow["hit"]):
+			continue
+
+		var victim: String = "defender_hp" if side == "attack" else "attacker_hp"
+		var taken: String = "defender_damage_taken" if side == "attack" else "attacker_damage_taken"
+		var applied: int = mini(int(blow["damage"]), int(out[victim]))
+		blow["damage"] = applied
+		out[victim] = int(out[victim]) - applied
+		out[taken] = int(out[taken]) + applied
+
+	return out
+#endregion
+
+
 ## Roll the RNG for a combat result
 ## Returns:
 ##   - 0 = miss

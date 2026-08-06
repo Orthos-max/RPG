@@ -193,6 +193,24 @@ func _test_local_ai() -> void:
 	var blocked: Dictionary = BRAIN.decide(actor, [ally], [far], reachable, DIFF.Level.NORMAL)
 	_check(int(blocked["col"]) != 8 or int(blocked["row"]) != 5,
 		"n'empile pas deux alliés sur une case", str(blocked))
+
+	# Portées : l'IA doit lire la riposte comme le moteur la résout.
+	var archer: Dictionary = BRAIN.make_unit({"attack_range": 2, "min_range": 2})
+	var swordsman: Dictionary = BRAIN.make_unit({"attack_range": 1, "min_range": 1})
+	_check(not BRAIN.can_strike(archer, 1) and BRAIN.can_strike(archer, 2),
+		"l'arc ne frappe qu'à 2 cases")
+	_check(BRAIN.can_strike(swordsman, 1) and not BRAIN.can_strike(swordsman, 2),
+		"la lame ne frappe qu'au contact")
+
+	# Charger un archer coûte moins cher que l'aborder à sa portée : sa riposte
+	# ne compte que dans le second cas.
+	var bowman: Dictionary = BRAIN.make_unit({"name": "Virion", "team": "player",
+		"col": 6, "row": 5, "hp": 20, "max_hp": 20, "atk": 12, "def": 2,
+		"attack_range": 2, "min_range": 2})
+	var at_range: float = BRAIN.score_target(actor, bowman, DIFF.Level.NORMAL, 2)
+	var in_melee: float = BRAIN.score_target(actor, bowman, DIFF.Level.NORMAL, 1)
+	_check(in_melee > at_range, "préfère charger l'archer que le tenir à distance",
+		"contact %.1f vs distance %.1f" % [in_melee, at_range])
 #endregion
 
 

@@ -16,6 +16,8 @@ const COLOR_DIM: Color = Color(0.72, 0.74, 0.8)
 @onready var _damage: Label = $Margin/VBox/Damage
 @onready var _rates: Label = $Margin/VBox/Rates
 @onready var _health: Label = $Margin/VBox/Health
+@onready var _counter: Label = $Margin/VBox/Counter
+@onready var _counter_health: Label = $Margin/VBox/CounterHealth
 @onready var _bonuses: Label = $Margin/VBox/Bonuses
 
 ## Dernière prévision affichée — évite de reconstruire le texte à chaque frame
@@ -61,6 +63,8 @@ func _fill_heal(f: Dictionary) -> void:
 	_rates.visible = false
 	_health.text = "PV %d → %d / %d" % [f["target_hp"], f["target_hp_after"], f["target_max_hp"]]
 	_health.add_theme_color_override("font_color", COLOR_HEAL)
+	_counter.visible = false
+	_counter_health.visible = false
 	_bonuses.text = ""
 	_bonuses.visible = false
 
@@ -83,6 +87,8 @@ func _fill_attack(f: Dictionary) -> void:
 	_health.text = "PV %d → %d / %d" % [f["target_hp"], f["target_hp_after"], f["target_max_hp"]]
 	_health.add_theme_color_override("font_color", _damage_color(f))
 
+	_fill_counter(f)
+
 	var notes: Array[String] = []
 	if int(f["triangle"]) != 0:
 		notes.append("Triangle %+d / %+d%%" % [f["triangle"], f["triangle_hit"]])
@@ -98,6 +104,55 @@ func _fill_attack(f: Dictionary) -> void:
 	_bonuses.visible = not notes.is_empty()
 	_bonuses.text = "   ".join(notes)
 	_bonuses.add_theme_color_override("font_color", COLOR_DIM)
+
+
+## Ce que la cible rend — la moitié de la prévision qui manquait.
+##
+## Quand l'assaut tue à coup sûr, la riposte reste affichée mais grisée : elle
+## n'aura lieu que si le coup manque, et c'est justement ce risque-là qu'il faut
+## voir avant d'engager.
+func _fill_counter(f: Dictionary) -> void:
+	if not bool(f.get("can_counter", false)):
+		_counter.visible = true
+		_counter.text = "↩ Aucune riposte" + (
+			"  (%s)" % f["counter_reason"] if not str(f.get("counter_reason", "")).is_empty() else ""
+		)
+		_counter.add_theme_color_override("font_color", COLOR_DIM)
+		_counter_health.visible = false
+		return
+
+	var expected: bool = bool(f["counter_expected"])
+	var line: String = "↩ Riposte %d dégâts" % f["counter_total"]
+	if bool(f["counter_double"]):
+		line += "  (%d ×2)" % f["counter_damage"]
+	line += "   %d%%" % f["counter_hit"]
+	if int(f["counter_crit"]) > 0:
+		line += "   crit %d%%" % f["counter_crit"]
+	if bool(f["counter_lethal"]):
+		line += "   ☠ MORTEL"
+	elif bool(f["counter_crit_lethal"]):
+		line += "   ☠ si critique"
+	if not expected:
+		line += "   (seulement si le coup manque)"
+
+	_counter.visible = true
+	_counter.text = line
+	_counter.add_theme_color_override("font_color", _counter_color(f) if expected else COLOR_DIM)
+
+	_counter_health.visible = true
+	_counter_health.text = "PV %s %d → %d / %d" % [
+		f["attacker_name"], f["attacker_hp"], f["attacker_hp_after"], f["attacker_max_hp"]
+	]
+	_counter_health.add_theme_color_override("font_color", _counter_color(f) if expected else COLOR_DIM)
+
+
+## Rouge quand la riposte tue l'assaillant, ambre si seul un critique le tue.
+func _counter_color(f: Dictionary) -> Color:
+	if bool(f["counter_lethal"]):
+		return COLOR_LETHAL
+	if bool(f["counter_crit_lethal"]):
+		return COLOR_CRIT_LETHAL
+	return COLOR_NEUTRAL
 
 
 ## Rouge quand le coup tue, ambre quand seul un critique tue.

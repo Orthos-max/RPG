@@ -68,6 +68,16 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 15
 
+[node name="Counter" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 15
+
+[node name="CounterHealth" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+
 [node name="Bonuses" type="Label" parent="Margin/VBox"]
 layout_mode = 2
 mouse_filter = 2
