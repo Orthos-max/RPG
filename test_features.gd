@@ -869,6 +869,7 @@ func _test_economy() -> void:
 	_test_weapons()
 	_test_weapon_economy(campaign)
 	_test_save_slots(campaign)
+	_test_character_editor(campaign)
 
 
 #region 12quater. Emplacements de sauvegarde
@@ -1118,6 +1119,90 @@ func _test_weapon_economy(campaign: Node) -> void:
 	campaign.delete_save(99)
 #endregion
 
+
+
+#region 12quinquies. Personnages écrits par le joueur
+## La fiche, sa validation, son rangement, et son entrée dans l'armée.
+func _test_character_editor(campaign: Node) -> void:
+	print("\n🧑 Test 12quinquies: éditeur de personnages")
+
+	# Une fiche neuve part des bases de sa classe : elle doit être jouable telle
+	# quelle, pas être une coquille à 0 partout.
+	var doc: UnitDocument = UnitDocument.from_class(CDB.Id.ARCHER)
+	_check(doc.validate().is_empty(), "une fiche neuve est valide",
+		str(doc.validate()))
+	_check(doc.max_hp > 0 and int(doc.stats["str"]) > 0,
+		"elle hérite des bases de sa classe (PV %d, FOR %d)" % [
+			doc.max_hp, int(doc.stats["str"])])
+	_check(not doc.weapons.is_empty(), "et d'une arme que sa classe sait manier")
+
+	# La validation dit non plutôt que de corriger en silence.
+	doc.name = ""
+	_check(not doc.validate().is_empty(), "un personnage sans nom est refusé")
+	doc.name = "Aurèle le Bref"
+	doc.stats["str"] = 300
+	_check(not doc.validate().is_empty(), "une statistique hors bornes est refusée")
+	doc.stats["str"] = 9
+	_check(doc.validate().is_empty(), "corrigée, la fiche repasse")
+
+	# Une classe ne manie pas n'importe quelle arme.
+	var mage: UnitDocument = UnitDocument.from_class(CDB.Id.DARK_MAGE)
+	mage.name = "Sombre"
+	mage.weapons = ["iron_axe"]
+	_check(not mage.validate().is_empty(),
+		"une arme que la classe ignore est refusée", str(mage.validate()))
+
+	# L'identifiant de fichier se déduit du nom, sans caractère hasardeux.
+	doc.name = "Aurèle le Bref"
+	_check(not doc.slug().is_empty() and not doc.slug().contains(" "),
+		"identifiant de fichier dérivé du nom : %s" % doc.slug())
+
+	# Aller-retour disque : ce qu'on relit doit valoir ce qu'on a écrit.
+	UnitLibrary.delete_unit(doc.slug())
+	var saved: Dictionary = UnitLibrary.save(doc)
+	_check(bool(saved["ok"]), "fiche enregistrée", str(saved.get("error", "")))
+	var back: UnitDocument = UnitLibrary.load_unit(doc.slug())
+	_check(back != null and back.name == doc.name and back.class_id == doc.class_id,
+		"fiche relue à l'identique")
+	_check(back != null and int(back.stats["str"]) == 9, "ses statistiques survivent")
+
+	var listed: Array = UnitLibrary.list_units()
+	var found: bool = false
+	for entry: Dictionary in listed:
+		if str(entry["slug"]) == doc.slug():
+			found = true
+	_check(found, "elle apparaît dans la bibliothèque (%d fiche(s))" % listed.size())
+
+	# Une fiche invalide n'est pas enregistrée : le dire à l'écriture vaut mieux
+	# qu'au moment où le personnage entre en bataille.
+	var broken: UnitDocument = UnitDocument.from_class(CDB.Id.LORD)
+	broken.name = ""
+	_check(not bool(UnitLibrary.save(broken)["ok"]), "une fiche invalide est refusée")
+
+	# Entrée dans l'armée.
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	var before: int = campaign.roster.size()
+	var enlisted: Dictionary = campaign.enlist_custom(doc)
+	_check(bool(enlisted["ok"]) and campaign.roster.size() == before + 1,
+		"le personnage rejoint l'armée", str(enlisted))
+	_check(not bool(campaign.enlist_custom(doc)["ok"]),
+		"mais pas deux fois")
+
+	var unit: Dictionary = campaign.get_unit(doc.slug())
+	_check(bool(unit.get("custom", false)) and str(unit.get("source", "x")).is_empty(),
+		"il est marqué comme écrit à la main, sans .tres derrière lui")
+	_check(int(unit.get("attack_range", 0)) == 2,
+		"sa portée suit l'arme en main (arc : %d)" % int(unit.get("attack_range", 0)))
+
+	# Il doit survivre à la sauvegarde comme les autres.
+	_check(campaign.save_game(97) and campaign.load_game(97),
+		"partie sauvegardée et relue")
+	_check(not campaign.get_unit(doc.slug()).is_empty(),
+		"le personnage écrit à la main survit à la sauvegarde")
+	campaign.delete_save(97)
+	UnitLibrary.delete_unit(doc.slug())
+	_check(UnitLibrary.load_unit(doc.slug()) == null, "fiche supprimée")
+#endregion
 
 #region 12ter. Lecture de carte et choix du terrain en préparation
 func _test_chapter_map() -> void:

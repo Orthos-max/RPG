@@ -527,6 +527,31 @@ func unit_arsenal(unit_id: String) -> Array:
 #endregion
 
 
+## Verse un personnage créé par le joueur dans l'armée.
+##
+## Il entre par la même porte que les autres — une entrée de roster — mais sans
+## `.tres` derrière lui : c'est [UnitDocument] qui décrit sa fiche. Gratuit et
+## sans condition, contrairement au recrutement : c'est du contenu que le joueur
+## écrit, pas une récompense de campagne.
+##
+## [returns] {ok, id, reason}
+func enlist_custom(doc: UnitDocument) -> Dictionary:
+	if not doc:
+		return {"ok": false, "reason": "aucun personnage"}
+	var errors: Array[String] = doc.validate()
+	if not errors.is_empty():
+		return {"ok": false, "reason": errors[0]}
+
+	var unit: Dictionary = doc.to_roster_unit()
+	for u: Dictionary in roster:
+		if str(u.get("id", "")) == str(unit["id"]):
+			return {"ok": false, "reason": "%s est déjà dans l'armée" % str(unit["name"])}
+
+	roster.append(unit)
+	roster_changed.emit()
+	return {"ok": true, "id": str(unit["id"]), "reason": ""}
+
+
 ## Unités recrutables encore absentes du roster : [{path, cost, name, class}]
 func available_recruits() -> Array:
 	var out: Array = []

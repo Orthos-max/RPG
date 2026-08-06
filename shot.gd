@@ -42,6 +42,10 @@ func _init() -> void:
 			# moyen de juger le surlignage autrement qu'en lisant du code.
 			await _open_battle(main, int(args[2]) if args.size() > 2 and args[2].is_valid_int() else 1)
 			await _show_range(main)
+		"chars":
+			main.show_character_editor()
+			for _i in 10:
+				await physics_frame
 		"prep":
 			await _open_prep(main, args[2] if args.size() > 2 else "")
 		"saves":

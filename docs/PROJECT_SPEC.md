@@ -272,9 +272,12 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       LocalPlayer / LocalAI / CielAI / RemotePlayer) et autoload `GameSession`
       (mode, difficulté, chapitre, code d'invitation). La boucle de tour interroge
       `GameSession.controller_for(side)` au lieu d'un test en dur.
-- [x] **M2 — Hotseat (local, 2 joueurs sur la même machine)** : les actions
-      humaines sont remontées dans `TacticsParticipant`, la boucle de tour prend
-      le camp en paramètre et un bandeau rappelle à qui de jouer.
+- [x] ~~**M2 — Hotseat (local, 2 joueurs sur la même machine)**~~ — **retiré le
+      2026-08-06** : personne ne s'en servait. Ce qu'il avait apporté reste et
+      sert au réseau — les actions humaines remontées dans `TacticsParticipant`,
+      la boucle de tour qui prend le camp en paramètre, le bandeau « à qui de
+      jouer ». Seuls le mode, son bouton et son entrée de menu ont disparu ; la
+      valeur 2 de `GameSession.Mode` reste vacante, elle voyage jusqu'à Ciel.
 - [x] **M3 — Réseau peer-to-peer (invitation par code)** : `ENetMultiplayerPeer`
       sur le port 24710, code de 7 caractères encodant l'adresse de l'hôte, état
       diffusé par l'hôte et reflété par l'invité (`NetMirror`).
@@ -1323,4 +1326,49 @@ la boucle de tour les remet à zéro à chaque frame ; il faut demander l'étape
 
 ```
 bash scripts/test_all.sh --window   # 58 / 489 / 77 OK + test_map + 9 OK
+```
+
+
+---
+
+### Passe du 2026-08-06 (9) — duel local retiré, éditeur de personnages
+
+**Le duel local (M2) est retiré**, à la demande d'Aurèle : personne ne s'en
+servait. Ce qu'il avait apporté reste et sert au réseau — actions humaines
+remontées dans `TacticsParticipant`, boucle de tour paramétrée par camp, bandeau
+« à qui de jouer ». Seuls le mode, son bouton et son entrée de menu disparaissent.
+
+> La valeur `2` de `GameSession.Mode` reste **vacante** plutôt que renumérotée :
+> le mode voyage jusqu'à Ciel dans `ai_state.json`, et décaler `NETWORK` de 3 à 2
+> aurait changé le protocole pour rien.
+
+**Éditeur de personnages.** Le joueur écrit ses propres recrues et les verse dans
+son armée. Trois pièces, dans l'ordre habituel du projet :
+
+* `UnitDocument` — la fiche : nom, classe, niveau, PV, mouvement, sept
+  statistiques, armes, objets. Elle se valide (bornes, arme que la classe sait
+  manier, nom non vide) et se sérialise. Logique pure, éprouvée en headless.
+* `UnitLibrary` — le rangement, dans `user://units/*.json`. Même raison que
+  [MapLibrary] : `res://` est en lecture seule une fois le jeu installé, une
+  fiche enregistrée là serait perdue. Un personnage est un fichier JSON lisible,
+  corrigeable à la main, envoyable à quelqu'un.
+* `CharacterEditor` — l'écran, accessible depuis l'écran-titre.
+
+Deux partis pris qui méritent d'être dits :
+
+1. **Une fiche neuve part des bases de sa classe**, pas de zéros. Un personnage
+   créé sans rien toucher doit être jouable tout de suite. Changer de classe
+   rebat ces bases — c'est ce qu'on attend en la choisissant, et ça évite un
+   archer avec les statistiques d'un chevalier.
+2. **L'aperçu monte une unité vivante** (`Stats.import_stats`) au lieu de
+   recopier les formules de combat. C'est la seule façon d'être sûr que les
+   chiffres affichés pendant le réglage — attaque, précision, esquive, vitesse
+   d'attaque, poids de l'arme — sont ceux que le combat appliquera.
+
+`Campaign.enlist_custom()` fait entrer la recrue par la même porte que les
+autres : une entrée de roster, avec son arsenal, sa portée d'arme et ses objets.
+Elle survit à la sauvegarde comme n'importe quelle unité.
+
+```
+bash scripts/test_all.sh --window   # 58 / 509 / 77 OK + test_map + 9 OK
 ```
