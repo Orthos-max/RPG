@@ -280,11 +280,22 @@ func _check_victory(killed_pawn: TacticsPawn) -> void:
 		return
 	
 	_victory_checked = true
-	
+
 	# Determine if this is the player team or opponent team
 	# TacticsPlayer has show_available_pawn_actions, TacticsOpponent doesn't
 	var is_player_team := killed_team.has_method("show_available_pawn_actions")
-	
+
+	# Un chapitre a son propre arbitre : [ChapterRunner] évalue l'objectif, écrit
+	# le résultat dans la campagne et enchaîne. Ce chemin-ci date d'avant lui, et
+	# les laisser courir ensemble **détruisait la partie suivante** : deux
+	# secondes et huit dixièmes après le dernier mort, il déchargeait le niveau et
+	# rentrait au menu — c'est-à-dire en plein chargement du chapitre suivant si
+	# le joueur avait cliqué entre-temps. Écran figé, puis fermeture.
+	#
+	# On garde donc l'annonce (escarmouche, duel local : personne d'autre ne la
+	# fait), mais on ne touche plus à la scène quand un runner est aux commandes.
+	var runner_owns_outcome: bool = chapter_runner(killed_pawn) != null
+
 	await tree.create_timer(0.8).timeout
 
 	if is_player_team:
@@ -299,7 +310,27 @@ func _check_victory(killed_pawn: TacticsPawn) -> void:
 		if not path.is_empty():
 			print("[Replay] ", ProjectSettings.globalize_path(path))
 
+	# Le runner enchaîne lui-même : on s'arrête à l'annonce.
+	if runner_owns_outcome:
+		return
+
 	_show_victory_screen(tree)
+
+
+## Le chapitre en cours a-t-il un arbitre ?
+##
+## On remonte depuis le pion jusqu'au niveau : c'est lui qui porte le
+## [ChapterRunner] quand la bataille appartient à une campagne ou à une carte
+## d'essai. Une escarmouche ou un duel local n'en a pas — et c'est là que le
+## chemin hérité ci-dessus garde toute son utilité.
+func chapter_runner(pawn: Node) -> Node:
+	var node: Node = pawn
+	while node:
+		var runner: Node = node.get_node_or_null("ChapterRunner")
+		if runner:
+			return runner
+		node = node.get_parent()
+	return null
 
 
 ## Display victory/defeat screen and return to menu

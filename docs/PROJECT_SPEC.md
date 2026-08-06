@@ -1207,3 +1207,44 @@ disponible.
 ```
 bash scripts/test_all.sh   # 58 / 482 / 76 OK + test_map
 ```
+
+
+---
+
+### Passe du 2026-08-06 (6) — le crash du chapitre 2, trouvé
+
+Aurèle : « lorsque l'on passe du chapitre 1 au chapitre 2, l'écran se fige et le
+jeu se ferme ». C'est la **transition** qui plantait, pas le chapitre 2 — ce que
+mes quatre premières tentatives de reproduction avaient manqué, parce qu'elles
+appelaient `complete_chapter()` directement et sautaient le chemin de la victoire.
+
+**Deux gestionnaires de victoire couraient en parallèle.** `ChapterRunner` évalue
+l'objectif, écrit le résultat dans la campagne et enchaîne sur l'écran suivant.
+Mais `TacticsPawnCombatService._check_victory()` — hérité d'avant la campagne —
+faisait sa propre annonce puis, **2,8 secondes après le dernier mort**,
+déchargeait le niveau et rentrait au menu.
+
+Deux secondes et huit dixièmes, c'est exactement le temps qu'un joueur met à lire
+« Victoire » et à cliquer. Le minuteur tombait alors en plein chargement du
+chapitre suivant : le niveau tout juste monté était détruit sous les pieds de son
+propre `ChapterRunner`, encore en train d'attendre ses frames d'initialisation.
+Écran figé, puis fermeture.
+
+Reproduit en faisant cliquer la sonde **vite** (45 frames au lieu de 400) : le
+niveau du chapitre 2 passe de « présent » à « PERDU » entre deux relevés. C'est
+la lenteur de mes sondes qui avait masqué le bug — elles laissaient le minuteur
+passer avant d'enchaîner.
+
+Le chemin hérité garde son annonce (une escarmouche ou un duel local n'a pas de
+runner, personne d'autre ne la fait) mais ne touche plus à la scène dès qu'un
+arbitre est aux commandes : `chapter_runner()` remonte du pion jusqu'au niveau
+pour le savoir.
+
+**Journal sur disque activé** (`file_logging` dans `project.godot`). Sans lui, un
+plantage chez un joueur ne laisse aucune trace : la fenêtre se ferme et l'erreur
+part avec elle. Les dix derniers journaux sont conservés dans `user://logs/`,
+et `docs/INSTALL.md` dit où les trouver.
+
+```
+bash scripts/test_all.sh   # 58 / 482 / 77 OK + test_map
+```

@@ -130,6 +130,21 @@ func _run() -> void:
 					CMAP.defense_at(map, chosen),
 				"tuile : +%d" % TacticsGrid.terrain_defense(target_tile))
 
+	# --- Un seul arbitre par bataille ---
+	# Deux gestionnaires de victoire couraient en parallèle : le `ChapterRunner`
+	# du chapitre, et un chemin hérité qui déchargeait le niveau et rentrait au
+	# menu 2,8 s après le dernier mort — donc en plein chargement du chapitre
+	# suivant si le joueur avait cliqué entre-temps. Écran figé, puis fermeture.
+	var any_pawn: Node = null
+	for p in level.player.get_children():
+		if p is TacticsPawn and is_instance_valid(p):
+			any_pawn = p
+			break
+	if any_pawn:
+		var service := TacticsPawnCombatService.new()
+		_check(service.chapter_runner(any_pawn) != null,
+			"le chapitre a son arbitre : le chemin hérité se retire")
+
 	if runner:
 		var snapshot: Dictionary = runner.build_snapshot()
 		_check(snapshot["player_units"].size() == player_pawns

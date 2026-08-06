@@ -26,6 +26,13 @@ Deux publics, deux chemins : **jouer** (aucune connaissance technique requise) e
 4. Désinstallation : *Paramètres → Applications → Ciel Emblem → Désinstaller*.
    Les sauvegardes de campagne, elles, restent dans `%APPDATA%\Godot\app_userdata\Ciel Emblem\`.
 
+> **Signaler un plantage.** Le jeu tient un journal sur disque, dans
+> `%APPDATA%\Godot\app_userdata\Ciel Emblem\logs\` (`godot.log` est le plus
+> récent, les précédents sont horodatés). Les dix derniers sont conservés. Joindre
+> ce fichier à un rapport évite d'avoir à deviner : la dernière erreur avant la
+> fermeture y est écrite. Sur macOS le dossier est
+> `~/Library/Application Support/Godot/app_userdata/Ciel Emblem/logs/`.
+
 **Sans installeur (version portable)**
 1. Télécharger `CielEmblem-<version>-windows.zip` et le décompresser où l'on veut.
 2. Double-cliquer sur `CielEmblem.exe`.
