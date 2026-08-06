@@ -155,14 +155,17 @@ func mark_reachable_tiles(arena: TacticsArena, root: TacticsTile, distance: floa
 		_t.reachable = (_has_dist and _reachable and _not_taken) or _is_root
 
 
-## Mark attackable tiles within a certain distance from a root tile
-## [param arena] The TacticsArena containing the tiles
-## [param root] The starting tile
-## [param distance] The maximum attack distance
-func mark_attackable_tiles(arena: TacticsArena, root: TacticsTile, distance: float) -> void:
+## Marque les cases qu'une unité peut frapper depuis sa tuile.
+##
+## [param distance] Portée maximale de l'arme.
+## [param min_distance] Portée **minimale** — un arc vaut 2 et ne frappe pas au
+## contact. Sans ce plancher, Virion tirait à bout portant : la portée d'arme
+## avait un plafond mais pas de seuil, et seule la riposte connaissait la règle.
+func mark_attackable_tiles(arena: TacticsArena, root: TacticsTile, distance: float,
+		min_distance: float = 1.0) -> void:
 	for _t: TacticsTile in arena.get_node("Tiles").get_children():
 		var _has_dist: bool = _t.pf_distance > 0
-		var _reachable: bool = _t.pf_distance <= distance
+		var _in_reach: bool = _t.pf_distance <= distance and _t.pf_distance >= min_distance
 		var _is_root: bool = _t == root
-		
-		_t.attackable = _has_dist and _reachable or _is_root
+
+		_t.attackable = (_has_dist and _in_reach) or _is_root

@@ -148,5 +148,5 @@ func mark_reachable_tiles(root: TacticsTile, distance: float) -> void:
 ## Marks tiles attackable within a certain distance from a root tile
 ## [param root] The starting tile
 ## [param distance] The maximum attack distance
-func mark_attackable_tiles(root: TacticsTile, distance: float) -> void:
-	serv.mark_attackable_tiles(self, root, distance)
+func mark_attackable_tiles(root: TacticsTile, distance: float, min_distance: float = 1.0) -> void:
+	serv.mark_attackable_tiles(self, root, distance, min_distance)

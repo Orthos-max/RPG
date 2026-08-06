@@ -1,5 +1,6 @@
 class_name TacticsPlayerService
 extends RefCounted
+const WT = preload("res://data/models/world/stats/weapon_type.gd")
 ## Service class for TacticsPlayer
 
 ## Resource containing participant data and configurations
@@ -89,7 +90,8 @@ func display_attackable_targets() -> void:
 	camera.target = p
 	# Don't filter by allies — enemy tiles must be reachable for attack targeting
 	arena.process_surrounding_tiles(p.get_tile(), float(p.stats.attack_range))
-	arena.mark_attackable_tiles(p.get_tile(), float(p.stats.attack_range))
+	arena.mark_attackable_tiles(p.get_tile(), float(p.stats.attack_range),
+		float(WT.get_min_range(p.stats.weapon_type)))
 	res.stage = res.STAGE_SELECT_ATTACK_TARGET
 
 

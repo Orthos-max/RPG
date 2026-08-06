@@ -1,5 +1,6 @@
 class_name TacticsOpponentService
 extends RefCounted
+const WT = preload("res://data/models/world/stats/weapon_type.gd")
 ## Service class for TacticsOpponent
 ##
 ## Les décisions viennent de [LocalAIBrain] via [TacticsAIExecutor] : ciblage
@@ -102,7 +103,8 @@ func choose_pawn_to_attack() -> void:
 	arena.reset_all_tile_markers()
 	# Don't filter by allies — enemy tiles must be reachable for attack targeting
 	arena.process_surrounding_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
-	arena.mark_attackable_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range)
+	arena.mark_attackable_tiles(res.curr_pawn.get_tile(), res.curr_pawn.stats.attack_range,
+		float(WT.get_min_range(res.curr_pawn.stats.weapon_type)))
 
 	# On honore d'abord la cible choisie par l'heuristique, si elle est à portée.
 	res.attackable_pawn = _resolve_planned_target()

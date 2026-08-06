@@ -125,7 +125,8 @@ static func reachable_tiles(arena: Node) -> Array:
 ## Cases situées à portée (distance de Manhattan) d'une position de grille.
 ## Calcul géométrique : n'écrase pas le marquage de pathfinding en cours.
 ## [returns] [{col, row}]
-static func tiles_in_range(arena: Node, center: Vector2i, reach: int) -> Array:
+## [param min_reach] Portée minimale — un arc ne couvre pas la case d'à côté.
+static func tiles_in_range(arena: Node, center: Vector2i, reach: int, min_reach: int = 1) -> Array:
 	var gs: Vector2i = grid_size(arena)
 	var out: Array = []
 	if center.x < 0 or center.y < 0 or reach <= 0:
@@ -133,7 +134,7 @@ static func tiles_in_range(arena: Node, center: Vector2i, reach: int) -> Array:
 	for d_row in range(-reach, reach + 1):
 		var span: int = reach - absi(d_row)
 		for d_col in range(-span, span + 1):
-			if d_col == 0 and d_row == 0:
+			if absi(d_col) + absi(d_row) < maxi(1, min_reach):
 				continue
 			var col: int = center.x + d_col
 			var row: int = center.y + d_row

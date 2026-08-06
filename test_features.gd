@@ -197,6 +197,22 @@ func _test_local_ai() -> void:
 	_check(int(blocked["col"]) != 8 or int(blocked["row"]) != 5,
 		"n'empile pas deux alliés sur une case", str(blocked))
 
+	# Un archer collé à sa cible ne tire plus : la portée a un plancher autant
+	# qu'un plafond. Sans cela, Virion tirait à bout portant.
+	var bowman_actor: Dictionary = BRAIN.make_unit({"name": "Virion", "col": 5, "row": 5,
+		"hp": 20, "max_hp": 20, "atk": 12, "attack_range": 2, "min_range": 2})
+	var prey: Dictionary = BRAIN.make_unit({"name": "Proie", "team": "player",
+		"col": 6, "row": 5, "hp": 20, "max_hp": 20, "atk": 5, "def": 2})
+	var adjacent_only: Array = [{"col": 5, "row": 5, "def_bonus": 0}]
+	var stuck: Dictionary = BRAIN.decide(bowman_actor, [], [prey], adjacent_only, DIFF.Level.NORMAL)
+	_check(str(stuck["action"]) != "attack",
+		"l'archer au contact ne tire pas (%s)" % str(stuck["action"]), str(stuck))
+
+	var far_prey: Dictionary = BRAIN.make_unit({"name": "Proie", "team": "player",
+		"col": 7, "row": 5, "hp": 20, "max_hp": 20, "atk": 5, "def": 2})
+	var shot: Dictionary = BRAIN.decide(bowman_actor, [], [far_prey], adjacent_only, DIFF.Level.NORMAL)
+	_check(str(shot["action"]) == "attack", "mais il tire à deux cases", str(shot))
+
 	# Portées : l'IA doit lire la riposte comme le moteur la résout.
 	var archer: Dictionary = BRAIN.make_unit({"attack_range": 2, "min_range": 2})
 	var swordsman: Dictionary = BRAIN.make_unit({"attack_range": 1, "min_range": 1})
@@ -1143,6 +1159,18 @@ func _test_chapter_map() -> void:
 			found = CMAP.defense_at(map, pos) == forest
 			break
 	_check(found, "le bonus annoncé est celui du calculateur (+%d en forêt)" % forest)
+
+	# Les cases annoncées à Ciel doivent respecter le plancher de portée : sans
+	# quoi il croirait pouvoir tirer au contact avec un arc.
+	var reach_bow: Array = TacticsGrid.tiles_in_range(null, Vector2i(5, 5), 2, 2)
+	var touches_neighbour: bool = false
+	for cell: Dictionary in reach_bow:
+		if absi(int(cell["col"]) - 5) + absi(int(cell["row"]) - 5) < 2:
+			touches_neighbour = true
+	_check(not touches_neighbour and not reach_bow.is_empty(),
+		"portée d'arc exportée sans les cases adjacentes (%d cases)" % reach_bow.size())
+	var reach_sword: Array = TacticsGrid.tiles_in_range(null, Vector2i(5, 5), 1, 1)
+	_check(reach_sword.size() == 4, "portée de lame : les quatre voisines")
 
 	# Hors bornes : la lecture ne doit pas exploser, juste répondre platement.
 	_check(CMAP.defense_at(map, Vector2i(-5, -5)) == 0

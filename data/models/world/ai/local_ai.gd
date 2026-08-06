@@ -136,7 +136,6 @@ static func decide(actor: Dictionary, allies: Array, enemies: Array, reachable: 
 
 	var profile: Dictionary = DIFF.get_profile(difficulty)
 	var use_exposure: bool = bool(profile["uses_exposure"])
-	var atk_range: int = int(actor.get("attack_range", 1))
 
 	# Cases candidates : les tuiles atteignables + la position actuelle (rester sur place).
 	var spots: Array = _candidate_spots(actor, allies, reachable)
@@ -152,7 +151,9 @@ static func decide(actor: Dictionary, allies: Array, enemies: Array, reachable: 
 
 		for enemy: Dictionary in live_enemies:
 			var dist: int = distance(here, enemy)
-			if dist > atk_range or dist == 0:
+			# La portée a un plancher autant qu'un plafond : un archer qui se
+			# colle à sa cible ne peut plus tirer.
+			if not can_strike(here, dist):
 				continue
 			var score: float = score_target(here, enemy, difficulty, dist)
 			score += float(spot.get("def_bonus", 0)) * W_TERRAIN

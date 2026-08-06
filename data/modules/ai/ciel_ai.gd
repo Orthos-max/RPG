@@ -900,7 +900,8 @@ func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: Tact
 	# géométrique (la calculer via le pathfinding écraserait le marquage).
 	if current and p == current and arena and p.is_alive():
 		d["reachable_tiles"] = TacticsGrid.reachable_tiles(arena)
-		d["attack_tiles"] = TacticsGrid.tiles_in_range(arena, g, s.attack_range)
+		d["attack_tiles"] = TacticsGrid.tiles_in_range(arena, g, s.attack_range,
+			WT.get_min_range(s.weapon_type))
 	return d
 
 
