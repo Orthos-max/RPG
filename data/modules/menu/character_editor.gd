@@ -31,6 +31,7 @@ var doc: UnitDocument = null
 
 var _name_edit: LineEdit
 var _class_picker: OptionButton
+var _sprite_picker: OptionButton
 var _rows: VBoxContainer
 var _preview: Label
 var _status: Label
@@ -172,6 +173,8 @@ func _rebuild_form() -> void:
 	_class_picker.item_selected.connect(_on_class_changed)
 	_rows.add_child(_labelled("Classe", _class_picker))
 
+	_rows.add_child(_labelled("Figurine", _build_sprite_picker()))
+
 	_rows.add_child(_number("Niveau", doc.level, UnitDocument.MIN_LEVEL, UnitDocument.MAX_LEVEL,
 		func(v: int) -> void: doc.level = v))
 	_rows.add_child(_number("PV max", doc.max_hp, UnitDocument.MIN_HP, UnitDocument.MAX_HP,
@@ -232,6 +235,60 @@ func _rebuild_form() -> void:
 
 
 ## Une ligne « intitulé + champ ».
+## Choix de la figurine, avec un aperçu de ce qu'on choisit.
+##
+## Une liste de noms ne dirait rien : « chemist » ou « mage » ne se devinent pas.
+## L'aperçu montre la rangée du bas de la planche — l'unité **de face**, celle
+## qu'on voit le plus souvent en jeu.
+func _build_sprite_picker() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+
+	var preview := TextureRect.new()
+	preview.custom_minimum_size = Vector2(48, 48)
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+
+	var show_look := func(path: String) -> void:
+		var sheet: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+		if not sheet:
+			preview.texture = null
+			return
+		# La planche fait deux rangées : dos en haut, face en bas. On découpe la
+		# seconde plutôt que d'afficher les deux l'une au-dessus de l'autre.
+		var half := AtlasTexture.new()
+		half.atlas = sheet
+		half.region = Rect2(0, sheet.get_height() / 2.0,
+			sheet.get_width(), sheet.get_height() / 2.0)
+		preview.texture = half
+
+	_sprite_picker = OptionButton.new()
+	_sprite_picker.custom_minimum_size = Vector2(0, 34)
+	_sprite_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# Premier choix : « celle de la classe ». Sans lui, une fiche ne pourrait plus
+	# suivre sa classe si on la change après coup.
+	_sprite_picker.add_item("Celle de la classe (%s)" %
+		CDB.get_sprite(doc.class_id).get_file().trim_prefix("chr_pawn_").trim_suffix(".png"))
+	_sprite_picker.set_item_metadata(0, "")
+
+	for entry: Dictionary in UnitDocument.available_sprites():
+		_sprite_picker.add_item(str(entry["label"]))
+		_sprite_picker.set_item_metadata(_sprite_picker.item_count - 1, str(entry["path"]))
+		if str(entry["path"]) == doc.sprite:
+			_sprite_picker.select(_sprite_picker.item_count - 1)
+
+	_sprite_picker.item_selected.connect(func(index: int) -> void:
+		doc.sprite = str(_sprite_picker.get_item_metadata(index))
+		show_look.call(doc.effective_sprite())
+		_refresh_preview())
+
+	row.add_child(_sprite_picker)
+	row.add_child(preview)
+	show_look.call(doc.effective_sprite())
+	return row
+
+
 func _labelled(text: String, field: Control) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)

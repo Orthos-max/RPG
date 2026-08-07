@@ -1655,3 +1655,36 @@ de la balayer à la main plutôt que d'attendre qu'elle se manifeste.
 ```
 bash scripts/test_all.sh --window   # 58 / 570 / 77 OK + test_map + 18 + 14 OK
 ```
+
+### Passe du 2026-08-07 (7) — figurines, fiches d'unité, et la liste de courses
+
+**`assets/textures/actor/README.md`** — le pendant du README audio, et pour la
+même raison : le code est prêt, l'art manque. Quatre planches de héros pour six
+classes, donc Sully porte celle du seigneur et Cordelia celle de la clerc. Le
+fichier dit le format (128 × 256, dos en haut, face en bas), ce qui manque, pour
+qui, et comment brancher une planche fournie.
+
+**Trois planches dormaient sur le disque** : `chr_pawn_skeleton_cpt.png` et
+`chr_pawn_skeleton_mage.png` existaient sans qu'aucune fiche pointe dessus — les
+trois morts-vivants portaient la même. Garrick et les mages noirs ont désormais
+la leur.
+
+**Sélecteur de figurine dans l'éditeur de personnages.** `UnitDocument` gagne un
+champ `sprite`, sérialisé, vide par défaut — auquel cas la figurine de la classe
+fait foi (`ClassDataDB.get_sprite`, table honnête sur ce qu'on a plutôt que sur
+ce qu'on voudrait). La liste se lit sur le disque, comme le roster de l'éditeur
+de cartes : déposer une planche suffit à la rendre choisissable. Un aperçu montre
+la moitié basse de la planche — l'unité de face, celle qu'on voit en jeu.
+
+**Fiches d'unité à l'écran de préparation** (bouton « 📋 Fiches »). L'écran ne
+montrait qu'une ligne par unité : nom, niveau, PV, arme. Tout ce qui décide
+réellement d'une bataille — les sept statistiques, les **croissances** (qui
+pèsent plus sur la valeur d'une unité que ses chiffres du jour), les compétences
+débloquées, le fourreau avec l'arme en main, l'inventaire — n'était visible nulle
+part avant d'engager. Les unités tombées y figurent aussi, marquées.
+
+`shot.gd` accepte `prep … detail`.
+
+```
+bash scripts/test_all.sh --window   # 58 / 573 / 77 OK + test_map + 18 + 14 OK
+```

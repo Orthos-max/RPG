@@ -52,6 +52,9 @@ var _equip_panel: Control = null
 ## Unité affichée au menu d'équipement — retenue pour que changer d'arme ne
 ## renvoie pas le joueur en tête de liste à chaque clic.
 var _equip_unit: String = ""
+var _detail_panel: Control = null
+## Unité affichée à la fiche détaillée.
+var _detail_unit: String = ""
 
 
 func _ready() -> void:
@@ -160,6 +163,10 @@ func _build() -> void:
 	var equip := _make_button("⚔  Équipement", false)
 	equip.pressed.connect(_toggle_equipment)
 	buttons.add_child(equip)
+
+	var detail := _make_button("📋  Fiches", false)
+	detail.pressed.connect(_toggle_detail)
+	buttons.add_child(detail)
 
 	# Sauvegarder avant un chapitre risqué : c'est ici que ça se décide, la
 	# bataille commencée on ne revient plus en arrière.
@@ -493,6 +500,206 @@ func _build_shop() -> Control:
 
 
 ## Ouvre/ferme le menu d'équipement : quelle arme chaque unité prend en main.
+#region Fiche détaillée
+func _toggle_detail() -> void:
+	if _detail_panel and is_instance_valid(_detail_panel):
+		_detail_panel.queue_free()
+		_detail_panel = null
+		_refresh()
+		return
+	_detail_panel = _build_detail()
+	add_child(_detail_panel)
+
+
+## La fiche complète d'une unité : figurine, classe, statistiques, compétences,
+## arsenal, inventaire.
+##
+## L'écran de préparation ne montrait qu'une ligne par unité — nom, niveau, PV,
+## arme. Tout le reste (les statistiques que le combat utilise vraiment, les
+## compétences débloquées, ce qu'elle porte) n'était visible nulle part avant
+## d'engager la bataille.
+func _build_detail() -> Control:
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	# Une fiche se lit : le fond est opaque, pas voilé. À 0,75 l'écran du dessous
+	# transparaissait entre les lignes et rendait les chiffres pénibles à suivre.
+	var dim := ColorRect.new()
+	dim.color = Color(C_BG, 0.97)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(dim)
+
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 140
+	box.offset_right = -140
+	box.offset_top = 60
+	box.offset_bottom = -60
+	box.add_theme_constant_override("separation", 8)
+	panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "📋  FICHES D'UNITÉ"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", C_GOLD)
+	box.add_child(title)
+
+	if not campaign:
+		return panel
+
+	var target := OptionButton.new()
+	target.custom_minimum_size = Vector2(0, 34)
+	for u: Dictionary in campaign.roster:
+		target.add_item("%s%s" % [str(u["name"]),
+			"  ☠" if not bool(u.get("alive", true)) else ""])
+		target.set_item_metadata(target.item_count - 1, str(u["id"]))
+		if str(u["id"]) == _detail_unit:
+			target.select(target.item_count - 1)
+	if target.item_count > 0 and target.selected < 0:
+		target.select(0)
+	box.add_child(target)
+
+	var sheet := VBoxContainer.new()
+	sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(sheet)
+
+	var show_unit := func(id: String) -> void:
+		_detail_unit = id
+		for child in sheet.get_children():
+			sheet.remove_child(child)
+			child.queue_free()
+		_fill_detail(sheet, campaign.get_unit(id))
+
+	target.item_selected.connect(func(index: int) -> void:
+		show_unit.call(str(target.get_item_metadata(index))))
+	if target.item_count > 0:
+		show_unit.call(str(target.get_item_metadata(target.selected)))
+
+	var close := _make_button("Fermer", true)
+	close.pressed.connect(_toggle_detail)
+	box.add_child(close)
+	return panel
+
+
+## Remplit la fiche d'une unité.
+func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
+	if unit.is_empty():
+		host.add_child(_note("Unité introuvable."))
+		return
+
+	# --- En-tête : figurine, nom, classe, niveau ---
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 14)
+
+	var look := TextureRect.new()
+	look.custom_minimum_size = Vector2(72, 72)
+	look.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	look.texture = _front_of(str(unit.get("sprite", "")))
+	header.add_child(look)
+
+	var who := Label.new()
+	who.text = "%s\n%s   Niv. %d%s\nPV %d / %d   MOV %d" % [
+		str(unit.get("name", "?")),
+		CDB.get_class_name(int(unit.get("class_id", 0))),
+		int(unit.get("level", 1)),
+		"  (promue)" if bool(unit.get("is_promoted", false)) else "",
+		int(unit.get("hp", 0)), int(unit.get("max_hp", 0)), int(unit.get("movement", 0)),
+	]
+	who.add_theme_font_size_override("font_size", 16)
+	who.add_theme_color_override("font_color", C_GOLD)
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(who)
+	host.add_child(header)
+
+	if not bool(unit.get("alive", true)):
+		host.add_child(_note("☠ Tombée au combat — elle ne repartira pas."))
+
+	# --- Statistiques ---
+	const LABELS: Dictionary = {
+		"str": "Force", "mag": "Magie", "skl": "Adresse", "spd": "Vitesse",
+		"lck": "Chance", "def": "Défense", "res": "Résistance",
+	}
+	var stats_line: Array = []
+	for key: String in ["str", "mag", "skl", "spd", "lck", "def", "res"]:
+		stats_line.append("%s %d" % [str(LABELS[key]), int(unit.get(key, 0))])
+	host.add_child(_detail_line("Statistiques", "   ".join(stats_line)))
+
+	# --- Croissances : ce que l'unité gagnera en montant, et qui décide de sa
+	# valeur à long terme bien plus que ses chiffres actuels.
+	var growths: Dictionary = CDB.get_growths(int(unit.get("class_id", 0)))
+	var growth_line: Array = []
+	for key: String in ["str", "mag", "skl", "spd", "lck", "def", "res"]:
+		growth_line.append("%s %d%%" % [str(LABELS[key]), int(growths.get(key, 0))])
+	host.add_child(_detail_line("Croissances", "   ".join(growth_line)))
+
+	# --- Compétences débloquées ---
+	var skills: Array = CDB.unlocked_skills(
+		int(unit.get("class_id", 0)), int(unit.get("level", 1)))
+	var skill_names: Array = []
+	for sk: Variant in skills:
+		skill_names.append(SKILLS.get_skill_name(str(sk)))
+	host.add_child(_detail_line("Compétences",
+		"   ".join(skill_names) if not skill_names.is_empty() else "aucune pour l'instant"))
+
+	# --- Arsenal ---
+	var held: String = str(unit.get("weapon", ""))
+	var arsenal: Array = []
+	for w: Variant in unit.get("weapons", []):
+		arsenal.append("%s%s" % [WEAPONS.label(str(w)), "  ⟵ en main" if str(w) == held else ""])
+	host.add_child(_detail_line("Fourreau",
+		"   ".join(arsenal) if not arsenal.is_empty() else "mains nues"))
+
+	# --- Inventaire ---
+	var bag: Array = []
+	for it: Variant in unit.get("items", []):
+		bag.append(str(it))
+	host.add_child(_detail_line("Objets",
+		"   ".join(bag) if not bag.is_empty() else "sac vide"))
+
+
+## Une ligne « intitulé : contenu » de la fiche.
+func _detail_line(label_text: String, content: String) -> Control:
+	var row := VBoxContainer.new()
+	var head := Label.new()
+	head.text = label_text
+	head.add_theme_font_size_override("font_size", 12)
+	head.add_theme_color_override("font_color", C_ACCENT)
+	row.add_child(head)
+
+	var body := Label.new()
+	body.text = content
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 14)
+	body.add_theme_color_override("font_color", C_TEXT)
+	row.add_child(body)
+	return row
+
+
+## La moitié basse d'une planche : l'unité **de face**, celle qu'on voit en jeu.
+func _front_of(sheet_path: String) -> Texture2D:
+	if sheet_path.is_empty() or not ResourceLoader.exists(sheet_path):
+		return null
+	var sheet: Texture2D = load(sheet_path) as Texture2D
+	if not sheet:
+		return null
+	var half := AtlasTexture.new()
+	half.atlas = sheet
+	half.region = Rect2(0, sheet.get_height() / 2.0, sheet.get_width(), sheet.get_height() / 2.0)
+	return half
+
+
+func _note(text: String) -> Control:
+	var l := Label.new()
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	return l
+#endregion
+
+
 func _toggle_equipment() -> void:
 	if _equip_panel and is_instance_valid(_equip_panel):
 		_equip_panel.queue_free()

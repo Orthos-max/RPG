@@ -11,7 +11,7 @@ extends SceneTree
 ##
 ## Écrans : title, battle, editor, prep.
 ##
-## `prep` accepte un troisième argument — `equip` ou `shop` — pour ouvrir
+## `prep` accepte un troisième argument — `equip`, `shop` ou `detail` — pour ouvrir
 ## directement le panneau à regarder. (`positions` a disparu avec son écran le
 ## 2026-08-07 : les cases de départ se choisissent sur le plateau.)
 
@@ -106,6 +106,8 @@ func _open_prep(main: Node, panel: String) -> void:
 			prep._toggle_equipment()
 		"shop":
 			prep._toggle_shop()
+		"detail":
+			prep._toggle_detail()
 		_:
 			pass
 	for _i in 10:

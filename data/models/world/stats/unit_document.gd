@@ -43,6 +43,58 @@ var growths: Dictionary = {}
 var weapons: Array[String] = []
 ## Consommables de départ (noms connus d'[ItemDB]).
 var items: Array[String] = []
+## Figurine portée sur le plateau. Vide : celle de la classe fait foi.
+##
+## Une fiche écrite à la main n'avait aucune apparence : elle empruntait celle du
+## pion qu'elle remplaçait, et deux créations se ressemblaient forcément.
+var sprite: String = ""
+
+
+## Dossiers où l'on va chercher les figurines disponibles.
+const SPRITE_DIRS: Array[String] = [
+	"res://assets/textures/actor/character",
+	"res://assets/textures/actor/mob",
+]
+
+
+## Toutes les figurines livrées avec le jeu : `[{path, label}]`.
+##
+## Lues sur le disque, comme le roster de l'éditeur de cartes : déposer une
+## planche suffit à la rendre choisissable, sans toucher au code. Ce que
+## `assets/textures/actor/README.md` promet à qui en fournira.
+static func available_sprites() -> Array:
+	var out: Array = []
+	for folder: String in SPRITE_DIRS:
+		var dir := DirAccess.open(folder)
+		if not dir:
+			continue
+		var files: PackedStringArray = dir.get_files()
+		files.sort()
+		for file_name: String in files:
+			# Une planche exportée est livrée en `.import` / `.remap` : c'est le nom
+			# d'origine qu'il faut, sinon la liste est vide dans le jeu installé.
+			var clean: String = file_name.trim_suffix(".remap").trim_suffix(".import")
+			if not clean.ends_with(".png") or _has(out, "%s/%s" % [folder, clean]):
+				continue
+			out.append({
+				"path": "%s/%s" % [folder, clean],
+				"label": clean.trim_prefix("chr_pawn_").trim_suffix(".png").capitalize(),
+			})
+	return out
+
+
+static func _has(entries: Array, path: String) -> bool:
+	for e: Dictionary in entries:
+		if str(e["path"]) == path:
+			return true
+	return false
+
+
+## Figurine réellement portée : celle choisie, sinon celle de la classe.
+func effective_sprite() -> String:
+	if not sprite.is_empty() and ResourceLoader.exists(sprite):
+		return sprite
+	return CDB.get_sprite(class_id)
 
 
 ## Fiche neuve, calquée sur les bases de sa classe.
@@ -149,12 +201,14 @@ func to_dict() -> Dictionary:
 		"growths": growths.duplicate(),
 		"weapons": weapons.duplicate(),
 		"items": items.duplicate(),
+		"sprite": sprite,
 	}
 
 
 static func from_dict(data: Dictionary) -> UnitDocument:
 	var doc := UnitDocument.new()
 	doc.name = str(data.get("name", "Recrue"))
+	doc.sprite = str(data.get("sprite", ""))
 	doc.class_id = int(data.get("class_id", CDB.Id.LORD))
 	doc.level = int(data.get("level", 1))
 	doc.max_hp = int(data.get("max_hp", 20))
@@ -215,6 +269,7 @@ func to_roster_unit() -> Dictionary:
 		"weapons": weapons.duplicate(),
 		"weapon": weapons[0] if not weapons.is_empty() else "",
 		"uses_arsenal": not weapons.is_empty(),
+		"sprite": effective_sprite(),
 	}
 	for key: String in STATS:
 		unit[key] = int(stats.get(key, 0))

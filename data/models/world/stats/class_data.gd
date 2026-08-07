@@ -298,6 +298,31 @@ static var DATA: Dictionary = {
 
 
 ## Get the name of a class by its ID
+## Figurine par défaut d'une classe, faute qu'elle en déclare une.
+##
+## Quatre planches pour vingt-et-une classes : la table dit à quoi chacune
+## ressemble **aujourd'hui**, pas à quoi elle devrait ressembler. Ce que le jeu
+## attend comme art est écrit dans `assets/textures/actor/README.md`.
+const SPRITE_DIR: String = "res://assets/textures/actor/character"
+const CLASS_SPRITE: Dictionary = {
+	Id.ARCHER: "chr_pawn_archer.png", Id.SNIPER: "chr_pawn_archer.png",
+	Id.BOW_KNIGHT: "chr_pawn_archer.png",
+	Id.CLERIC: "chr_pawn_mage.png", Id.WAR_CLERIC: "chr_pawn_mage.png",
+	Id.TACTICIAN: "chr_pawn_mage.png", Id.GRANDMASTER: "chr_pawn_mage.png",
+	Id.DARK_MAGE: "chr_pawn_mage.png", Id.SORCERER: "chr_pawn_mage.png",
+	Id.SAGE: "chr_pawn_mage.png",
+	Id.PEGASUS_KNIGHT: "chr_pawn_mage.png", Id.FALCON_KNIGHT: "chr_pawn_mage.png",
+	Id.GREAT_KNIGHT: "chr_pawn_chemist.png", Id.KNIGHT: "chr_pawn_chemist.png",
+}
+## Figurine de repli : celle du seigneur, portée par tout ce que la table ignore.
+const DEFAULT_SPRITE: String = "chr_pawn_knight.png"
+
+
+## Chemin de la figurine d'une classe.
+static func get_sprite(class_id: int) -> String:
+	return "%s/%s" % [SPRITE_DIR, str(CLASS_SPRITE.get(class_id, DEFAULT_SPRITE))]
+
+
 static func get_class_name(class_id: int) -> String:
 	return DATA[class_id].get("name", "Unknown") if DATA.has(class_id) else "Unknown"
 
