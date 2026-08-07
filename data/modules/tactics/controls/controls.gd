@@ -110,6 +110,19 @@ func select_new_location() -> void:
 
 
 ## Initiates the process of selecting a pawn to attack
+## Oublie la bataille précédente.
+##
+## Les contrôles vivent dans `main.tscn` et **survivent aux niveaux** : sans ce
+## nettoyage, `curr_pawn` désignait encore une unité de la bataille d'avant,
+## libérée depuis. En debug Godot annule la référence ; dans une build exportée
+## elle reste pendante, et la sélection travaillait dessus — plus rien ne
+## répondait au clic (remonté par Aurèle le 2026-08-07).
+func reset_for_level() -> void:
+	curr_pawn = null
+	set_battle_forecast({})
+	set_unit_sheet({})
+
+
 ## Fait pointer les contrôles vers l'arène réellement montée en scène.
 ##
 ## Les contrôles vivent dans `main.tscn` et survivent aux niveaux : ils ne

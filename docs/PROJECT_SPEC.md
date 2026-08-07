@@ -1555,3 +1555,51 @@ surlignée ; et le bandeau dit à chaque instant ce qu'on attend du joueur.
 ```
 bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 18 OK
 ```
+
+### Passe du 2026-08-07 (4) — une seconde bataille dans la même session
+
+Aurèle : « quand on veut relancer une partie, on peut déployer les personnages,
+mais quand on commence la partie on ne peut plus cliquer ni interagir. » Et :
+« on ne peut toujours pas lancer la deuxième mission après avoir fini la
+première. »
+
+**C'était le même bug.** Le passage d'un chapitre au suivant fonctionne : monté
+en sonde, la victoire s'enregistre, la campagne avance, la carte du chapitre 2
+se charge. Ce qui ne fonctionnait pas, c'est la bataille **une fois montée**.
+
+Participant, contrôles et caméra vivent dans `main.tscn` et **survivent aux
+niveaux**. Ils gardaient de la bataille précédente :
+
+- `TacticsParticipantResource` — `curr_pawn`, `stage`, et surtout `targets` et
+  `hostile_camps`, qui désignent des **camps** du niveau d'avant ;
+- `TacticsControls.curr_pawn` — l'unité que le joueur tenait à la fin de la
+  bataille précédente ;
+- `BattleGrid.current`, statique, qui survivait au niveau en désignant des tuiles
+  libérées.
+
+`TacticsParticipant.reset_participant()` existait déjà, écrit exactement pour ça
+(« Resets the participant's pawn references when unloading a level ») — et
+**personne ne l'appelait**. Il est appelé au `_ready` du participant, complété
+des camps, doublé d'un `reset_for_level()` sur les contrôles et d'une remise à
+zéro de `BattleGrid.current` au déchargement.
+
+> Même leçon que le plantage de Virion, et c'est la deuxième fois de la journée :
+> en debug, Godot annule les références aux objets libérés, donc la seconde
+> bataille se rattrapait toute seule sur le Mac. Dans une build exportée, les
+> services travaillaient sur des références pendantes et plus rien ne répondait
+> au clic.
+
+**Nouvelle suite : `test_chapters.gd`** (`--window`, 14 vérifications). Elle
+gagne le chapitre 1, passe au 2, et **clique une unité** pour exiger qu'elle soit
+prise. C'est le seul test qui monte deux batailles dans une même session, donc le
+seul qui puisse voir ce que les ressources partagées gardent de l'une à l'autre —
+le chaînage des chapitres a cassé deux fois, il est désormais tenu.
+
+L'assertion a demandé deux essais. « La référence est-elle valide ? » ne prouvait
+rien : en debug un nœud libéré se lit comme `null`, donc une ressource périmée
+passait pour propre. C'est l'**étape** du participant qui trahit l'état d'avant.
+Vérifié en faisant échouer le test sur le code non corrigé.
+
+```
+bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 18 + 14 OK
+```

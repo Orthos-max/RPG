@@ -421,6 +421,11 @@ func unload_level() -> void:
 		_level.queue_free()
 	_level = null
 
+	# L'index de grille est un statique : il survivrait au niveau, en désignant
+	# des tuiles qui n'existent plus. Une bataille à la fois, et hors bataille
+	# aucune — c'est ce que `BattleGrid.current` doit dire.
+	BattleGrid.current = null
+
 
 func _enable_3d_camera(enabled: bool) -> void:
 	var cam: Node = get_node_or_null("Camera/TacticsCamera")

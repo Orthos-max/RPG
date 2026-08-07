@@ -44,6 +44,19 @@ func _find_in_level(node_name: String) -> Node:
 
 ## Initializes the TacticsParticipant node
 func _ready() -> void:
+	# La ressource de participant est **partagée entre les niveaux** : elle survit
+	# à la bataille qui l'a remplie. Sans ce nettoyage, une seconde bataille
+	# s'ouvrait sur l'état de la première — étape déjà entamée, et surtout un
+	# `curr_pawn` désignant un pion du niveau précédent, libéré depuis.
+	#
+	# En debug, Godot annule les références aux objets libérés et le jeu s'en
+	# remettait. Dans une build exportée, le service travaillait sur une
+	# référence pendante : plus rien ne répondait au clic. C'est ce qu'Aurèle a
+	# vécu le 2026-08-07 en relançant une partie — « on peut déployer, mais on ne
+	# peut plus interagir ». La méthode existait, écrite pour ça, et personne ne
+	# l'appelait.
+	reset_participant()
+
 	# Initialize the service with necessary resources
 	serv = TacticsParticipantService.new(res, camera, controls)
 	# Set up the service with this node as context
@@ -123,9 +136,17 @@ func move_pawn() -> void:
 #endregion
 
 
-## Resets the participant's pawn references when unloading a level
+## Vide tout ce que la ressource garde d'une bataille : elle est partagée entre
+## les niveaux, et rien de ce qui suit n'a de sens dans le suivant.
+##
+## Les **camps** comptent autant que les pions. `targets` et `hostile_camps`
+## désignent des nœuds du niveau précédent ; le service y cherchait encore des
+## unités à afficher, et appelait `show_pawn_stats` sur des pions libérés.
 func reset_participant() -> void:
 	res.curr_pawn = null
 	res.attackable_pawn = null
+	res.targets = null
+	res.hostile_camps = []
+	res.acting_camp = null
 	res.stage = res.STAGE_SELECT_PAWN
 	res.turn_just_started = true

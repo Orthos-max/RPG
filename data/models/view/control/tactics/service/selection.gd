@@ -29,7 +29,7 @@ func _init(_participant: TacticsParticipantResource, _arena: TacticsArenaResourc
 func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	arena.reset_all_tile_markers()
 	controls.set_battle_forecast({})
-	if ctrl.curr_pawn:
+	if is_instance_valid(ctrl.curr_pawn):
 		controls.set_actions_menu_visibility(false, participant.curr_pawn)
 		ctrl.curr_pawn.show_pawn_stats(false)
 	

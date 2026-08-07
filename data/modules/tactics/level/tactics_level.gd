@@ -75,7 +75,13 @@ func _bind_controls_to_arena() -> void:
 	if not arena or not arena.res:
 		return
 	var controls: Node = get_tree().root.get_node_or_null("Main/TacticsControls")
-	if controls and controls.has_method("use_arena"):
+	if not controls:
+		return
+	# Les contrôles survivent aux niveaux : ils doivent oublier la bataille
+	# précédente avant de viser celle-ci.
+	if controls.has_method("reset_for_level"):
+		controls.reset_for_level()
+	if controls.has_method("use_arena"):
 		controls.use_arena(arena.res)
 
 
