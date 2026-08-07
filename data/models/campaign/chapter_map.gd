@@ -30,12 +30,13 @@ const DEFAULT_RADIUS: int = 2
 ##
 ## [returns] {ok: bool, reason: String, grid_size: Vector2i,
 ##            terrain: Array[int] (aplati, ligne par ligne),
+##            heights: Array[float] (même indexation),
 ##            starts: Array[Vector2i] (ligne de départ du joueur),
 ##            slots: Array[Vector2i] (cases ouvertes au déploiement)}
 static func read(chapter: ChapterData) -> Dictionary:
 	var out: Dictionary = {
 		"ok": false, "reason": "",
-		"grid_size": Vector2i.ZERO, "terrain": [],
+		"grid_size": Vector2i.ZERO, "terrain": [], "heights": [],
 		"starts": [], "slots": [],
 	}
 	if not chapter:
@@ -55,6 +56,7 @@ static func read(chapter: ChapterData) -> Dictionary:
 
 	out["grid_size"] = map_data.grid_size
 	out["terrain"] = map_data.terrain_grid.duplicate()
+	out["heights"] = map_data.height_grid.duplicate()
 	out["starts"] = _player_starts(state, map_data)
 	out["slots"] = _slots_for(chapter, out["starts"], map_data)
 	out["ok"] = not out["slots"].is_empty()
@@ -77,6 +79,48 @@ static func terrain_at(map: Dictionary, pos: Vector2i) -> int:
 ## Bonus défensif d'une case — le chiffre que le joueur vient chercher ici.
 static func defense_at(map: Dictionary, pos: Vector2i) -> int:
 	return MapDataRef.get_defense_bonus(terrain_at(map, pos))
+
+
+## Hauteur déclarée d'une case, lue dans le tableau aplati de [method read].
+static func height_at(map: Dictionary, pos: Vector2i) -> float:
+	var gs: Vector2i = map.get("grid_size", Vector2i.ZERO)
+	if pos.x < 0 or pos.y < 0 or pos.x >= gs.x or pos.y >= gs.y:
+		return 0.0
+	var heights: Array = map.get("heights", [])
+	var idx: int = pos.y * gs.x + pos.x
+	return float(heights[idx]) if idx < heights.size() else 0.0
+
+
+## Cases où l'on peut poser le pied, en (colonne, ligne) → altitude perçue.
+##
+## Deux traductions, et elles comptent :
+##
+## 1. **Le terrain filtre avant le relief.** Un lac et un rempart ne sont pas des
+##    marches trop hautes, ce sont des cases où l'on ne va pas — c'est ce que
+##    fait le parcours ([TacticsArenaService.process_surrounding_tiles]), qui
+##    écarte l'infranchissable avant même de regarder la dénivellation.
+## 2. **L'altitude vaut la moitié de la hauteur déclarée.** Une case engendrée
+##    depuis [MapData] est un volume dont le centre est posé à `hauteur / 2` — et
+##    c'est ce centre que [BattleGrid] retient, donc lui que le jeu compare d'une
+##    case à l'autre. Comparer les hauteurs brutes ferait paraître les marches
+##    deux fois plus hautes qu'elles ne sont.
+static func walkable_cells(map: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var gs: Vector2i = map.get("grid_size", Vector2i.ZERO)
+	for row: int in gs.y:
+		for col: int in gs.x:
+			var pos := Vector2i(col, row)
+			if MapDataRef.is_walkable(terrain_at(map, pos)):
+				out[pos] = height_at(map, pos) / 2.0
+	return out
+
+
+## Nombre de zones franchissables d'une carte lue par [method read].
+##
+## Le pendant de [method zone_count] pour une carte engendrée depuis [MapData] :
+## deux zones, et les deux camps ne peuvent pas se rejoindre.
+static func walkable_zones(map: Dictionary, max_step: float) -> int:
+	return zone_count(walkable_cells(map), max_step)
 
 
 ## Hauteur de chaque case d'une carte posée à la main, lue dans la scène.

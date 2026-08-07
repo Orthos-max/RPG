@@ -99,3 +99,73 @@ static func delete(path: String) -> bool:
 ## Y a-t-il au moins une carte enregistrée ?
 static func has_maps() -> bool:
 	return not list_maps().is_empty()
+
+
+#region Échange
+## Le texte d'échange d'une carte : son JSON, mis en forme pour être lu.
+##
+## Exactement ce que [method save] écrit sur le disque. Une carte reçue par
+## message, par courriel ou par fichier est la même chose — il n'y a pas de
+## format d'export à part, et donc pas de second format à maintenir.
+static func to_json(doc: MapDocument) -> String:
+	return JSON.stringify(doc.to_dict(), "\t") if doc else ""
+
+
+## Relit une carte depuis son texte d'échange. [returns] {ok, doc, error}
+##
+## Tout ce qui peut arriver à un texte collé arrive : vide, tronqué, ce n'est pas
+## du JSON, c'est du JSON mais pas une carte, c'est une carte d'une version plus
+## récente. Chacun de ces cas doit se dire, pas se solder par une carte vide.
+static func from_json(text: String) -> Dictionary:
+	var trimmed: String = text.strip_edges()
+	if trimmed.is_empty():
+		return {"ok": false, "doc": null, "error": "rien à lire"}
+
+	var parsed: Variant = JSON.parse_string(trimmed)
+	if not parsed is Dictionary:
+		return {"ok": false, "doc": null, "error": "ce texte n'est pas une carte"}
+
+	# Il faut reconnaître une carte **avant** de la confier à `from_dict`, qui
+	# complète volontairement ce qui manque : un fichier tronqué doit se réparer,
+	# mais du JSON quelconque ne doit pas devenir une prairie de 16 × 10.
+	for required: String in ["grid_size", "terrain"]:
+		if not (parsed as Dictionary).has(required):
+			return {"ok": false, "doc": null, "error": "ce texte n'est pas une carte"}
+
+	var doc: MapDocument = MapDocument.from_dict(parsed)
+	if not doc:
+		return {"ok": false, "doc": null,
+			"error": "carte enregistrée par une version plus récente du jeu"}
+	if doc.terrain.is_empty():
+		return {"ok": false, "doc": null, "error": "cette carte n'a pas de terrain"}
+	return {"ok": true, "doc": doc, "error": ""}
+
+
+## Écrit une carte dans un fichier quelconque. [returns] {ok, path, error}
+##
+## Distinct de [method save] : celui-ci vise n'importe où sur le disque (le
+## dossier partagé d'un ami, une clé USB) et **accepte une carte imparfaite** —
+## on doit pouvoir envoyer un brouillon à quelqu'un pour qu'il le finisse.
+static func export_to(doc: MapDocument, path: String) -> Dictionary:
+	if not doc:
+		return {"ok": false, "path": path, "error": "aucune carte à exporter"}
+	var target: String = path if path.ends_with(EXTENSION) else path + EXTENSION
+	var f := FileAccess.open(target, FileAccess.WRITE)
+	if not f:
+		return {"ok": false, "path": target, "error": "écriture impossible : %s" % target}
+	f.store_string(to_json(doc))
+	f.close()
+	return {"ok": true, "path": target, "error": ""}
+
+
+## Relit une carte depuis un fichier quelconque. [returns] {ok, doc, error}
+static func import_from(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {"ok": false, "doc": null, "error": "fichier introuvable : %s" % path}
+	var f := FileAccess.open(path, FileAccess.READ)
+	if not f:
+		return {"ok": false, "doc": null, "error": "lecture impossible : %s" % path}
+	var text: String = f.get_as_text()
+	f.close()
+	return from_json(text)
+#endregion

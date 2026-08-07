@@ -37,6 +37,14 @@ var _occupant_at: Dictionary = {}
 ## Coordonnée de la case (0, 0) du damier.
 var _origin: Vector2i = Vector2i.ZERO
 
+## Repère du damier : une tuile réelle, sa position et sa coordonnée.
+##
+## Sans lui, on ne sait pas *où* le quadrillage est posé. Voir
+## [method coord_at_position] : c'est toute l'affaire.
+var _anchor_world := Vector2.ZERO
+var _anchor_coord := Vector2i.ZERO
+var _anchored: bool = false
+
 ## Racine sous laquelle chercher les pions. L'occupation se recalcule à partir
 ## de leur position : aucun pion n'a à signaler ses déplacements.
 var _pawn_root: Node = null
@@ -72,6 +80,15 @@ static func build_for(tiles_parent: Node3D, pawn_root: Node, size: float = 0.0) 
 ## Inscrit une tuile à la coordonnée que sa position désigne.
 func add_tile(tile: Node, world_position: Vector3) -> void:
 	var coord: Vector2i = coord_at_position(world_position)
+
+	# La première tuile inscrite devient le repère du damier : à partir d'elle,
+	# toute position se compte en cases pleines, sans supposer où tombent les
+	# centres.
+	if not _anchored:
+		_anchor_world = Vector2(world_position.x, world_position.z)
+		_anchor_coord = coord
+		_anchored = true
+
 	_tile_at[coord] = tile
 	_coord_of[tile.get_instance_id()] = coord
 	_height_at[coord] = world_position.y
@@ -98,16 +115,31 @@ func tile_at_cell(cell: Vector2i) -> Node:
 	return _tile_at.get(cell + _origin)
 
 
-## Coordonnée de grille d'un point du monde.
+## Coordonnée de grille d'un point du monde — la case **la plus proche**.
 ##
-## Arrondi au demi supérieur (`floor(x + 0.5)`) et non `round()` : les tuiles
-## générées tombent sur des positions en .5, et `round()` s'éloigne de zéro,
-## ce qui ouvrirait un trou d'une case entre -0.5 et +0.5 — deux voisines
-## cesseraient de l'être au milieu de la carte.
+## On compte les cases depuis une tuile réelle, et on arrondit. Sans ce repère,
+## il faudrait deviner où le quadrillage est posé, et c'est là qu'était le piège :
+## `floori(x + 0.5)` suppose des centres de case sur les entiers. Or une carte de
+## largeur **paire** les met sur les demis (…, 1.5, 2.5, …) — et la formule
+## plaçait alors la frontière entre deux cases exactement sur le centre de l'une
+## d'elles. Un pion arrêté à quelques centièmes en deçà de son centre était
+## attribué à la case précédente ; `adjust_to_center` l'y recollait, et il
+## terminait son déplacement une case trop tôt. Mesuré le 2026-08-07 sur le
+## chapitre 1 : visait la case (8, 7), finissait en (8, 6).
+##
+## Compter depuis une tuile connue règle les deux paritées d'un coup, et rend à
+## chaque case la moitié de l'écart qui la sépare de ses voisines.
 func coord_at_position(world_position: Vector3) -> Vector2i:
-	return Vector2i(
-		floori(world_position.x / tile_size + 0.5),
-		floori(world_position.z / tile_size + 0.5),
+	if not _anchored:
+		# Aucune tuile inscrite encore : c'est cet appel-là qui pose le repère,
+		# et l'étiquette qu'il choisit n'a qu'à être cohérente avec elle-même.
+		return Vector2i(
+			floori(world_position.x / tile_size + 0.5),
+			floori(world_position.z / tile_size + 0.5),
+		)
+	return _anchor_coord + Vector2i(
+		roundi((world_position.x - _anchor_world.x) / tile_size),
+		roundi((world_position.z - _anchor_world.y) / tile_size),
 	)
 
 
@@ -153,6 +185,29 @@ func size() -> int:
 	return _tile_at.size()
 
 
+## Les coordonnées orthogonalement adjacentes, à une dénivellation près.
+##
+## C'est la forme utile au parcours ([PathField]), qui raisonne en coordonnées
+## et n'a que faire des nœuds : une tuile n'a plus à exister pour qu'on sache
+## par où l'on passe.
+## [param coord] La case de départ.
+## [param max_height_diff] Écart de hauteur toléré — au-delà, on ne passe pas.
+func neighbor_coords(coord: Vector2i, max_height_diff: float) -> Array[Vector2i]:
+	var found: Array[Vector2i] = []
+	if not _tile_at.has(coord):
+		return found
+
+	var from_height: float = height_at(coord)
+	for offset: Vector2i in NEIGHBOR_OFFSETS:
+		var neighbor_coord: Vector2i = coord + offset
+		if not _tile_at.has(neighbor_coord):
+			continue
+		if absf(height_at(neighbor_coord) - from_height) <= max_height_diff:
+			found.append(neighbor_coord)
+
+	return found
+
+
 ## Les tuiles orthogonalement adjacentes, à une dénivellation près.
 ## [param tile] La tuile de départ.
 ## [param max_height_diff] Écart de hauteur toléré — au-delà, on ne passe pas.
@@ -161,15 +216,8 @@ func neighbors_of(tile: Node, max_height_diff: float) -> Array[Node3D]:
 	if not has_tile(tile):
 		return found
 
-	var coord: Vector2i = coord_of(tile)
-	var from_height: float = height_at(coord)
-	for offset: Vector2i in NEIGHBOR_OFFSETS:
-		var neighbor_coord: Vector2i = coord + offset
-		var neighbor: Node = _tile_at.get(neighbor_coord)
-		if not neighbor:
-			continue
-		if absf(height_at(neighbor_coord) - from_height) <= max_height_diff:
-			found.append(neighbor as Node3D)
+	for neighbor_coord: Vector2i in neighbor_coords(coord_of(tile), max_height_diff):
+		found.append(_tile_at[neighbor_coord] as Node3D)
 
 	return found
 

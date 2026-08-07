@@ -15,7 +15,7 @@ const C_BUTTON := Color("#0f3460")
 
 const MAPS: Array[Dictionary] = [
 	{"name": "Marches d'Ylisse (procédurale)", "path": "res://assets/maps/level/map_level.tscn"},
-	{"name": "Poste avancé (arène sculptée)", "path": "res://assets/maps/level/test_level.tscn"},
+	{"name": "Ruines du poste avancé", "path": "res://assets/maps/level/outpost_level.tscn"},
 ]
 
 ## true : cet écran héberge — false : il rejoint

@@ -34,6 +34,8 @@ var _tiles: Dictionary = {}       ## "col,row" → StaticBody3D
 var _markers: Node3D = null
 var _tool: int = UI.Tool.GRASS
 var _unit_paths: Dictionary = {"player": "", "opponent": ""}
+## Niveau donné aux prochaines unités posées — un réglage du pinceau.
+var _unit_level: int = 1
 
 # Caméra orbitale
 var _cam_yaw: float = -30.0
@@ -85,6 +87,9 @@ func _build_ui() -> void:
 
 	_ui.tool_selected.connect(_on_tool_selected)
 	_ui.unit_picked.connect(_on_unit_picked)
+	_ui.unit_level_changed.connect(func(level: int) -> void: _unit_level = level)
+	_ui.export_requested.connect(_on_export)
+	_ui.import_requested.connect(_on_import)
 	_ui.save_requested.connect(_on_save)
 	_ui.load_requested.connect(_on_load)
 	_ui.delete_requested.connect(_on_delete)
@@ -267,9 +272,9 @@ func _tile_center(pos: Vector2i, height: float) -> Vector3:
 func _on_tool_selected(tool_id: int) -> void:
 	_tool = tool_id
 	if tool_id == UI.Tool.UNIT_PLAYER:
-		_ui.open_unit_picker(MapDocument.TEAM_PLAYER)
+		_ui.open_unit_picker(MapDocument.TEAM_PLAYER, _unit_level)
 	elif tool_id == UI.Tool.UNIT_OPPONENT:
-		_ui.open_unit_picker(MapDocument.TEAM_OPPONENT)
+		_ui.open_unit_picker(MapDocument.TEAM_OPPONENT, _unit_level)
 	_refresh_feedback()
 
 
@@ -277,7 +282,8 @@ func _on_unit_picked(path: String) -> void:
 	var team: String = MapDocument.TEAM_PLAYER if _tool == UI.Tool.UNIT_PLAYER \
 		else MapDocument.TEAM_OPPONENT
 	_unit_paths[team] = path
-	_refresh_feedback("Unité choisie : %s" % MapDocument.unit_display_name(path))
+	_refresh_feedback("Unité choisie : %s (niveau %d)" % [
+		MapDocument.unit_display_name(path), _unit_level])
 
 
 ## Applique l'outil courant à une case, et retient le coup s'il a changé la carte.
@@ -303,7 +309,8 @@ func _apply_tool(pos: Vector2i) -> String:
 		UI.Tool.UNIT_PLAYER, UI.Tool.UNIT_OPPONENT:
 			var team: String = MapDocument.TEAM_PLAYER if _tool == UI.Tool.UNIT_PLAYER \
 				else MapDocument.TEAM_OPPONENT
-			var result: Dictionary = doc.place_unit(str(_unit_paths[team]), pos, team)
+			var result: Dictionary = doc.place_unit(
+				str(_unit_paths[team]), pos, team, _unit_level)
 			if not bool(result["ok"]):
 				return "⛔ %s" % str(result["error"])
 			_rebuild_markers()
@@ -440,6 +447,42 @@ func _on_load(path: String) -> void:
 	_forget_history()
 	_rebuild_all()
 	_refresh_feedback("📂 Carte « %s » chargée." % doc.name)
+
+
+## Sort la carte du jeu : vers le presse-papiers, ou vers un fichier choisi.
+func _on_export(to_clipboard: bool, path: String) -> void:
+	if to_clipboard:
+		DisplayServer.clipboard_set(LIBRARY.to_json(doc))
+		_refresh_feedback("📋 Carte copiée — colle-la où tu veux, c'est du texte.")
+		return
+
+	var result: Dictionary = LIBRARY.export_to(doc, path)
+	if not bool(result["ok"]):
+		_refresh_feedback("⛔ Export refusé : %s" % str(result["error"]))
+		return
+	_refresh_feedback("📤 Carte exportée : %s" % str(result["path"]))
+
+
+## Fait entrer une carte dans l'éditeur, en remplacement de celle en cours.
+##
+## On passe par `apply_dict` plutôt que de remplacer le document : l'historique
+## tient déjà celui-ci par référence, et un import raté ou regretté doit pouvoir
+## s'annuler comme n'importe quel autre geste.
+func _on_import(from_clipboard: bool, path: String) -> void:
+	var result: Dictionary = LIBRARY.from_json(DisplayServer.clipboard_get()) \
+		if from_clipboard else LIBRARY.import_from(path)
+	if not bool(result["ok"]):
+		_refresh_feedback("⛔ Import refusé : %s" % str(result["error"]))
+		return
+
+	var incoming: MapDocument = result["doc"]
+	if not doc.apply_dict(incoming.to_dict()):
+		_refresh_feedback("⛔ Cette carte n'a pas pu être reprise.")
+		return
+
+	_remember()
+	_rebuild_all()
+	_refresh_feedback("📥 Carte « %s » importée (Ctrl+Z pour revenir en arrière)." % doc.name)
 
 
 func _on_delete(path: String) -> void:

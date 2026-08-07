@@ -56,6 +56,7 @@ func _init() -> void:
 	_test_map_editor()
 	_test_map_history()
 	_test_battle_grid()
+	_test_path_field()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -1264,25 +1265,68 @@ func _test_chapter_map() -> void:
 
 	# --- Le chapitre 2 : une carte d'un seul tenant ---
 	# Son relief coupait la bataille en morceaux, chaque camp coincé de son côté
-	# (remonté par Aurèle le 2026-08-06). La carte a été aplatie ; ce test empêche
-	# qu'un relief la recoupe sans qu'on s'en aperçoive.
-	var hand_made: Dictionary = CMAP.scene_tiles(CAMPAIGN_DB.get_chapter(1).scene_path)
-	_check(hand_made.size() == 200,
-		"carte du chapitre 2 lue tuile par tuile (%d cases)" % hand_made.size())
+	# (remonté par Aurèle le 2026-08-06). Sa carte est désormais décrite par un
+	# [MapData] : ces vérifications empêchent qu'un mur ou une marche la
+	# recoupent sans qu'on s'en aperçoive.
+	var chapter2: ChapterData = CAMPAIGN_DB.get_chapter(1)
+	var outpost: Dictionary = CMAP.read(chapter2)
+	_check(bool(outpost["ok"]),
+		"la carte du chapitre 2 se lit avant la bataille", str(outpost["reason"]))
+	_check(outpost["grid_size"] == Vector2i(10, 20),
+		"chapitre 2 : une grille de 10 × 20", str(outpost["grid_size"]))
 
-	var flat: bool = true
-	for cell: Vector2i in hand_made:
-		if not is_zero_approx(float(hand_made[cell])):
-			flat = false
-	_check(flat, "la carte du chapitre 2 est de plain-pied")
+	var passable: Dictionary = CMAP.walkable_cells(outpost)
+	_check(passable.size() < 200 and passable.size() > 140,
+		"chapitre 2 : de l'infranchissable, mais pas au point d'étouffer la carte",
+		"%d cases praticables sur 200" % passable.size())
 
-	# Le saut d'une unité de mouvement 5 vaut 2 ; on vérifie plus sévère encore,
-	# pour qu'une marche même franchissable ne réapparaisse pas en douce.
-	_check(CMAP.zone_count(hand_made, 2.0) == 1,
+	# Le saut le plus faible du jeu vaut 2 (`jump = floor(mouvement / 2)`) : c'est
+	# à cette tolérance-là que la carte doit tenir d'un seul tenant. Un rempart
+	# tiré en travers la couperait aussi, la praticabilité comptant avant le
+	# relief.
+	_check(CMAP.walkable_zones(outpost, 2.0) == 1,
 		"chapitre 2 : une seule zone, les deux camps peuvent se rejoindre",
-		"%d zones" % CMAP.zone_count(hand_made, 2.0))
-	_check(CMAP.zone_count(hand_made, 0.0) == 1,
-		"chapitre 2 : aucune marche à franchir")
+		"%d zones" % CMAP.walkable_zones(outpost, 2.0))
+
+	# Et la marche la plus haute doit rester loin sous ce saut. Compter les zones
+	# ne le dirait pas : une falaise franchissable de justesse passerait, jusqu'au
+	# jour où une unité plus lourde s'y présenterait.
+	var steepest: float = 0.0
+	for cell: Vector2i in passable:
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+			if passable.has(cell + step):
+				steepest = maxf(steepest,
+					absf(float(passable[cell + step]) - float(passable[cell])))
+	_check(steepest > 0.0 and steepest <= 0.5,
+		"chapitre 2 : du relief, et pas une seule falaise (marche la plus haute : %.2f)"
+			% steepest)
+
+	# Les terrains ne servent à rien si personne ne les distingue : une carte
+	# entièrement en herbe repasserait toutes les vérifications ci-dessus.
+	var kinds: Dictionary = {}
+	for value: Variant in outpost["terrain"]:
+		kinds[int(value)] = true
+	_check(kinds.size() >= 5,
+		"chapitre 2 : la carte parle plusieurs terrains", "%d types" % kinds.size())
+	_check(kinds.has(MAP_DATA.TerrainType.FOREST) and kinds.has(MAP_DATA.TerrainType.WALL),
+		"chapitre 2 : un bois où s'abriter, un rempart à contourner")
+
+	# Les pions de la carte doivent tenir debout là où la scène les pose : sur du
+	# praticable, et de plain-pied — un pion posé à zéro sur une case surélevée
+	# tomberait à travers son plateau.
+	var starts: Array = outpost["starts"]
+	_check(starts.size() == 4, "chapitre 2 : quatre pions du joueur en place",
+		"%d" % starts.size())
+	var footing: bool = not starts.is_empty()
+	for cell: Vector2i in starts:
+		if not MAP_DATA.is_walkable(CMAP.terrain_at(outpost, cell)) \
+				or not is_zero_approx(CMAP.height_at(outpost, cell)):
+			footing = false
+	_check(footing, "chapitre 2 : chaque départ est praticable et de plain-pied")
+
+	_check(outpost["slots"].size() >= chapter2.deploy_slots,
+		"chapitre 2 : assez de cases ouvertes pour les %d places" % chapter2.deploy_slots,
+		"%d cases" % outpost["slots"].size())
 
 	# Le côté de case déduit d'une carte posée à la main. Les abscisses ci-dessous
 	# sont celles du chapitre 2 : un écart de 0,996 au lieu de 1,0, invisible à
@@ -1313,11 +1357,23 @@ func _test_chapter_map() -> void:
 	_check(CMAP.zone_count(split, 2.0) == 2 and CMAP.zone_count(split, 9.0) == 1,
 		"une falaise sépare bien deux zones, un saut suffisant les réunit")
 
-	# Une carte sans terrain déclaré doit le dire, pas se taire.
-	var handmade: Dictionary = CMAP.read(CAMPAIGN_DB.get_chapter(1))
+	# Une carte sans terrain déclaré doit le dire, pas se taire. `test_level.tscn`
+	# est restée dans le dépôt exactement pour ça : c'est la dernière arène posée
+	# tuile par tuile, donc le seul cas d'essai honnête pour cette lecture-là.
+	var sculpted := ChapterData.new()
+	sculpted.scene_path = "res://assets/maps/level/test_level.tscn"
+	var handmade: Dictionary = CMAP.read(sculpted)
 	_check(not bool(handmade["ok"]) and not str(handmade["reason"]).is_empty(),
 		"une carte écrite à la main annonce qu'elle ne se lit pas d'avance",
 		str(handmade["reason"]))
+
+	# Elle reste aussi le cas d'essai de la lecture tuile par tuile, qui n'a plus
+	# de chapitre à qui s'appliquer mais sert encore à toute carte sculptée.
+	var sculpted_tiles: Dictionary = CMAP.scene_tiles(sculpted.scene_path)
+	_check(sculpted_tiles.size() == 200,
+		"une arène sculptée se lit tuile par tuile (%d cases)" % sculpted_tiles.size())
+	_check(CMAP.zone_count(sculpted_tiles, 0.0) == 1,
+		"arène sculptée : un seul tenant")
 	_check(not CMAP.read(null)["ok"], "aucun chapitre : lecture refusée proprement")
 
 
@@ -2081,6 +2137,107 @@ func _test_map_editor() -> void:
 	_check(MapLibrary.load_map(str(saved["path"])) == null, "le fichier a bien disparu")
 	_check(doc.slug() == "col_de_laube", "nom de fichier lisible : %s" % doc.slug())
 
+	# --- Niveau des unités posées ---
+	# Une carte ne proposait que des unités de niveau 1 : impossible d'écrire un
+	# adversaire redoutable sans en poser dix.
+	var levelled := MapDocument.create_empty("Embuscade", Vector2i(10, 8))
+	levelled.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)
+	levelled.place_unit(SKELETON, Vector2i(6, 6), MapDocument.TEAM_OPPONENT, 12)
+	_check(int(levelled.unit_at(Vector2i(6, 6)).get("level", 0)) == 12,
+		"une unité se pose au niveau demandé")
+	_check(int(levelled.unit_at(Vector2i(1, 1)).get("level", 0)) == 1,
+		"sans précision, elle vaut 1 — ce qu'elle valait avant")
+
+	levelled.place_unit(SKELETON, Vector2i(5, 5), MapDocument.TEAM_OPPONENT, 999)
+	_check(int(levelled.unit_at(Vector2i(5, 5))["level"]) == MapDocument.MAX_LEVEL,
+		"un niveau démesuré est ramené au plafond")
+	_check(levelled.validate().is_empty(), "la carte reste jouable",
+		", ".join(levelled.validate()))
+
+	var out_of_range: Dictionary = levelled.to_dict()
+	out_of_range["units"][0]["level"] = 99
+	var reloaded: MapDocument = MapDocument.from_dict(out_of_range)
+	_check(int(reloaded.units[0]["level"]) <= MapDocument.MAX_LEVEL,
+		"un fichier bricolé à la main est ramené dans les bornes")
+
+	# Une carte d'avant les niveaux ne les déclare pas : elle doit rester lisible.
+	var legacy: Dictionary = levelled.to_dict()
+	for u: Dictionary in legacy["units"]:
+		u.erase("level")
+	var old_map: MapDocument = MapDocument.from_dict(legacy)
+	_check(old_map != null and int(old_map.units[0]["level"]) == 1,
+		"une carte d'avant les niveaux se relit, ses unités au niveau 1")
+
+	# --- Une unité posée au niveau N y monte vraiment ---
+	# Écrire `level = 8` sur une recrue lui donnerait l'étiquette d'une vétérane
+	# et les statistiques d'une bleue. Elle gravit donc les échelons.
+	var rookie: CharStats = _live(SKELETON)
+	var base_hp: int = rookie.max_hp
+	var veteran: CharStats = _live(SKELETON)
+	_check(veteran.raise_to_level(8) == 8, "l'unité atteint le niveau demandé",
+		"niveau %d" % veteran.level)
+	_check(veteran.max_hp >= base_hp,
+		"et ses statistiques ont grandi avec elle (%d → %d PV)" % [base_hp, veteran.max_hp])
+
+	# Graine fixe : deux machines d'une partie en réseau doivent voir la même
+	# adversaire, et rouvrir une carte ne doit pas la redessiner.
+	var twin: CharStats = _live(SKELETON)
+	twin.raise_to_level(8)
+	_check(twin.max_hp == veteran.max_hp and twin.str == veteran.str
+			and twin.spd == veteran.spd,
+		"deux montées au même niveau donnent la même unité",
+		"%d/%d PV" % [twin.max_hp, veteran.max_hp])
+
+	var untouched: CharStats = _live(SKELETON)
+	_check(untouched.raise_to_level(1) == 1 and untouched.max_hp == base_hp,
+		"demander un niveau déjà atteint ne change rien")
+
+	# --- Roster lu sur le disque ---
+	# Il était écrit en dur dans l'interface : neuf chemins, et rien d'autre ne
+	# pouvait être posé.
+	var heroes: Array = MapEditorUI.roster_of(MapDocument.TEAM_PLAYER)
+	var mobs: Array = MapEditorUI.roster_of(MapDocument.TEAM_OPPONENT)
+	_check(heroes.size() >= 6 and mobs.size() >= 3,
+		"le roster se lit sur le disque (%d héros, %d créatures)" % [heroes.size(), mobs.size()])
+	var named: bool = not heroes.is_empty()
+	for entry: Dictionary in heroes:
+		if str(entry["name"]).is_empty() or not MapDocument.unit_exists(str(entry["path"])):
+			named = false
+	_check(named, "chaque unité proposée a un nom et une fiche qui existe")
+
+	# --- Échange de cartes ---
+	var text: String = MapLibrary.to_json(levelled)
+	var back: Dictionary = MapLibrary.from_json(text)
+	_check(bool(back["ok"]) and back["doc"].name == levelled.name
+			and back["doc"].units.size() == levelled.units.size(),
+		"une carte passe par du texte et revient entière", str(back["error"]))
+	_check(int(back["doc"].unit_at(Vector2i(6, 6))["level"]) == 12,
+		"le niveau des unités fait le voyage")
+
+	_check(not bool(MapLibrary.from_json("")["ok"]),
+		"coller du vide ne casse rien, ça se dit")
+	_check(not bool(MapLibrary.from_json("bonjour")["ok"]),
+		"coller n'importe quel texte se refuse proprement")
+	_check(not bool(MapLibrary.from_json('{"nom": "pas une carte"}')["ok"]),
+		"du JSON qui n'est pas une carte se refuse aussi")
+
+	var exported: Dictionary = MapLibrary.export_to(levelled, "user://maps/essai_export")
+	_check(bool(exported["ok"]) and str(exported["path"]).ends_with(".json"),
+		"l'extension est ajoutée si on l'oublie", str(exported["error"]))
+	var imported: Dictionary = MapLibrary.import_from(str(exported["path"]))
+	_check(bool(imported["ok"]) and imported["doc"].name == levelled.name,
+		"le fichier exporté se réimporte", str(imported["error"]))
+	_check(not bool(MapLibrary.import_from("user://maps/rien_du_tout.json")["ok"]),
+		"importer un fichier absent se dit au lieu de se taire")
+	MapLibrary.delete(str(exported["path"]))
+
+	# Exporter accepte un brouillon, là où enregistrer le refuse : on doit pouvoir
+	# envoyer une carte inachevée à quelqu'un pour qu'il la finisse.
+	var draft: Dictionary = MapLibrary.export_to(broken, "user://maps/essai_brouillon.json")
+	_check(bool(draft["ok"]), "un brouillon injouable s'exporte quand même",
+		str(draft["error"]))
+	MapLibrary.delete(str(draft["path"]))
+
 
 ## Annuler / rétablir : la pile d'instantanés de l'éditeur.
 func _test_map_history() -> void:
@@ -2193,6 +2350,37 @@ func _test_battle_grid() -> void:
 	_check(right.x - left.x == 1, "les cases restent contiguës en traversant zéro",
 		"%s puis %s" % [str(left), str(right)])
 
+	# Un pion ne s'arrête jamais pile au centre de sa case : la grille doit lui
+	# rendre la **plus proche**, pas la précédente. C'est ce qui manquait le
+	# 2026-08-07 — arrêté à 0,14 en deçà du centre, il était rattaché à la case
+	# d'avant, et le recentrage le renvoyait une case en arrière. Un déplacement
+	# de cinq cases en valait quatre.
+	var target_tile: Node3D = tiles[Vector2i(2, 1)]
+	var target_coord: Vector2i = grid.coord_of(target_tile)
+	var always_nearest: bool = true
+	for nudge: float in [-0.4, -0.14, 0.0, 0.14, 0.4]:
+		if grid.coord_at_position(target_tile.position + Vector3(nudge, 0, nudge)) != target_coord:
+			always_nearest = false
+	_check(always_nearest,
+		"une position décalée dans sa case rend quand même cette case-là")
+
+	# Et cela quelle que soit la parité de la carte : une largeur paire pose ses
+	# centres sur les demis, une largeur impaire sur les entiers. L'ancienne
+	# formule n'était juste que pour l'une des deux.
+	var odd := BattleGrid.new()
+	var odd_tiles: Array[Node3D] = []
+	for col: int in 3:
+		var node := Node3D.new()
+		node.position = Vector3(float(col) - 1.0, 0.0, 0.0)
+		odd.add_tile(node, node.position)
+		odd_tiles.append(node)
+	var odd_middle: Vector2i = odd.coord_of(odd_tiles[1])
+	_check(odd.coord_at_position(Vector3(-0.3, 0, 0)) == odd_middle
+			and odd.coord_at_position(Vector3(0.3, 0, 0)) == odd_middle,
+		"une carte de largeur impaire se lit avec la même justesse")
+	for node: Node3D in odd_tiles:
+		node.free()
+
 	var middle: Node3D = tiles[Vector2i(1, 1)]
 	_check(grid.neighbors_of(middle, 1.0).size() == 4, "une case au centre a 4 voisines")
 
@@ -2230,4 +2418,67 @@ func _test_battle_grid() -> void:
 		node.free()
 	cliff.free()
 	stranger.free()
+
+
+func _test_path_field() -> void:
+	print("\n🧭 Test 22: le parcours en données (PathField)")
+
+	# Une grille 5×5 plate, un mur vertical percé d'un passage : le cas qui dit
+	# tout. Rien de tout ceci n'exigeait de scène 3D avant le 2026-08-07 — c'est
+	# précisément ce que ce refactor rend possible.
+	var grid := BattleGrid.new()
+	var nodes: Array[Node3D] = []
+	for row: int in 5:
+		for col: int in 5:
+			var node := Node3D.new()
+			node.position = Vector3(float(col) - 2.5 + 0.5, 0.0, float(row) - 2.5 + 0.5)
+			grid.add_tile(node, node.position)
+			nodes.append(node)
+
+	var origin: Vector2i = grid.coord_at_position(Vector3(-2.0, 0.0, -2.0))  # case (0, 0)
+	var open_everything: Callable = func(_c: Vector2i) -> bool: return true
+
+	var field := PathField.new()
+	field.expand(grid, origin, 1.0, open_everything)
+
+	_check(is_zero_approx(field.distance_at(origin)) and not field.has_root(origin),
+		"l'origine est à zéro pas et ne vient de nulle part")
+	_check(is_equal_approx(field.distance_at(origin + Vector2i(2, 0)), 2.0),
+		"deux cases plus loin, deux pas",
+		str(field.distance_at(origin + Vector2i(2, 0))))
+	_check(is_equal_approx(field.distance_at(origin + Vector2i(2, 2)), 4.0),
+		"en diagonale, on contourne : quatre pas pour deux et deux")
+	_check(field.reached().size() == 24, "les 24 autres cases sont atteintes",
+		"%d" % field.reached().size())
+
+	# Le chemin rendu part de l'origine et arrive à la case demandée.
+	var route: Array[Vector2i] = field.path_to(origin + Vector2i(2, 2))
+	_check(route.size() == 5 and route[0] == origin and route[-1] == origin + Vector2i(2, 2),
+		"le chemin va de l'origine à la case visée, celle-ci comprise",
+		"%d étapes : %s" % [route.size(), str(route)])
+
+	# Une case hors du parcours ne rend qu'elle-même — c'est ce qui empêche un
+	# pion de partir vers une case qu'il ne peut pas rejoindre.
+	var walled := PathField.new()
+	# Un mur sur toute la colonne 2, sauf la case la plus au sud.
+	var barrier: Callable = func(c: Vector2i) -> bool:
+		return c.x - origin.x != 2 or c.y - origin.y == 4
+	walled.expand(grid, origin, 1.0, barrier)
+
+	_check(is_equal_approx(walled.distance_at(origin + Vector2i(2, 4)), 6.0),
+		"le passage est emprunté : six pas pour longer le mur",
+		str(walled.distance_at(origin + Vector2i(2, 4))))
+	_check(is_equal_approx(walled.distance_at(origin + Vector2i(2, 0)), 0.0)
+			and not walled.has_root(origin + Vector2i(2, 0)),
+		"une case murée reste hors du parcours")
+	_check(walled.path_to(origin + Vector2i(2, 0)).size() == 1,
+		"et son « chemin » ne mène nulle part : elle seule")
+
+	# Oublier le parcours le vide vraiment.
+	walled.clear()
+	_check(walled.reached().is_empty() and not walled.has_root(origin + Vector2i(1, 0)),
+		"remettre à zéro efface tout le parcours")
+
+	for node: Node3D in nodes:
+		node.free()
 #endregion

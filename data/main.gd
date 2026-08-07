@@ -200,7 +200,11 @@ func _on_play_custom_map(document: MapDocument, with_ciel: bool) -> void:
 
 	_custom_map = document
 	_chapter = document.to_chapter()
-	_load_level("", CustomBattleClass.build(document))
+	var level: Node = CustomBattleClass.build(document)
+	_load_level("", level)
+	# Une fois le niveau dans l'arbre, et pas avant : c'est là que les pions ont
+	# des statistiques à recevoir.
+	CustomBattleClass.apply_levels(level)
 
 
 ## Écran de fin de bataille (victoire, défaite, fin de campagne).

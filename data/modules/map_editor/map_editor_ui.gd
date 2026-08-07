@@ -8,6 +8,11 @@ extends CanvasLayer
 
 signal tool_selected(tool_id: int)
 signal unit_picked(path: String)
+## Niveau retenu pour les prochaines unités posées.
+signal unit_level_changed(level: int)
+## Le joueur veut sortir sa carte du jeu, ou en faire entrer une.
+signal export_requested(to_clipboard: bool, path: String)
+signal import_requested(from_clipboard: bool, path: String)
 signal save_requested()
 signal load_requested(path: String)
 signal delete_requested(path: String)
@@ -52,18 +57,15 @@ const TERRAIN_COLORS: Array[Color] = [
 	Color(TacticsScenery.TERRAIN_COLORS[6]),
 ]
 
-## Unités posables, groupées par camp
-const ROSTER: Array[Dictionary] = [
-	{"path": "res://data/models/world/stats/hero/lord.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/hero/cleric.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/hero/archer.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/hero/great_knight.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/hero/cavalier.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/hero/pegasus_knight.tres", "team": "player"},
-	{"path": "res://data/models/world/stats/mob/skeleton.tres", "team": "opponent"},
-	{"path": "res://data/models/world/stats/mob/skeleton_cpn.tres", "team": "opponent"},
-	{"path": "res://data/models/world/stats/mob/skeleton_mage.tres", "team": "opponent"},
-]
+## Dossiers de fiches livrées avec le jeu, par camp par défaut.
+##
+## Le roster était une liste de neuf chemins écrite ici : ajouter une unité au
+## jeu demandait de venir modifier l'interface, et les personnages écrits dans
+## l'éditeur de personnages n'y figuraient pas du tout. On lit le disque.
+const UNIT_DIRS: Dictionary = {
+	"player": "res://data/models/world/stats/hero",
+	"opponent": "res://data/models/world/stats/mob",
+}
 
 var _status: Label = null
 var _tool_label: Label = null
@@ -164,7 +166,7 @@ func _build_top_bar() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	row.offset_left = -880
+	row.offset_left = -1000
 	row.offset_right = -12
 	row.offset_top = 8
 	row.offset_bottom = 38
@@ -185,6 +187,7 @@ func _build_top_bar() -> void:
 	row.add_child(VSeparator.new())
 	row.add_child(_action("🆕 Nouvelle", Color("#e67e22"), _open_new_panel))
 	row.add_child(_action("📂 Ouvrir", Color("#256eb8"), _open_library_panel))
+	row.add_child(_action("🔗 Partager", Color("#1f7a8c"), _open_share_panel))
 	row.add_child(_action("⚙ Réglages", Color("#5d4e8c"),
 		func() -> void: settings_requested.emit()))
 	row.add_child(_action("💾 Enregistrer", Color("#1b6b3a"),
@@ -308,9 +311,42 @@ func _build_status() -> void:
 	add_child(_errors)
 
 
-## Liste des unités posables du camp demandé.
+## Liste des unités posables du camp demandé : `[{path, name, custom}]`.
+##
+## Deux sources, dans cet ordre : les fiches livrées avec le jeu, puis les
+## personnages écrits par le joueur. Ces derniers sont proposés **aux deux
+## camps** — rien ne dit qu'une créature de son cru soit un allié plutôt qu'un
+## adversaire, et c'est justement ce qu'on vient choisir ici.
 static func roster_of(team: String) -> Array:
-	return ROSTER.filter(func(u: Dictionary) -> bool: return str(u["team"]) == team)
+	var out: Array = []
+
+	var dir := DirAccess.open(str(UNIT_DIRS.get(team, "")))
+	if dir:
+		var files: PackedStringArray = dir.get_files()
+		files.sort()
+		for file_name: String in files:
+			# Un `.tres` exporté est livré en `.remap` : c'est le nom d'origine
+			# qui doit être chargé, sinon le roster est vide dans le jeu installé.
+			var clean: String = file_name.trim_suffix(".remap")
+			if not clean.ends_with(".tres"):
+				continue
+			var path: String = "%s/%s" % [str(UNIT_DIRS[team]), clean]
+			out.append({
+				"path": path,
+				"name": MapDocument.unit_display_name(path),
+				"custom": false,
+			})
+
+	for entry: Dictionary in UnitLibrary.list_units():
+		if not bool(entry.get("valid", false)):
+			continue
+		out.append({
+			"path": UnitLibrary.path_for(str(entry["slug"])),
+			"name": str(entry["name"]),
+			"custom": true,
+		})
+
+	return out
 #endregion
 
 
@@ -513,17 +549,100 @@ func _open_library_panel() -> void:
 
 
 ## Choix de l'unité à poser, ouvert quand on prend un outil de placement.
-func open_unit_picker(team: String) -> void:
+##
+## Le niveau se règle ici, avant de choisir : c'est un réglage du pinceau, pas
+## de la case. On peut donc poser six squelettes de niveau 8 d'affilée sans
+## rouvrir ce panneau entre chacun.
+func open_unit_picker(team: String, level: int = 1) -> void:
 	var box: VBoxContainer = _open_panel(
 		"Unité à poser — %s" % ("camp du joueur" if team == "player" else "camp adverse")
 	)
-	for entry: Dictionary in roster_of(team):
+
+	var spin := SpinBox.new()
+	spin.min_value = MapDocument.MIN_LEVEL
+	spin.max_value = MapDocument.MAX_LEVEL
+	spin.value = clampi(level, MapDocument.MIN_LEVEL, MapDocument.MAX_LEVEL)
+	spin.custom_minimum_size = Vector2(110, 30)
+	box.add_child(_labelled("Niveau des unités posées", spin))
+	box.add_child(_note("Une unité posée au-dessus de 1 monte réellement les "
+		+ "échelons, par les croissances de sa classe. Le tirage est fixe : la "
+		+ "même carte donne toujours la même unité."))
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 260)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 4)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	box.add_child(scroll)
+
+	var roster: Array = roster_of(team)
+	if roster.is_empty():
+		list.add_child(_note("Aucune unité disponible pour ce camp."))
+		return
+
+	for entry: Dictionary in roster:
 		var path: String = str(entry["path"])
-		var label: String = MapDocument.unit_display_name(path)
-		var btn := _confirm(label if not label.is_empty() else path, func() -> void:
+		var label: String = str(entry["name"])
+		if label.is_empty():
+			label = path.get_file()
+		if bool(entry.get("custom", false)):
+			label = "✎ %s" % label  # Écrit par le joueur
+		var btn := _confirm(label, func() -> void:
+			unit_level_changed.emit(int(spin.value))
 			unit_picked.emit(path)
 			close_panel())
-		box.add_child(btn)
+		list.add_child(btn)
+
+
+## Sortir une carte du jeu, ou en faire entrer une.
+##
+## Le format d'échange existait depuis le début — [MapDocument] se sérialise en
+## JSON lisible, exprès pour qu'on puisse envoyer une carte à quelqu'un. Il n'y
+## avait simplement aucun moyen de le faire depuis le jeu : il fallait aller
+## chercher le fichier dans `user://maps/` à la main.
+func _open_share_panel() -> void:
+	var box: VBoxContainer = _open_panel("Partager une carte", 520.0)
+	box.add_child(_note("Une carte est un fichier JSON lisible. L'envoyer à "
+		+ "quelqu'un suffit à la lui faire jouer — il n'y a rien d'autre dedans."))
+
+	box.add_child(_confirm("📋  Copier la carte dans le presse-papiers", func() -> void:
+		export_requested.emit(true, "")
+		close_panel()))
+	box.add_child(_confirm("📥  Remplacer par la carte du presse-papiers", func() -> void:
+		import_requested.emit(true, "")
+		close_panel()))
+
+	box.add_child(HSeparator.new())
+
+	box.add_child(_confirm("📤  Exporter vers un fichier…", func() -> void:
+		_open_file_dialog(FileDialog.FILE_MODE_SAVE_FILE,
+			func(path: String) -> void: export_requested.emit(false, path))))
+	box.add_child(_confirm("📂  Importer un fichier…", func() -> void:
+		_open_file_dialog(FileDialog.FILE_MODE_OPEN_FILE,
+			func(path: String) -> void: import_requested.emit(false, path))))
+
+	box.add_child(_note("Importer remplace la carte en cours. L'annulation "
+		+ "(Ctrl+Z) la ramène si c'était une erreur."))
+
+
+## Un sélecteur de fichier natif, sur tout le disque — une carte reçue d'un ami
+## est dans les téléchargements, pas dans le dossier du jeu.
+func _open_file_dialog(mode: FileDialog.FileMode, on_chosen: Callable) -> void:
+	close_panel()
+	var dialog := FileDialog.new()
+	dialog.file_mode = mode
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.use_native_dialog = true
+	dialog.filters = PackedStringArray(["*.json ; Carte Ciel Emblem"])
+	dialog.title = "Exporter la carte" if mode == FileDialog.FILE_MODE_SAVE_FILE \
+		else "Importer une carte"
+	dialog.file_selected.connect(func(path: String) -> void:
+		on_chosen.call(path)
+		dialog.queue_free())
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(820, 560))
 
 
 func _open_test_panel() -> void:

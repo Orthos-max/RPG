@@ -7,9 +7,6 @@ extends StaticBody3D
 ## Used by: [TacticsArena]
 
 #region: --- Props ---
-## Resource for tile raycasting
-var tile_raycast: Resource = load("res://data/modules/tactics/level/arena/tile/raycast/tile_raycasting.tscn")
-
 ## Whether the tile is reachable
 var reachable: bool = false
 ## Whether the tile is attackable
@@ -25,11 +22,6 @@ var deploy_point: bool = false
 @export var terrain_type: int = 0
 ## Base material for terrain (applied when no special state is active)
 var terrain_mat: StandardMaterial3D = null
-
-## Pathfinding starting point.[br]Used by [TacticsArena]
-var pf_root: TacticsTile
-## The distance to cover.[br]Used by [TacticsArena]
-var pf_distance: float
 
 ## Matériau de surlignage de cette case, pour un état donné.
 ##
@@ -95,22 +87,18 @@ func _process(_delta: float) -> void:
 # Getters
 ## Returns all 4 directly adjacent tiles
 ##
-## L'index de grille répond sans moteur physique. Le repli sur les rayons ne
-## sert qu'aux tuiles qui n'y sont pas inscrites (scène montée à la main hors
-## d'une arène) ; il disparaîtra quand la parité sera prouvée fenêtre ouverte.
+## L'index de grille répond seul depuis le 2026-08-07. Le repli sur les rayons
+## 3D a disparu : toute tuile existante passe par [TacticsTileService], donc par
+## l'index bâti dans la foulée — il n'y avait plus de cas à rattraper.
 func get_neighbors(height: float) -> Array:
 	var grid: BattleGrid = BattleGrid.current
-	if grid and grid.has_tile(self):
-		return grid.neighbors_of(self, height)
-	return $RayCasting.get_all_neighbors(height)
+	return grid.neighbors_of(self, height) if grid else []
 
 
 ## Returns the pawn standing on this tile, if any
 func get_tile_occupier() -> Object:
 	var grid: BattleGrid = BattleGrid.current
-	if grid and grid.has_tile(self):
-		return grid.occupant_of(self)
-	return $RayCasting.get_object_above()
+	return grid.occupant_of(self) if grid else null
 
 
 ## Return whether target tile is occupied
@@ -119,21 +107,21 @@ func is_taken() -> bool:
 
 
 # Setters
-## Resets the tile's markers (pf_root, pf_distance, reachable, attackable)
+## Remet à zéro ce que la tuile affiche d'un parcours (atteignable, attaquable).
+##
+## Le parcours lui-même — d'où l'on vient, en combien de pas — ne vit plus ici :
+## il est dans [PathField], indexé par coordonnée. La tuile ne garde que ce
+## qu'elle dessine.
 func reset_markers() -> void:
-	pf_root = null
-	pf_distance = 0
 	reachable = false
 	attackable = false
 
 
-## Initializes tile (disable hover, instantiate raycast & reset state)
+## Initializes tile (disable hover & reset state)
 func configure_tile() -> void:
 	hover = false
 	# Set terrain material
 	if TacticsConfig.terrain_material.has(terrain_type):
 		terrain_mat = TacticsConfig.terrain_material[terrain_type]
-	var instance: Node = tile_raycast.instantiate() # Instantiate raycast
-	add_child(instance) # Add raycast as child
 	reset_markers() # Reset tile markers
 #endregion

@@ -17,6 +17,10 @@ const EXPERTISE_SCENE = preload("res://data/modules/stats/expertise/expertise.ts
 ## Hauteur du pion au-dessus du dessus de sa tuile
 const PAWN_LIFT: float = 0.5
 
+## Fiche prêtée à un personnage écrit par le joueur, le temps qu'il entre en
+## scène. Tout y est réécrit ensuite : seul compte qu'elle existe.
+const CUSTOM_UNIT_TEMPLATE: String = "res://data/models/world/stats/hero/lord.tres"
+
 
 ## Construit un niveau jouable à partir d'une carte. Renvoie null si elle est vide.
 static func build(doc: MapDocument) -> Node:
@@ -76,6 +80,13 @@ static func _populate(level: Node, doc: MapDocument) -> void:
 
 		counters[team] = int(counters[team]) + 1
 		var pawn: Node3D = _make_pawn(path, int(counters[team]))
+		# Ce que le pion doit devenir une fois en scène. Rien ne peut s'appliquer
+		# ici : `Stats` n'existe qu'au `_ready` du pion, et le niveau n'est pas
+		# encore dans l'arbre. Voir [method apply_levels].
+		pawn.set_meta("start_level", clampi(int(unit.get("level", 1)),
+			MapDocument.MIN_LEVEL, MapDocument.MAX_LEVEL))
+		if MapDocument.is_custom_unit(path):
+			pawn.set_meta("custom_unit", path)
 		camp.add_child(pawn)
 		# Position locale : le niveau n'est pas encore dans l'arbre, `global_position`
 		# n'y voudrait rien dire — d'où le décalage des camps retranché à la main.
@@ -96,9 +107,51 @@ static func _make_pawn(stats_path: String, index: int) -> Node3D:
 
 	var expertise: Node = EXPERTISE_SCENE.instantiate()
 	expertise.name = "Expertise"
-	expertise.starting_stats = load(stats_path)
+	# Un personnage écrit par le joueur n'est pas une ressource : il n'a pas de
+	# `.tres` à charger. On lui prête une fiche de départ, entièrement réécrite
+	# ensuite par [method apply_levels] — le pion a besoin de *quelque chose* à
+	# lire dans son `_ready`, pas de la bonne chose.
+	expertise.starting_stats = load(
+		CUSTOM_UNIT_TEMPLATE if MapDocument.is_custom_unit(stats_path) else stats_path)
 	pawn.add_child(expertise)
 	return pawn
+
+
+## Applique aux pions ce qui ne pouvait pas l'être avant leur entrée en scène :
+## la fiche d'un personnage écrit à la main, puis le niveau de départ.
+##
+## À appeler une fois le niveau dans l'arbre — c'est là seulement que chaque pion
+## a passé son `_ready`, donc qu'il a des statistiques à modifier.
+static func apply_levels(level: Node) -> void:
+	if not level or not is_instance_valid(level):
+		return
+	for pawn: Node in _pawns_of(level):
+		var stats: Object = pawn.get("stats")
+		if not stats:
+			continue
+
+		# La fiche d'abord : elle remplace classe, statistiques et arsenal. Monter
+		# en niveau avant elle ferait grandir la mauvaise unité.
+		if pawn.has_meta("custom_unit"):
+			var slug: String = str(pawn.get_meta("custom_unit")) \
+				.trim_prefix(MapDocument.CUSTOM_PREFIX).trim_suffix(".json")
+			var doc: UnitDocument = UnitLibrary.load_unit(slug)
+			if doc:
+				ChapterRunner.apply_roster_unit(stats, doc.to_roster_unit())
+
+		var target: int = int(pawn.get_meta("start_level", 1))
+		if target > stats.level:
+			stats.raise_to_level(target)
+
+
+static func _pawns_of(node: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	for child: Node in node.get_children():
+		if child is TacticsPawn:
+			out.append(child)
+		else:
+			out.append_array(_pawns_of(child))
+	return out
 
 
 ## Décalage cumulé d'un camp par rapport à la racine du niveau.

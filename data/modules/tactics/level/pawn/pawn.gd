@@ -48,11 +48,20 @@ func show_pawn_stats(v: bool) -> void:
 	$Character/CharacterUI.visible = v
 
 
-## Gets the tile the pawn is currently on
+## La case sur laquelle le pion se tient.
 ##
-## @return: The TacticsTile the pawn is on
+## C'était un rayon lancé vers le bas, donc une question posée au moteur
+## physique : elle ne répondait qu'en fenêtre ouverte (sans rendu, les tuiles
+## n'ont pas de collision), et elle répondait avec une frame de retard — poser
+## un pion et lui demander sa case rendait la précédente, ce qui obligeait
+## [ChapterRunner] à forcer le rayon à la main après chaque placement.
+##
+## L'index de grille répond de la position, tout de suite, et sans fenêtre.
 func get_tile() -> TacticsTile:
-	return $Tile.get_collider()
+	var grid: BattleGrid = BattleGrid.current
+	if not grid:
+		return null
+	return grid.tile_at(grid.coord_at_position(global_position)) as TacticsTile
 
 
 ## Nom affiché du pion — unique au sein de son camp.

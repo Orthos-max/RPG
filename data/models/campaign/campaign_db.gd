@@ -60,7 +60,7 @@ const CHAPTERS: Array[Dictionary] = [
 			"Garrick s'effondre en poussière.",
 			"Les autres refluent vers la forêt.",
 		],
-		"scene_path": "res://assets/maps/level/test_level.tscn",
+		"scene_path": "res://assets/maps/level/outpost_level.tscn",
 		# La cible doit correspondre au nom affiché d'un pion de la carte
 		# (skeleton_cpn.tres → « Garrick »), sinon l'objectif serait gagné d'emblée.
 		"objective": {"kind": OBJ.Kind.DEFEAT_BOSS, "target": "Garrick"},

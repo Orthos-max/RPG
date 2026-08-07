@@ -27,6 +27,18 @@ const TEAM_OPPONENT: String = "opponent"
 const MIN_SIZE: Vector2i = Vector2i(6, 6)
 const MAX_SIZE: Vector2i = Vector2i(32, 24)
 
+## Niveaux acceptés pour une unité posée.
+##
+## Le plafond est celui de la campagne : au-delà, une unité promue continue de
+## monter, mais plus rien ne l'y prépare. Poser un niveau 40 sur une carte
+## donnerait un adversaire que rien n'équilibre.
+const MIN_LEVEL: int = 1
+const MAX_LEVEL: int = 20
+
+## Préfixe d'un personnage écrit dans l'éditeur de personnages, par opposition
+## à une fiche `.tres` livrée avec le jeu.
+const CUSTOM_PREFIX: String = "user://units/"
+
 var format_version: int = FORMAT_VERSION
 var name: String = "Carte sans nom"
 var author: String = ""
@@ -36,7 +48,7 @@ var tile_size: float = 1.0
 var terrain: Array[int] = []
 ## Hauteurs à plat, même indexation
 var heights: Array[float] = []
-## Unités posées : [{path: String, col: int, row: int, team: String}]
+## Unités posées : [{path: String, col: int, row: int, team: String, level: int}]
 var units: Array = []
 ## Cases ouvertes au déploiement ([[col, row], …]) — vide : voisinage par défaut
 var deploy_tiles: Array = []
@@ -153,8 +165,9 @@ func unit_at(pos: Vector2i) -> Dictionary:
 
 
 ## Pose une unité. Remplace celle qui occupait déjà la case.
+## [param level] Niveau de départ, borné à [constant MIN_LEVEL]…[constant MAX_LEVEL].
 ## [returns] {ok: bool, error: String}
-func place_unit(path: String, pos: Vector2i, team: String) -> Dictionary:
+func place_unit(path: String, pos: Vector2i, team: String, level: int = 1) -> Dictionary:
 	if path.is_empty():
 		return {"ok": false, "error": "aucune unité choisie"}
 	if not is_placeable(pos):
@@ -164,8 +177,25 @@ func place_unit(path: String, pos: Vector2i, team: String) -> Dictionary:
 	units.append({
 		"path": path, "col": pos.x, "row": pos.y,
 		"team": team if team == TEAM_PLAYER else TEAM_OPPONENT,
+		"level": clampi(level, MIN_LEVEL, MAX_LEVEL),
 	})
 	return {"ok": true, "error": ""}
+
+
+## L'unité désignée par ce chemin existe-t-elle ?
+##
+## Deux origines possibles : une fiche `.tres` livrée avec le jeu, ou un
+## personnage écrit dans l'éditeur de personnages — un simple JSON de
+## `user://units/`, que `ResourceLoader` ne connaît pas.
+static func unit_exists(path: String) -> bool:
+	if is_custom_unit(path):
+		return FileAccess.file_exists(path)
+	return ResourceLoader.exists(path)
+
+
+## Ce chemin désigne-t-il un personnage écrit par le joueur ?
+static func is_custom_unit(path: String) -> bool:
+	return path.begins_with(CUSTOM_PREFIX) and path.ends_with(".json")
 
 
 ## Retire l'unité d'une case. [returns] vrai si quelque chose a été retiré.
@@ -268,8 +298,12 @@ func validate() -> Array[String]:
 		elif not MapDataClass.is_walkable(terrain_at(pos)):
 			errors.append("Une unité est posée sur un terrain infranchissable (%d, %d)."
 				% [pos.x, pos.y])
-		if not ResourceLoader.exists(str(u.get("path", ""))):
+		if not unit_exists(str(u.get("path", ""))):
 			errors.append("Unité inconnue : %s" % str(u.get("path", "")))
+		var level: int = int(u.get("level", 1))
+		if level < MIN_LEVEL or level > MAX_LEVEL:
+			errors.append("Niveau hors bornes (%d) pour l'unité en (%d, %d)."
+				% [level, pos.x, pos.y])
 
 	for t: Variant in deploy_tiles:
 		var pos: Vector2i = _to_vec(t)
@@ -323,6 +357,10 @@ func _validate_objective() -> Array[String]:
 ## Reproduit [method TacticsPawn.base_name] : nom propre s'il existe, sinon la
 ## classe. Sans quoi l'éditeur validerait une cible que le moteur ne reconnaît pas.
 static func unit_display_name(path: String) -> String:
+	if is_custom_unit(path):
+		var doc: UnitDocument = UnitLibrary.load_unit(
+			path.trim_prefix(CUSTOM_PREFIX).trim_suffix(".json"))
+		return doc.name.strip_edges() if doc else ""
 	if not ResourceLoader.exists(path):
 		return ""
 	var res: Resource = load(path)
@@ -470,6 +508,9 @@ static func from_dict(data: Dictionary) -> MapDocument:
 			"col": int(u.get("col", 0)),
 			"row": int(u.get("row", 0)),
 			"team": TEAM_PLAYER if str(u.get("team", "")) == TEAM_PLAYER else TEAM_OPPONENT,
+			# Une carte d'avant les niveaux n'en déclare pas : ses unités valent 1,
+			# ce qu'elles étaient déjà.
+			"level": clampi(int(u.get("level", MIN_LEVEL)), MIN_LEVEL, MAX_LEVEL),
 		})
 
 	for t: Variant in data.get("deploy_tiles", []):

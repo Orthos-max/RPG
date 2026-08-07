@@ -11,8 +11,16 @@ extends SceneTree
 ## d'attaquer, un arc qui tirait au contact, un bouton hors de l'écran. Aucun
 ## n'était visible sans une vraie fenêtre et un vrai curseur.
 ##
-## Ce qu'on prouve ici : sélectionner une unité, ouvrir son menu, la déplacer sur
-## une case, attaquer un ennemi — **en cliquant**, comme un joueur.
+## Ce qu'on prouve ici, **en cliquant**, comme un joueur : placer ses unités
+## avant la bataille (échanger deux d'entre elles, en poser une sur une case
+## ouverte, défaire le tout), sélectionner une unité, ouvrir son menu, la
+## déplacer, attaquer un ennemi, puis rendre la main et voir l'adversaire jouer
+## son tour et le rendre à son tour.
+##
+## Le placement se défait avant de commencer la bataille : les étapes suivantes
+## jouent la position de départ du chapitre, et la laisser défaite mettrait
+## l'attaque hors de portée — le test se déclarerait alors « non testable » au
+## lieu d'échouer, ce qui est la pire des deux issues.
 ##
 ## Le piège du clic simulé (documenté le 2026-08-05, payé de nouveau ici) :
 ## `Input.parse_input_event` ne suffit pas. Sans `position` renseignée, le
@@ -55,7 +63,12 @@ func _init() -> void:
 
 
 func _run() -> void:
-	if not await _open_battle():
+	var phase: Node = await _open_battle()
+	if not _level:
+		return
+
+	await _test_deployment(phase)
+	if not await _start_battle(phase):
 		return
 
 	var pawn: Node = _first_actable_pawn()
@@ -67,9 +80,81 @@ func _run() -> void:
 	await _test_select(pawn)
 	await _test_move(pawn)
 	await _test_attack()
+	await _test_opponent_turn()
 
 
 #region Étapes
+## Le placement d'avant-bataille, joué à la souris.
+##
+## C'est le trou de preuve le plus ancien : l'échange de deux unités au
+## déploiement est l'un des trois blocages remontés par Aurèle le 2026-08-05, et
+## il est passé au travers de toute la suite headless — l'étape ne s'ouvre même
+## pas en `--headless`, faute de collisions sur les tuiles.
+func _test_deployment(phase: Node) -> void:
+	if not phase or not is_instance_valid(phase):
+		_ko("L'étape de déploiement s'ouvre", "aucune — le chapitre l'a-t-il abandonnée ?")
+		return
+
+	var marked: int = 0
+	for tile in TacticsGrid.tiles(_level.arena):
+		if tile.get("deploy_point"):
+			marked += 1
+	_check(marked > 0, "les cases de déploiement sont surlignées (%d)" % marked)
+
+	var pawns: Array = _player_pawns()
+	if pawns.size() < 2:
+		_ko("Deux unités à échanger", "%d en scène" % pawns.size())
+		return
+
+	# --- Échanger deux unités : clic sur l'une, puis clic sur l'autre ---
+	var first: Node = pawns[0]
+	var second: Node = pawns[1]
+	var first_cell: Vector2i = _cell_of(first)
+	var second_cell: Vector2i = _cell_of(second)
+
+	await _click_world(first.global_position)
+	await _click_world(second.global_position)
+
+	_check(_cell_of(first) == second_cell and _cell_of(second) == first_cell,
+		"deux unités échangent leurs places (%s ↔ %s)" % [first_cell, second_cell],
+		"%s et %s après le clic" % [_cell_of(first), _cell_of(second)])
+
+	# --- Poser une unité sur une case libre ---
+	var free: Vector2i = _free_slot_away_from(phase, pawns)
+	if free.x < 0:
+		_ok("Aucune case ouverte restée libre — pose non testable ici")
+		return
+
+	var before: Vector2i = _cell_of(first)
+	var tile: Node = _tile_at_cell(free)
+	if not tile:
+		_ko("La case libre a une tuile", str(free))
+		return
+
+	await _click_world(first.global_position)
+	await _click_world(tile.global_position)
+
+	_check(_cell_of(first) == free,
+		"une unité se pose sur une case ouverte (%s → %s)" % [before, free],
+		"elle est en %s" % _cell_of(first))
+
+	# --- Tout remettre où on l'a trouvé ---
+	# Les étapes suivantes (déplacement, attaque) jouent la position de départ du
+	# chapitre : la laisser défaite ferait passer l'attaque hors de portée, et le
+	# test d'attaque se déclarerait « non testable » au lieu d'échouer. Ce
+	# retour en arrière est aussi la seule preuve qu'on sait défaire un placement.
+	var origin: Node = _tile_at_cell(second_cell)
+	if origin:
+		await _click_world(first.global_position)
+		await _click_world(origin.global_position)
+	await _click_world(first.global_position)
+	await _click_world(second.global_position)
+
+	_check(_cell_of(first) == first_cell and _cell_of(second) == second_cell,
+		"le placement se défait : chacun retrouve sa case de départ",
+		"%s et %s" % [_cell_of(first), _cell_of(second)])
+
+
 ## Cliquer une unité doit la sélectionner et ouvrir son menu d'actions.
 func _test_select(pawn: Node) -> void:
 	await _click_world(pawn.global_position)
@@ -168,6 +253,59 @@ func _test_attack() -> void:
 				"%d → %d PV" % [attacker_hp, attacker.stats.hp])
 			_ok("riposte encaissée : %d PV" % counter_taken if counter_taken > 0
 				else "pas de riposte (cible tombée ou hors de portée)")
+
+
+## Rendre la main : l'adversaire doit jouer, puis rendre le tour au joueur.
+##
+## Autre trou de preuve resté ouvert. L'IA locale est éprouvée en headless, mais
+## en tant que *règle* : ce qu'elle décide, jamais ce qu'elle parvient à exécuter
+## sur un plateau monté. Un tour adverse qui ne se termine pas laisse la partie
+## figée sans qu'aucune suite headless ne s'en aperçoive.
+func _test_opponent_turn() -> void:
+	var before: Dictionary = {}
+	for p in _level.opponent.get_children():
+		if p is TacticsPawn and is_instance_valid(p) and p.is_alive():
+			before[p.get_instance_id()] = p.global_position
+	if before.is_empty():
+		_ok("Plus aucun adversaire en scène — tour adverse non testable ici")
+		return
+
+	# Le menu d'actions s'est refermé quand l'assaillant a fini son tour, et le
+	# bouton de fin de tour vit dedans. Un joueur ferait pareil : reprendre une
+	# unité encore disponible, puis rendre la main.
+	var idle: Node = _first_actable_pawn()
+	if idle:
+		await _click_world(idle.global_position)
+	if not _actions_menu().visible:
+		_ko("Le menu se rouvre pour rendre la main", "menu fermé, bouton inatteignable")
+		return
+
+	await _click_button(_action_button("Debug_next_turn"))
+	_check(not _level.participant.can_act(_level.player),
+		"passer le tour clôt celui de toutes les unités du joueur")
+
+	# L'adversaire joue ses pions l'un après l'autre, chacun avec son trajet
+	# animé : il lui faut du temps réel, pas quelques frames.
+	var moved: bool = false
+	var back_to_player: bool = false
+	for _i in 5400:
+		await physics_frame
+		if not moved:
+			for p in _level.opponent.get_children():
+				if not (p is TacticsPawn and is_instance_valid(p)):
+					continue
+				var was: Variant = before.get(p.get_instance_id())
+				if was != null and p.global_position.distance_to(was) > 0.9:
+					moved = true
+					break
+		if moved and _level.participant.can_act(_level.player):
+			back_to_player = true
+			break
+
+	_check(moved, "l'adversaire déplace au moins une unité de lui-même",
+		"aucun pion adverse n'a bougé")
+	_check(back_to_player, "le tour revient au joueur une fois l'adversaire passé",
+		"la partie est restée sur le camp adverse")
 #endregion
 
 
@@ -218,7 +356,9 @@ func _click_button(button: Button) -> void:
 
 
 #region Mise en place
-func _open_battle() -> bool:
+## Ouvre une bataille et s'arrête **avant** la confirmation du déploiement.
+## [returns] l'étape de placement encore en cours, ou `null` si elle a renoncé.
+func _open_battle() -> Node:
 	var scene: PackedScene = load("res://assets/scene/main.tscn")
 	_main = scene.instantiate()
 	root.add_child(_main)
@@ -233,12 +373,15 @@ func _open_battle() -> bool:
 	_level = _find_named(_main, "TacticsLevel")
 	if not _level:
 		_ko("Niveau chargé", "introuvable")
-		return false
+		return null
 
-	# Le placement des unités suspend la bataille : on le confirme.
 	var runner: Node = _level.get_node_or_null("ChapterRunner")
-	var phase: Node = runner.get_node_or_null("DeploymentPhase") if runner else null
-	if phase and phase.has_method("confirm"):
+	return runner.get_node_or_null("DeploymentPhase") if runner else null
+
+
+## Confirme le placement et récupère les contrôles de la bataille.
+func _start_battle(phase: Node) -> bool:
+	if phase and is_instance_valid(phase) and phase.has_method("confirm"):
 		phase.confirm()
 	for _i in 60:
 		await physics_frame
@@ -253,6 +396,48 @@ func _open_battle() -> bool:
 
 
 #region Utilitaires
+## Les unités du joueur réellement en scène.
+func _player_pawns() -> Array:
+	var out: Array = []
+	for p in _level.player.get_children():
+		if p is TacticsPawn and is_instance_valid(p) and not p.is_queued_for_deletion():
+			out.append(p)
+	return out
+
+
+## Case (colonne, ligne) sur laquelle se tient un pion, ou (-1, -1).
+func _cell_of(pawn: Node) -> Vector2i:
+	var tile: Node = pawn.get_tile() if pawn.has_method("get_tile") else null
+	return TacticsGrid.tile_to_grid(_level.arena, tile) if tile else Vector2i(-1, -1)
+
+
+func _tile_at_cell(cell: Vector2i) -> Node:
+	for tile in TacticsGrid.tiles(_level.arena):
+		if TacticsGrid.tile_to_grid(_level.arena, tile) == cell:
+			return tile
+	return null
+
+
+## Une case ouverte encore libre, choisie loin de toute unité.
+##
+## Loin, parce que le clic passe par un rayon depuis la caméra : une case collée
+## à un pion se ferait voler son clic par la figurine qui la masque.
+func _free_slot_away_from(phase: Node, pawns: Array) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_dist: float = -1.0
+	for slot: Vector2i in phase.plan.free_slots():
+		var tile: Node = _tile_at_cell(slot)
+		if not tile:
+			continue
+		var nearest: float = INF
+		for p in pawns:
+			nearest = minf(nearest, tile.global_position.distance_to(p.global_position))
+		if nearest > best_dist:
+			best_dist = nearest
+			best = slot
+	return best
+
+
 func _first_actable_pawn() -> Node:
 	for p in _level.player.get_children():
 		if p is TacticsPawn and is_instance_valid(p) and p.can_act():

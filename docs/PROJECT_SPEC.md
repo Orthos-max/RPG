@@ -74,7 +74,8 @@ data/
     network/     → net_service (parties par code d'accès)
     session/     → game_session (mode, camps, difficulté)
 assets/
-  maps/          → niveaux (map_level procédural, test_level sculpté)
+  maps/          → niveaux (map_level et outpost_level engendrés depuis MapData ;
+                   test_level, dernière arène sculptée, gardée comme cas d'essai)
   textures/      → actor, mob, ui
 docs/            → PROJECT_SPEC, CIEL_PROTOCOL, INSTALL
 scripts/
@@ -105,7 +106,11 @@ test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
 ### 3.4 Gameplay tactics (`data/modules/tactics/`)
 - **`tactics_level.gd`** — orquestre le niveau.
 - **`tactics_arena.gd`** — arène / grille de combat.
-- **`tactics_tile.gd`** + **`tile_raycasting.gd`** — tuiles + raycast souris.
+- **`tactics_tile.gd`** — tuiles : terrain, surlignage, ce qu'elles affichent.
+  Elles ne portent plus d'état de parcours depuis le 2026-08-07.
+- **`battle_grid.gd`** + **`path_field.gd`** (`data/models/world/map/`) — la grille
+  et le parcours **en données** : adjacence, occupation, distances, chemins,
+  tout sans moteur physique ni fenêtre.
 - **`tactics_participant.gd`** / **`tactics_player.gd`** / **`tactics_opponent.gd`** — participants.
 - **`pawn.gd`** — unité sur la grille.
 - **`support_tracker.gd`** — suivi des soutiens en session.
@@ -541,9 +546,15 @@ l'annulation et le redimensionnement.
 La passe du 2026-08-06 a livré les quatre features de jeu qui restaient
 codables : la **riposte**, le **menu d'équipement d'armes**, le **choix du terrain
 en préparation** et le **menu d'actions en français**.
+La passe du 2026-08-07 a livré les quatre derniers chantiers codables : la
+**carte du chapitre 2 rendue présentable**, le **placement et le tour adverse
+prouvés à la souris**, la **grille en données achevée**, et le **confort de
+l'éditeur de cartes**.
 **Backlog : 47 items faits, 3 restants** (partie en ligne sur deux machines,
-signature macOS, fichiers audio + animations de duel). Ordre conseillé pour la
-reprise — classé par ce que ça rapporte au projet, pas par facilité :
+signature macOS, fichiers audio + animations de duel) — tous **bloqués hors du
+code** : ils demandent du matériel, de l'argent ou des fichiers son. Ordre
+conseillé pour la reprise — classé par ce que ça rapporte au projet, pas par
+facilité :
 
 ### ✅ 1. La grille en données — première moitié faite (2026-08-05)
 
@@ -560,29 +571,28 @@ de mouvement, aucune au-delà). `TacticsGrid` — la conversion que parle le pon
 CielAI — passe par l'index quand il existe : une seule formule, et une
 consultation directe au lieu d'un balayage de toutes les tuiles.
 
-Ce qui reste de l'ancien monde :
-- `pf_root` / `pf_distance` vivent toujours sur les nœuds `StaticBody3D` ; le
-  parcours est juste, mais son état s'accroche encore à la scène.
-- Le repli sur `tile_raycasting.tscn` subsiste dans `TacticsTile`, pour les tuiles
-  hors index. À supprimer une fois la parité prouvée fenêtre ouverte (§6.2).
-- `TacticsPawn.get_tile()` reste un rayon vers le bas.
+**Seconde moitié faite le 2026-08-07.** Il ne reste rien de l'ancien monde :
 
-### 🥇 1bis. La grille en données (le refactor qui débloque le reste)
+- `pf_root` / `pf_distance` ont quitté les nœuds `StaticBody3D` pour
+  [`path_field.gd`](../data/models/world/map/path_field.gd), indexé par
+  coordonnée. `TacticsTile` ne garde que ce qu'elle dessine (`reachable`,
+  `attackable`, `hover`). Le parcours s'éprouve sans monter de scène.
+- Le repli sur `tile_raycasting.tscn` a disparu, scène et script compris : toute
+  tuile passe par `TacticsTileService`, donc par l'index bâti dans la foulée —
+  il n'y avait plus aucun cas à rattraper.
+- `TacticsPawn.get_tile()` consulte l'index au lieu de lancer un rayon vers le
+  bas. Le `RayCast3D` du pion est retiré de `pawn.tscn`, et le rattrapage que
+  `ChapterRunner` devait faire après chaque placement (`force_raycast_update`)
+  n'a plus lieu d'être.
 
-Aujourd'hui, « qui est à côté de qui » et « cette case est-elle occupée » se
-répondent par des **rayons 3D** (`tile_raycasting.tscn`, `TacticsTile.get_neighbors()`,
-`get_tile_occupier()`), et le pathfinding accroche son état (`pf_root`, `pf_distance`)
-sur des nœuds `StaticBody3D`. Trois conséquences déjà payées :
-
-- **Aucun tour de combat complet n'est testable en headless** — la limite connue
-  documentée plus bas vient précisément de là.
-- Des règles pures irréprochables (`MapDocument`, `ObjectiveDB`, `DeploymentPlan`)
-  posées sur un cœur de déplacement qui, lui, exige une scène 3D montée.
-- Tout changement de rendu bute dessus.
-
-`MapData` contient déjà le nécessaire. Ce n'est pas une réécriture : déplacer
-l'adjacence et l'occupation dans la donnée, et laisser les tuiles ne faire que de
-l'affichage.
+**Un bug de fond trouvé au passage.** `BattleGrid.coord_at_position` faisait
+`floori(x + 0.5)`, ce qui suppose des centres de case sur les entiers. Une carte
+de largeur **paire** les met sur les demis : la frontière entre deux cases
+tombait alors exactement sur le centre de l'une d'elles. Un pion arrêté à
+quelques centièmes en deçà de son centre était attribué à la case précédente, et
+`adjust_to_center` l'y recollait — **un déplacement de cinq cases en valait
+quatre**. Invisible tant que la case se lisait au rayon. La grille compte
+désormais les cases depuis une tuile réelle, ce qui règle les deux parités.
 
 ### ✅ 2. Prouver une bataille fenêtre ouverte — **fait le 2026-08-06**
 
@@ -604,8 +614,17 @@ elle ne peut pas tourner en `--headless`, rien n'y dessine ni ne clique.
 > du jeu mais une lacune du test — achever une cible donne de l'XP, et une montée
 > de niveau augmente les PV maximum. L'invariant ne tient qu'à niveau constant.
 
-Restent hors de son champ : le déploiement à la souris (échange de deux unités),
-le tour adverse, et la caméra.
+**Étendue le 2026-08-07 — seize vérifications.** Elle joue désormais aussi le
+**placement d'avant-bataille** (échanger deux unités, en poser une sur une case
+ouverte, tout défaire) et le **tour adverse** (rendre la main, voir l'IA locale
+déplacer ses pions d'elle-même, et récupérer le tour).
+
+Le placement se défait avant que la bataille commence, et c'est délibéré : les
+étapes suivantes jouent la position de départ du chapitre, et la laisser défaite
+mettait l'attaque hors de portée — le test se déclarait alors « non testable »
+au lieu d'échouer, ce qui est la pire des deux issues.
+
+Reste hors de son champ : la caméra.
 
 ### 🗂 2bis. L'argument d'origine, gardé pour mémoire
 
@@ -626,6 +645,7 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 | ✅ **La caméra du jeu** — orthographique, inclinaison fixe, posée sur le plateau (2026-08-05) | Fait : [`framing.gd`](../data/models/view/camera/tactics/framing.gd). Voir le journal ci-dessous |
 | ✅ **Décors posés sur les cases** — arbres, rochers, créneaux (2026-08-05) | Fait : [`props.gd`](../data/models/view/scenery/props.gd), en bataille **et** dans l'éditeur |
 | ✅ **Surlignage de portée** — teinté, plus posé d'un bloc (2026-08-06) | Fait : [`tactics_scenery.gd`](../data/models/view/scenery/tactics_scenery.gd) `highlight_material()`. Le grain, la trame des cases et le terrain restent lisibles sous la teinte |
+| ✅ **La carte du chapitre 2 rendue présentable** (2026-08-07) | Fait : [`outpost_map.tres`](../data/models/world/map/outpost_map.tres). Elle était plate et entièrement « en herbe » — 200 tuiles posées à la main, sans terrain déclaré, donc sans un seul décor. Devenue un `MapData` de 10 × 20 : ruines du poste avancé, rempart percé d'une brèche, montagne à l'ouest, mare, bois, chemin, et du relief |
 
 ### ✅ 4. Supprimer `fe_2d/` — fait le 2026-08-06
 
@@ -649,10 +669,29 @@ sauvegardes à migrer. La table de correspondance et le chemin de migration peuv
 - 🔨 **Installeur Windows exécuté.** La chaîne produit désormais un `.exe` (§4bis) ;
   il reste à l'installer, le lancer et le désinstaller sur une machine Windows.
 
-### 7. Confort de l'éditeur de cartes
+### ✅ 7. Confort de l'éditeur de cartes — fait le 2026-08-07
 
-Roster figé à 9 unités sans réglage de niveau, aucun import/export dans l'interface
-(le JSON se copie à la main). Utile, nettement moins urgent que ce qui précède.
+- **Le roster se lit sur le disque** au lieu d'être une liste de neuf chemins
+  écrite dans l'interface. Ajouter une fiche au jeu suffit désormais à la rendre
+  posable — et les **personnages écrits dans l'éditeur de personnages** le sont
+  aussi, pour les deux camps (rien ne dit qu'une créature de son cru soit un
+  allié). Ils n'ont pas de `.tres` : le pion emprunte une fiche de départ,
+  entièrement réécrite par `ChapterRunner.apply_roster_unit` une fois en scène.
+- **Niveau des unités posées** (1 à 20), réglé sur le pinceau plutôt que sur la
+  case : on pose six squelettes de niveau 8 sans rouvrir le panneau. Une unité
+  posée au-dessus de 1 **monte réellement les échelons**, par les croissances de
+  sa classe — lui écrire `level = 8` lui donnerait l'étiquette d'une vétérane et
+  les statistiques d'une recrue. Le tirage est à graine fixe (nom + niveau visé),
+  donc identique d'une ouverture à l'autre et sur les deux machines d'une partie
+  en réseau, comme le décor.
+- **Partage de cartes** : bouton « 🔗 Partager » — copier la carte dans le
+  presse-papiers, la remplacer par celle du presse-papiers, exporter vers un
+  fichier ou en importer un (sélecteur natif, tout le disque : une carte reçue
+  d'un ami est dans les téléchargements, pas dans `user://maps/`). Le format
+  d'échange est celui de l'enregistrement — pas de second format à maintenir.
+  Exporter accepte un brouillon injouable, là où enregistrer le refuse : on doit
+  pouvoir envoyer une carte inachevée à quelqu'un pour qu'il la finisse. Un
+  import s'annule au Ctrl+Z comme n'importe quel autre geste.
 
 ### 8. Le reste
 
@@ -1371,4 +1410,66 @@ Elle survit à la sauvegarde comme n'importe quelle unité.
 
 ```
 bash scripts/test_all.sh --window   # 58 / 509 / 77 OK + test_map + 9 OK
+```
+
+### Passe du 2026-08-07 — les quatre chantiers restés codables
+
+Les quatre points que le §6 laissait ouverts, dans l'ordre où ils ont été faits.
+
+**1. La carte du chapitre 2, présentable.** Elle était jouable et vide : 200
+tuiles posées à la main, plates, sans terrain déclaré — donc affichées en herbe
+et sans un seul décor, `TacticsProps` ne posant d'arbres et de rochers que sur
+les cases qui annoncent leur terrain. Elle est désormais un `MapData` de 10 × 20
+(`outpost_map.tres`, `outpost_arena.tscn`, `outpost_level.tscn`) : ruines du
+poste avancé, rempart percé d'une brèche de trois cases, montagne à l'ouest,
+mare, bois, chemin, et du relief là où personne ne démarre. Les pions sont
+reposés au centre exact de leur case.
+
+`test_level.tscn` reste au dépôt, exprès : c'est la dernière arène sculptée, et
+donc le seul cas d'essai honnête pour `ChapterMap.scene_tiles` et pour le refus
+d'une carte qui ne déclare pas son terrain. Les tests qui portaient sur le
+chapitre 2 pointent sur elle.
+
+Ce que le test vérifie maintenant : une grille de 10 × 20, plusieurs terrains
+(dont bois et rempart), **une seule zone franchissable** au saut le plus faible
+du jeu, la marche la plus haute bien en deçà de ce saut, chaque départ praticable
+et de plain-pied, et assez de cases ouvertes pour les places du chapitre.
+
+**2. `test_window.gd` étendu — 9 vérifications, puis 16.** Le placement
+d'avant-bataille à la souris (échanger deux unités, en poser une sur une case
+ouverte, tout défaire) et le tour adverse (rendre la main, voir l'IA locale jouer
+d'elle-même, récupérer le tour). Deux détails payés :
+
+- Le placement doit se **défaire** avant que la bataille commence. Sans cela,
+  l'unité déplacée se retrouvait loin des ennemis et le test d'attaque se
+  déclarait « non testable » — il passait au vert en ne vérifiant rien.
+- Le bouton de fin de tour vit dans le menu d'actions, qui se referme quand
+  l'assaillant a fini son tour. Il faut reprendre une unité disponible d'abord,
+  comme le ferait un joueur.
+
+**3. La grille en données, finie.** Voir §6.1 : `PathField` remplace `pf_root` /
+`pf_distance` sur les nœuds, `TacticsPawn.get_tile()` consulte l'index,
+`tile_raycasting` disparaît, et le `RayCast3D` du pion avec.
+
+> **Le bug que ce refactor a révélé.** En passant `get_tile()` à l'index, un
+> déplacement de cinq cases s'est mis à en valoir quatre. Ce n'était pas le
+> nouveau code : `BattleGrid.coord_at_position` faisait `floori(x + 0.5)`, ce qui
+> suppose des centres de case sur les entiers. Une carte de largeur **paire** les
+> met sur les demis, et la frontière entre deux cases tombait alors exactement
+> sur le centre de l'une d'elles. Un pion arrêté à 0,14 de son centre — la
+> tolérance d'arrivée du déplacement — était attribué à la case d'avant, et
+> `adjust_to_center` l'y recollait. Le rayon, lui, ne trouvait rien à cet endroit
+> et ne recentrait donc pas : le bug était là depuis le début, masqué par
+> l'imprécision qu'il remplaçait. La grille compte désormais les cases depuis une
+> tuile réelle.
+
+**4. Confort de l'éditeur de cartes.** Voir §6.7 : roster lu sur le disque et
+ouvert aux personnages du joueur, niveau des unités posées (avec montée réelle et
+tirage à graine fixe), et partage de cartes par presse-papiers ou par fichier.
+
+`shot.gd` accepte un argument de plus : `editor units` ouvre le sélecteur
+d'unité, le seul moyen de juger cette liste autrement qu'en lisant du code.
+
+```
+bash scripts/test_all.sh --window   # 58 / 549 / 77 OK + test_map + 16 OK
 ```

@@ -37,6 +37,16 @@ func _init() -> void:
 			pass
 		"editor":
 			main.show_editor()
+			# `editor units` ouvre le sélecteur d'unité : c'est le seul moyen de
+			# juger cette liste-là autrement qu'en lisant du code.
+			if args.size() > 2 and args[2] == "units":
+				for _i in 20:
+					await physics_frame
+				var editor: Node = main._level
+				if editor and editor.has_node("EditorUI"):
+					editor.get_node("EditorUI").open_unit_picker("opponent", 8)
+				else:
+					push_error("[shot] éditeur introuvable pour ouvrir le sélecteur")
 		"range":
 			# Une unité en main, sa portée de déplacement affichée : c'est le seul
 			# moyen de juger le surlignage autrement qu'en lisant du code.

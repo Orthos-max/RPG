@@ -193,7 +193,7 @@ func _apply_roster() -> void:
 			continue
 
 		_deployed_names.append(unit_name)
-		_apply_unit(p.stats, unit)
+		apply_roster_unit(p.stats, unit)
 
 	print_rich("[color=cyan]📋 Déploiement : %s[/color]" % (
 		", ".join(_deployed_names) if not _deployed_names.is_empty() else "roster par défaut du niveau"
@@ -227,11 +227,12 @@ func _check_protected_present() -> void:
 ## Contrairement à [DeploymentPhase], ceci marche **aussi en headless** : poser un
 ## pion sur une tuile connue ne demande ni collision ni rayon, juste sa position.
 ##
-## Un pion sait sur quelle case il se tient par un `RayCast3D` dirigé vers le bas,
-## dont le résultat date de la frame précédente. Le téléporter ne suffit donc pas :
-## à la frame suivante, il se recentrait sur l'ancienne tuile — celle que le rayon
-## croyait encore avoir sous lui — et revenait exactement à l'endroit où l'éditeur
-## l'avait laissé. D'où la mise à jour forcée du rayon, juste après le déplacement.
+## Un pion savait sur quelle case il se tient par un `RayCast3D` dirigé vers le
+## bas, dont le résultat datait de la frame précédente : le téléporter ne
+## suffisait pas, il se recentrait à la frame suivante sur la tuile que le rayon
+## croyait encore avoir sous lui. Il fallait forcer le rayon à la main juste
+## après. Depuis que la case se lit dans [BattleGrid] (2026-08-07), la position
+## suffit — et ce rattrapage a disparu.
 func _apply_deployment_tiles() -> void:
 	var campaign: Node = get_node_or_null("/root/Campaign")
 	if not campaign or not level or not level.player or not level.arena:
@@ -259,22 +260,10 @@ func _apply_deployment_tiles() -> void:
 		p.res.pathfinding_tilestack = []
 		p.velocity = Vector3.ZERO
 		p.global_position = tile.global_position + Vector3(0, DEPLOYMENT.PAWN_LIFT, 0)
-		_refresh_tile_sensor(p)
 		placed += 1
 
 	if placed > 0:
 		print_rich("[color=cyan]⚑ %d unité(s) posée(s) sur la case choisie en préparation[/color]" % placed)
-
-
-## Fait relire au pion la case sous ses pieds, tout de suite.
-##
-## Sans cela, son rayon garde le collisionneur de la frame précédente : le pion
-## se recentrerait sur la tuile qu'il vient de quitter, annulant le placement.
-func _refresh_tile_sensor(pawn: Node3D) -> void:
-	pawn.force_update_transform()
-	var sensor: RayCast3D = pawn.get_node_or_null("Tile") as RayCast3D
-	if sensor:
-		sensor.force_raycast_update()
 
 
 ## Ouvre le placement des unités avant le premier tour.
@@ -297,7 +286,12 @@ func _start_deployment() -> void:
 	add_child(phase)
 
 
-func _apply_unit(stats: Stats, unit: Dictionary) -> void:
+## Reporte une entrée de roster sur les statistiques d'un pion.
+##
+## Publique et statique : l'éditeur de cartes en a besoin lui aussi, pour poser
+## sur une carte un personnage écrit à la main. Sans cela il faudrait deux
+## chemins d'application, et deux occasions de diverger.
+static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	stats.level = int(unit.get("level", stats.level))
 	stats.exp = int(unit.get("exp", stats.exp))
 	stats.character_class = int(unit.get("class_id", stats.character_class))
@@ -320,7 +314,7 @@ func _apply_unit(stats: Stats, unit: Dictionary) -> void:
 ## Reporte l'arsenal du roster sur le pion : sans cela, l'arme achetée et
 ## équipée à l'écran de préparation restait dans la sauvegarde et le pion
 ## entrait en scène avec l'arme brute de sa fiche.
-func _apply_arsenal(stats: Stats, unit: Dictionary) -> void:
+static func _apply_arsenal(stats: Stats, unit: Dictionary) -> void:
 	var arsenal: Array = unit.get("weapons", [])
 	# Un fourreau vide veut dire deux choses opposées selon l'unité : « fiche
 	# d'avant le catalogue, ses valeurs brutes font foi » ou « elle a tout

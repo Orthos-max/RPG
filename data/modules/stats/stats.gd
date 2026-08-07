@@ -486,6 +486,30 @@ func gain_exp(amount: int, rng: RandomNumberGenerator = null) -> Dictionary:
 	return result
 
 
+## Amène l'unité au niveau demandé, en lui faisant gravir les échelons.
+##
+## Une carte de l'éditeur pose des unités à un niveau choisi. Leur donner
+## directement `level = 8` mentirait : elles auraient les statistiques d'une
+## recrue avec l'étiquette d'une vétérane. Elles montent donc réellement, par
+## les croissances de leur classe — même chemin que la campagne.
+##
+## Le tirage est **graine fixe**, dérivée du nom et du niveau visé : rouvrir une
+## carte donne la même adversaire, et les deux machines d'une partie en réseau
+## la voient identique sans rien s'échanger. C'est la même exigence que le décor
+## ([TacticsProps]).
+##
+## [returns] le niveau réellement atteint.
+func raise_to_level(target: int) -> int:
+	if target <= level:
+		return level
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("%s|%d" % [override_name if override_name else expertise, target])
+	while level < target:
+		_perform_level_up(rng)
+	return level
+
+
 ## Internal level up using RNG growth rates
 ## [param rng] Générateur optionnel (graine fixe = résultat reproductible)
 func _perform_level_up(rng: RandomNumberGenerator = null) -> Dictionary:
