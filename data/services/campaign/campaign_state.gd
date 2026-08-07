@@ -99,6 +99,15 @@ func complete_chapter(bonuses: Array = []) -> void:
 			gold += 100
 	for path: String in chapter.recruits:
 		recruit(path)
+
+	# On repart d'aplomb. Les blessures traversaient les chapitres et rien ne les
+	# effaçait : il fallait payer l'intendance pour se relever, et une campagne
+	# mal engagée n'avait aucun moyen de se redresser. C'est aussi la convention
+	# de Fire Emblem — une bataille finie, l'armée se soigne.
+	#
+	# Les morts ne reviennent pas : la mort permanente reste ce qu'elle est.
+	rest_army()
+
 	chapter_completed.emit(chapter.id, bonuses)
 	chapter_index += 1
 	turn_count = 1
@@ -302,6 +311,29 @@ func unit_class_name(unit: Dictionary) -> String:
 
 
 #region Intendance (économie entre chapitres)
+## Remet toute l'armée d'aplomb, sans rien coûter.
+##
+## Le repos entre deux chapitres, par opposition à [method heal_all] qui est le
+## service **payant** de l'intendance — celui-là sert encore à se soigner en
+## cours de chapitre, avant d'engager une bataille avec des blessés.
+##
+## Ne ressuscite personne : une unité tombée en mort permanente le reste.
+## [returns] le nombre d'unités qui en avaient besoin.
+func rest_army() -> int:
+	var healed: int = 0
+	for unit: Dictionary in roster:
+		if not bool(unit.get("alive", true)):
+			continue
+		var max_hp: int = int(unit.get("max_hp", 0))
+		if int(unit.get("hp", max_hp)) >= max_hp:
+			continue
+		unit["hp"] = max_hp
+		healed += 1
+	if healed > 0:
+		roster_changed.emit()
+	return healed
+
+
 ## Coût de soin d'une unité (par point de vie manquant).
 func heal_cost(unit_id: String) -> int:
 	var unit: Dictionary = get_unit(unit_id)

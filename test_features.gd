@@ -848,9 +848,40 @@ func _test_economy() -> void:
 		"unité soignée à plein")
 	_check(not bool(campaign.heal_unit(id)["ok"]), "soin refusé si déjà au maximum")
 
-	# Les blessures survivent au chapitre (sinon l'intendance ne servirait à rien)
+	# Les blessures survivent à la bataille : c'est ce qui rend l'intendance utile
+	# après une défaite, où le chapitre n'est pas bouclé et rien ne les efface.
 	campaign.apply_battle_result({"id": id, "hp": 3})
-	_check(int(campaign.get_unit(id)["hp"]) == 3, "blessures conservées entre chapitres")
+	_check(int(campaign.get_unit(id)["hp"]) == 3, "blessures conservées après la bataille")
+
+	# Mais un chapitre bouclé remet l'armée d'aplomb, sans rien coûter. Sans cela
+	# une campagne mal engagée n'avait aucun moyen de se redresser : il fallait
+	# payer, et l'or manque justement quand ça va mal.
+	var purse: int = campaign.gold
+	var wounded_id: String = id
+	campaign.apply_battle_result({"id": wounded_id, "hp": 2})
+
+	# Une unité tombée ne doit pas se relever pour autant.
+	var fallen: Dictionary = {}
+	for u: Dictionary in campaign.roster:
+		if str(u.get("id", "")) != wounded_id:
+			fallen = u
+			break
+	if not fallen.is_empty():
+		fallen["alive"] = false
+		fallen["hp"] = 0
+
+	campaign.complete_chapter([])
+	_check(int(campaign.get_unit(wounded_id)["hp"])
+			== int(campaign.get_unit(wounded_id)["max_hp"]),
+		"un chapitre bouclé rend tous ses PV à l'unité blessée",
+		"%d PV" % int(campaign.get_unit(wounded_id)["hp"]))
+	_check(campaign.gold >= purse, "et ce repos ne coûte rien")
+	if not fallen.is_empty():
+		_check(not bool(fallen.get("alive", true)) and int(fallen.get("hp", 1)) == 0,
+			"la mort permanente reste permanente : personne ne se relève")
+
+	_check(campaign.rest_army() == 0,
+		"l'armée déjà d'aplomb, le repos n'a plus rien à soigner")
 
 	# Recrutement
 	campaign.gold = 2000

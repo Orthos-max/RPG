@@ -75,7 +75,9 @@ for suite in "${SUITES[@]}"; do
 done
 
 # Les suites fenêtrées : même lecture, mais sans `--headless`.
-for suite in "${WINDOW_SUITES[@]}"; do
+# `${a[@]+"${a[@]}"}` : sans cela, `set -u` fait échouer le script quand le
+# tableau est vide — c'est-à-dire à chaque lancement sans `--window`.
+for suite in ${WINDOW_SUITES[@]+"${WINDOW_SUITES[@]}"}; do
     log="$LOG_DIR/$suite.log"
     "$GODOT" --path "$PROJECT_DIR" --resolution 1280x720 --script "$suite.gd" >"$log" 2>&1
     code=$?

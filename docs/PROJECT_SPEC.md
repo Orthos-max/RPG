@@ -1603,3 +1603,26 @@ Vérifié en faisant échouer le test sur le code non corrigé.
 ```
 bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 18 + 14 OK
 ```
+
+### Passe du 2026-08-07 (5) — l'armée se repose entre les chapitres
+
+Aurèle : « il n'y a pas de soin entre les chapitres, ajoutes-en un automatique. »
+
+Les blessures traversaient les chapitres et rien ne les effaçait : il fallait
+payer l'intendance pour se relever. C'est le mauvais sens de la difficulté — l'or
+manque justement quand la campagne va mal, donc une partie mal engagée n'avait
+aucun moyen de se redresser. C'est aussi la convention de Fire Emblem : une
+bataille finie, l'armée se soigne.
+
+`CampaignState.rest_army()` remet tous les survivants à plein, gratuitement, dans
+`complete_chapter` — donc avant la sauvegarde, et seulement sur un chapitre
+**bouclé**. La mort permanente n'est pas touchée : personne ne se relève.
+
+**L'intendance garde son utilité**, et c'est pour ça que le soin payant reste :
+après une **défaite**, le chapitre n'est pas bouclé, rien n'est effacé, et il
+faut décider si l'on paie pour repartir d'aplomb ou si l'on retente avec des
+blessés.
+
+```
+bash scripts/test_all.sh --window   # 58 / 561 / 77 OK + test_map + 18 + 14 OK
+```
