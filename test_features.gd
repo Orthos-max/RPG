@@ -57,6 +57,7 @@ func _init() -> void:
 	_test_map_history()
 	_test_battle_grid()
 	_test_path_field()
+	_test_traversal_rules()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -2481,4 +2482,107 @@ func _test_path_field() -> void:
 
 	for node: Node3D in nodes:
 		node.free()
+
+
+## Ce que le parcours accepte de traverser : terrain, alliés, adversaires.
+##
+## Éprouvé sur le service réel, pas sur une règle recopiée — c'est le service qui
+## s'est trompé. Et c'est possible sans fenêtre depuis le 2026-08-07 seulement :
+## avant, l'occupation se lisait par un rayon.
+func _test_traversal_rules() -> void:
+	print("\n🚶 Test 23: ce qu'une unité traverse")
+
+	var arena_res: Resource = load("res://data/models/world/combat/arena/arena.tres")
+	var service := TacticsArenaService.new(arena_res)
+	var grid := BattleGrid.new()
+	service.grid = grid
+
+	# Une ligne de cinq cases, toutes praticables.
+	var tiles: Array[TacticsTile] = []
+	for col: int in 5:
+		var tile := TacticsTile.new()
+		tile.terrain_type = MAP_DATA.TerrainType.GRASS
+		tile.position = Vector3(float(col) - 2.5 + 0.5, 0.0, 0.0)
+		grid.add_tile(tile, tile.position)
+		tiles.append(tile)
+
+	var origin: TacticsTile = tiles[0]
+	var far: Vector2i = grid.coord_of(tiles[4])
+	var ally := RefCounted.new()
+	var foe := RefCounted.new()
+	var allies: Array = [ally]
+
+	# Rien sur la route : on va au bout.
+	service.process_surrounding_tiles(origin, 2.0, allies)
+	_check(is_equal_approx(service.field.distance_at(far), 4.0),
+		"une ligne dégagée se parcourt de bout en bout",
+		str(service.field.distance_at(far)))
+
+	# Un allié au milieu : on passe derrière lui. C'est le bug corrigé le
+	# 2026-08-07 — le test « est-ce un allié ? » était enfermé dans une branche
+	# qui ne s'exécutait jamais, et une unité était arrêtée par ses camarades.
+	grid.place_occupant(grid.coord_of(tiles[2]), ally)
+	service.field.clear()
+	service.process_surrounding_tiles(origin, 2.0, allies)
+	_check(is_equal_approx(service.field.distance_at(far), 4.0),
+		"on traverse les siens : l'allié au milieu ne barre pas la route",
+		"la case du bout est à %s" % service.field.distance_at(far))
+
+	# Mais on ne s'y arrête pas : une case occupée n'est jamais une destination.
+	# (`mark_reachable_tiles` s'en charge, et il faut une arène pour l'appeler —
+	# on vérifie ici la règle qu'il consulte.)
+	_check(grid.is_taken(tiles[2]),
+		"la case de l'allié reste occupée, donc refusée comme destination")
+
+	# Un adversaire au milieu : la route est coupée.
+	grid.place_occupant(grid.coord_of(tiles[2]), foe)
+	service.field.clear()
+	service.process_surrounding_tiles(origin, 2.0, allies)
+	_check(is_zero_approx(service.field.distance_at(far))
+			and not service.field.has_root(far),
+		"on ne traverse pas l'adversaire : le bout devient inatteignable",
+		str(service.field.distance_at(far)))
+
+	# Sans liste d'alliés, ce n'est plus un déplacement mais une portée d'arme :
+	# l'occupation ne compte pas, un arc tire par-dessus les têtes.
+	service.field.clear()
+	service.process_surrounding_tiles(origin, 2.0)
+	_check(is_equal_approx(service.field.distance_at(far), 4.0),
+		"une portée d'arme ignore qui se tient sur le chemin")
+
+	# Le terrain, lui, arrête tout le monde.
+	grid.place_occupant(grid.coord_of(tiles[2]), null)
+	tiles[2].terrain_type = MAP_DATA.TerrainType.WATER
+	service.field.clear()
+	service.process_surrounding_tiles(origin, 2.0, allies)
+	_check(not service.field.has_root(far), "un lac coupe la route à tous")
+
+	# Le dénivelé aussi — et c'est le **saut** qui en décide, pas le mouvement.
+	# Le joueur passait son mouvement (5) là où l'IA passe son saut (2) : il
+	# escaladait des falaises que l'adversaire ne pouvait pas suivre.
+	tiles[2].terrain_type = MAP_DATA.TerrainType.GRASS
+	var cliff := BattleGrid.new()
+	var ledges: Array[TacticsTile] = []
+	for col: int in 3:
+		var tile := TacticsTile.new()
+		tile.terrain_type = MAP_DATA.TerrainType.GRASS
+		# La case du milieu est perchée trois unités plus haut.
+		tile.position = Vector3(float(col) - 1.0, 3.0 if col == 1 else 0.0, 0.0)
+		cliff.add_tile(tile, tile.position)
+		ledges.append(tile)
+	service.grid = cliff
+
+	service.field.clear()
+	service.process_surrounding_tiles(ledges[0], 2.0, allies)
+	_check(not service.field.has_root(cliff.coord_of(ledges[1])),
+		"un saut de 2 ne franchit pas une marche de 3")
+	service.field.clear()
+	service.process_surrounding_tiles(ledges[0], 5.0, allies)
+	_check(service.field.has_root(cliff.coord_of(ledges[1])),
+		"un saut de 5 la franchirait — d'où l'écart entre les deux camps")
+
+	for tile: TacticsTile in tiles:
+		tile.free()
+	for tile: TacticsTile in ledges:
+		tile.free()
 #endregion

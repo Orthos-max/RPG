@@ -58,29 +58,43 @@ func configure_tiles(arena: TacticsArena) -> void:
 ## Calcule le parcours depuis une tuile.
 ##
 ## [param root_tile] La tuile de départ.
-## [param height] Le dénivelé franchissable d'une case à l'autre.
-## [param allies_on_map] Les unités du camp qui joue. Non vide, elles bloquent —
-## voir [method _passable].
+## [param height] Le dénivelé franchissable d'une case à l'autre (le saut).
+## [param allies_on_map] Les unités du camp qui joue. **C'est cette liste qui dit
+## de quel calcul il s'agit** :
+##
+## - **non vide** — un déplacement. On traverse les siens, jamais l'adversaire.
+## - **vide** — une portée d'arme. L'occupation ne compte pas : un arc tire
+##   par-dessus les têtes, et une cible doit rester visée même si quelqu'un se
+##   tient entre les deux.
 func process_surrounding_tiles(root_tile: TacticsTile, height: float, allies_on_map: Array = []) -> void:
 	if not grid or not grid.has_tile(root_tile):
 		return
-	# `allies_on_map` ne sert qu'à savoir s'il faut tenir compte de l'occupation :
-	# la liste elle-même n'est jamais consultée. C'est la règle d'origine, gardée
-	# telle quelle — le ciblage d'attaque l'appelle sans liste précisément pour
-	# traverser les pions, et la changer déplacerait la portée des armes.
-	var ignore_occupancy: bool = allies_on_map.is_empty()
 	field.expand(grid, grid.coord_of(root_tile), height,
-		func(coord: Vector2i) -> bool: return _passable(coord, ignore_occupancy))
+		func(coord: Vector2i) -> bool: return _passable(coord, allies_on_map))
 
 
 ## Une case se traverse-t-elle ? Terrain d'abord, occupation ensuite.
-func _passable(coord: Vector2i, ignore_occupancy: bool) -> bool:
+##
+## Traverser n'est pas s'arrêter : [method mark_reachable_tiles] refuse toute
+## case occupée comme destination. On peut donc passer derrière son voisin sans
+## pouvoir se poser sur lui — la règle de Fire Emblem.
+##
+## C'est ce que le code d'origine annonçait sans le faire : son test
+## « l'occupant est-il un allié ? » était enfermé dans une branche qui ne
+## s'exécutait que si la liste d'alliés était **vide**, donc il répondait
+## toujours non. Résultat, une unité était arrêtée par ses propres camarades.
+func _passable(coord: Vector2i, allies_on_map: Array) -> bool:
 	var tile: Node = grid.tile_at(coord)
 	if not tile:
 		return false
 	if not MAP_DATA.is_walkable(int(tile.terrain_type)):
 		return false
-	return ignore_occupancy or not grid.is_taken(tile)
+
+	if allies_on_map.is_empty():
+		return true  # Portée d'arme : l'occupation ne compte pas.
+
+	var occupier: Object = grid.occupant_of(tile)
+	return occupier == null or occupier in allies_on_map
 
 
 ## Get the pathfinding tilestack to a target tile

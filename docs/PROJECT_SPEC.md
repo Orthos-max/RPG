@@ -1473,3 +1473,42 @@ d'unité, le seul moyen de juger cette liste autrement qu'en lisant du code.
 ```
 bash scripts/test_all.sh --window   # 58 / 549 / 77 OK + test_map + 16 OK
 ```
+
+### Passe du 2026-08-07 (2) — deux règles de déplacement qui mentaient
+
+Deux bugs trouvés en refactorant le parcours, laissés de côté ce jour-là parce
+qu'ils touchent à l'équilibre, puis corrigés sur décision d'Aurèle.
+
+**On ne pouvait pas traverser ses propres unités.** `process_surrounding_tiles`
+annonçait le contraire — il testait « l'occupant est-il un allié ? » — mais ce
+test était enfermé dans une branche qui ne s'exécutait que si la liste d'alliés
+était **vide**, auquel cas la réponse était forcément non. Résultat : toute case
+occupée bloquait, y compris celles de ses propres camarades. Une unité coincée
+derrière ses voisins ne pouvait plus sortir de la mêlée.
+
+La règle est désormais celle de Fire Emblem : on **traverse** les siens, jamais
+l'adversaire, et on ne s'**arrête** sur personne (`mark_reachable_tiles` refusait
+déjà toute case occupée comme destination, il n'a pas bougé). La liste d'alliés
+dit maintenant explicitement de quel calcul il s'agit : non vide, c'est un
+déplacement ; vide, c'est une portée d'arme, et l'occupation ne compte pas — un
+arc tire par-dessus les têtes.
+
+**Le joueur et l'IA ne franchissaient pas les mêmes dénivelés.** Le deuxième
+argument de `process_surrounding_tiles` est la hauteur franchissable ; l'IA
+(`ai_executor`, `ciel_ai`) y passe le `jump` du pion (2), le joueur y passait son
+`movement` (5). Deux camps, deux règles : le joueur escaladait des falaises que
+l'adversaire ne pouvait pas suivre. `plyr_serv` passe désormais `jump` lui aussi.
+
+> **Sans effet visible sur les cartes actuelles**, et il faut le dire : aucune
+> n'a de marche assez haute pour que 2 et 5 diffèrent (le relief y plafonne à
+> 0,75 de dénivelé perçu). Ça se serait vu sur une carte dessinée dans l'éditeur,
+> qui autorise des hauteurs de -1 à 3.
+
+Le premier est tenu par un test (`_test_traversal_rules`), éprouvé sur le service
+réel et non sur une règle recopiée — **et vérifié en le faisant échouer** sur
+l'ancien code avant de le déclarer bon. Il ne demande pas de fenêtre : c'est le
+premier bénéfice concret du parcours sorti des nœuds.
+
+```
+bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 16 OK
+```

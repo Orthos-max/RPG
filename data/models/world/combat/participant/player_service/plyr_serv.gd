@@ -73,7 +73,12 @@ func show_available_movements() -> void:
 		return
 	
 	camera.target = p
-	arena.process_surrounding_tiles(p.get_tile(), int(p.stats.movement), p.get_parent().get_children())
+	# Le deuxième argument est le **dénivelé franchissable**, pas la distance : le
+	# joueur passait son `movement` (5) là où l'IA passe son `jump` (2). Il
+	# escaladait donc des falaises que l'adversaire ne pouvait pas suivre — deux
+	# camps, deux règles. La distance, elle, est bornée par `mark_reachable_tiles`
+	# juste en dessous.
+	arena.process_surrounding_tiles(p.get_tile(), p.stats.jump, p.get_parent().get_children())
 	arena.mark_reachable_tiles(p.get_tile(), p.stats.movement)
 	res.stage = res.STAGE_SELECT_LOCATION
 
