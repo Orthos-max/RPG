@@ -1512,3 +1512,46 @@ premier bénéfice concret du parcours sorti des nœuds.
 ```
 bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 16 OK
 ```
+
+### Passe du 2026-08-07 (3) — trois retours de jeu réel d'Aurèle
+
+**Le plantage à la mort de Virion.** L'adversaire qui le vise pose la caméra sur
+lui ; Virion meurt et quitte la scène une demi-seconde plus tard, pendant que la
+caméra le poursuit encore. La garde en place — `if not res.target or res.target
+== null` — répond juste **en debug**, où Godot annule les références aux objets
+libérés. Dans une build **exportée**, cette protection n'existe pas : la
+référence reste pendante, répond « vrai », et lire `global_position` fait tomber
+le jeu.
+
+> **À retenir, au-delà de ce bug.** Aucune suite de ce projet ne reproduira
+> jamais ce genre de plantage : elles tournent toutes en debug, donc sous la
+> protection qui manque au joueur. `is_instance_valid` est la seule garde qui
+> vaille dès qu'une référence peut désigner un nœud disparu — un pion meurt, et
+> tout ce qui le tenait le tient encore.
+
+Corrigé sur la caméra et sur le tour adverse (une riposte peut tuer l'assaillant
+en cours de tour, et le pion actif disparaît sous les pieds de l'étape suivante).
+
+**Une régression de la veille, trouvée au passage.** Un mort reste en scène une
+demi-seconde. Tant que l'occupation se lisait par un rayon, il cessait de compter
+dès que sa collision était coupée ; `BattleGrid` ne regarde pas les collisions,
+donc depuis le passage à l'index un cadavre bloquait sa case. Les morts sont
+écartés de l'occupation.
+
+**Le placement des unités, refait.** Deux écrans faisaient le même travail : le
+bouton « Positions » de la préparation choisissait les cases, puis la bataille
+s'ouvrait et redemandait de placer les unités sur le plateau. Le second écrasait
+le premier — d'où « ce bouton ne sert à rien ». L'écran de préparation perd donc
+son panneau ; les cases se choisissent sur le plateau, là où l'on voit le
+terrain.
+
+Et le vrai bug derrière « on ne peut cliquer que sur une autre unité » : l'unité
+**restait en main** après avoir été posée. Le clic suivant sur une autre unité
+tombait donc dans le cas « échange » au lieu de la choisir — impossible de passer
+à la suivante, on permutait sans fin les deux mêmes. Poser relâche désormais ;
+recliquer l'unité qu'on tient la repose ; la case de l'unité en main est
+surlignée ; et le bandeau dit à chaque instant ce qu'on attend du joueur.
+
+```
+bash scripts/test_all.sh --window   # 58 / 557 / 77 OK + test_map + 18 OK
+```

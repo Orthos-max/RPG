@@ -21,7 +21,6 @@ const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
-const CMAP = preload("res://data/models/campaign/chapter_map.gd")
 const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
 
 ## Glyphe et couleur de chaque terrain, pour lire la carte d'un coup d'œil.
@@ -53,11 +52,6 @@ var _equip_panel: Control = null
 ## Unité affichée au menu d'équipement — retenue pour que changer d'arme ne
 ## renvoie pas le joueur en tête de liste à chaque clic.
 var _equip_unit: String = ""
-var _positions_panel: Control = null
-## Unité à poser au menu des positions
-var _position_unit: String = ""
-## Carte du chapitre lue une seule fois ([ChapterMap])
-var _map: Dictionary = {}
 
 
 func _ready() -> void:
@@ -167,10 +161,6 @@ func _build() -> void:
 	equip.pressed.connect(_toggle_equipment)
 	buttons.add_child(equip)
 
-	var positions := _make_button("🗺  Positions", false)
-	positions.pressed.connect(_toggle_positions)
-	buttons.add_child(positions)
-
 	# Sauvegarder avant un chapitre risqué : c'est ici que ça se décide, la
 	# bataille commencée on ne revient plus en arrière.
 	var save := _make_button("💾  Sauvegarder", false)
@@ -215,12 +205,10 @@ func _refresh() -> void:
 			lost.add_theme_color_override("font_color", Color(1, 1, 1, 0.3))
 			_unit_rows.add_child(lost)
 
-	var posted: int = 0
-	for id in _selected:
-		if campaign.deployment_tile(str(id)).x >= 0:
-			posted += 1
-	_slots_label.text = "Déploiement : %d / %d place(s)   —   Positions choisies : %d   —   Or : %d   —   Niveau conseillé : %d" % [
-		_selected.size(), chapter.deploy_slots, posted, campaign.gold, chapter.recommended_level
+	# Les cases de départ ne se choisissent plus ici : elles se posent sur le
+	# plateau, en ouvrant la bataille, là où l'on voit le terrain.
+	_slots_label.text = "Déploiement : %d / %d place(s)   —   Or : %d   —   Niveau conseillé : %d" % [
+		_selected.size(), chapter.deploy_slots, campaign.gold, chapter.recommended_level
 	]
 	_start_button.disabled = _selected.is_empty()
 
@@ -640,292 +628,6 @@ func _rebuild_equipment() -> void:
 	add_child(_equip_panel)
 	old.queue_free()
 	_refresh()
-
-
-#region Positions de départ
-## Ouvre/ferme le choix des cases de départ — donc du terrain.
-func _toggle_positions() -> void:
-	if _positions_panel and is_instance_valid(_positions_panel):
-		_positions_panel.queue_free()
-		_positions_panel = null
-		# La fermeture emporte les nœuds que la closure de reconstruction tenait.
-		remove_meta("positions_rebuild")
-		_refresh()
-		return
-	_positions_panel = _build_positions()
-	add_child(_positions_panel)
-
-
-## Choix des cases de départ, avec le terrain de chacune.
-##
-## Le bonus défensif d'une case était calculé de bout en bout depuis longtemps —
-## jusqu'au pont CielAI — sans que le joueur puisse jamais le choisir. C'est le
-## sens de cet écran : poser l'archer dans la forêt (+1 DÉF) avant que le premier
-## coup ne parte, plutôt que de le découvrir en encaissant.
-func _build_positions() -> Control:
-	var campaign: Node = get_node_or_null("/root/Campaign")
-	var panel := Control.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.8)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.add_child(dim)
-
-	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 80
-	box.offset_right = -80
-	box.offset_top = 40
-	box.offset_bottom = -40
-	box.add_theme_constant_override("separation", 8)
-	panel.add_child(box)
-
-	var title := Label.new()
-	title.text = "🗺  POSITIONS DE DÉPART"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 22)
-	title.add_theme_color_override("font_color", C_GOLD)
-	box.add_child(title)
-
-	if _map.is_empty():
-		_map = CMAP.read(chapter)
-
-	var status := Label.new()
-	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status.add_theme_font_size_override("font_size", 13)
-	status.add_theme_color_override("font_color", C_ACCENT)
-	box.add_child(status)
-
-	if not campaign or not bool(_map.get("ok", false)):
-		# Une carte écrite à la main ne déclare pas son terrain : on le dit, et le
-		# placement se fera comme avant, en jeu, à l'ouverture de la bataille.
-		status.text = "Cette carte ne se lit pas d'avance (%s).\nLe placement restera possible en début de bataille." % str(_map.get("reason", "raison inconnue"))
-		var back := _make_button("Fermer", true)
-		back.pressed.connect(_toggle_positions)
-		box.add_child(back)
-		return panel
-
-	status.text = "Choisis une unité, puis sa case. Deux unités posées sur la même case échangent leurs places."
-
-	var columns := HBoxContainer.new()
-	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 16)
-	box.add_child(columns)
-
-	var roster_column := VBoxContainer.new()
-	roster_column.custom_minimum_size = Vector2(300, 0)
-	roster_column.add_theme_constant_override("separation", 4)
-	columns.add_child(roster_column)
-
-	var grid_holder := VBoxContainer.new()
-	grid_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columns.add_child(grid_holder)
-
-	# `queue_free` seul laisserait l'ancien contenu une frame de plus, et les deux
-	# versions se chevaucheraient dans le conteneur : on détache tout de suite.
-	var rebuild := func() -> void:
-		for column: Node in [roster_column, grid_holder]:
-			for child in column.get_children():
-				column.remove_child(child)
-				child.queue_free()
-		_fill_position_roster(roster_column, campaign, status)
-		grid_holder.add_child(_build_position_grid(campaign, status))
-
-	set_meta("positions_rebuild", rebuild)
-	rebuild.call()
-
-	var footer := HBoxContainer.new()
-	footer.alignment = BoxContainer.ALIGNMENT_CENTER
-	footer.add_theme_constant_override("separation", 12)
-	box.add_child(footer)
-
-	var reset := _make_button("Réinitialiser", false)
-	reset.pressed.connect(func() -> void:
-		campaign.clear_deployment_tiles()
-		status.text = "Positions remises à la ligne de départ de la carte."
-		_rebuild_positions())
-	footer.add_child(reset)
-
-	var close := _make_button("Fermer", true)
-	close.pressed.connect(_toggle_positions)
-	footer.add_child(close)
-
-	return panel
-
-
-## Colonne de gauche : les unités déployées, et la case de chacune.
-func _fill_position_roster(column: VBoxContainer, campaign: Node, status: Label) -> void:
-	var header := Label.new()
-	header.text = "Unités déployées (%d)" % _selected.size()
-	header.add_theme_font_size_override("font_size", 14)
-	header.add_theme_color_override("font_color", C_GOLD)
-	column.add_child(header)
-
-	if _selected.is_empty():
-		var none := Label.new()
-		none.text = "Aucune unité sélectionnée."
-		none.add_theme_font_size_override("font_size", 13)
-		none.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
-		column.add_child(none)
-		return
-
-	for id in _selected:
-		var unit: Dictionary = campaign.get_unit(str(id))
-		if unit.is_empty():
-			continue
-		var pos: Vector2i = campaign.deployment_tile(str(id))
-		var placed: bool = pos.x >= 0
-		var bonus: int = CMAP.defense_at(_map, pos) if placed else 0
-
-		var btn := Button.new()
-		btn.toggle_mode = true
-		btn.button_pressed = str(id) == _position_unit
-		btn.custom_minimum_size = Vector2(0, 34)
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.text = "%s %-13s %s" % [
-			"▶" if str(id) == _position_unit else "  ",
-			str(unit.get("name", "?")),
-			("(%d, %d) %s" % [pos.x, pos.y, _terrain_note(pos, bonus)]) if placed else "— non posée",
-		]
-		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_color_override("font_color", C_GOLD if placed else C_TEXT)
-		var style := StyleBoxFlat.new()
-		style.bg_color = C_PANEL
-		style.set_corner_radius_all(6)
-		style.content_margin_left = 10
-		btn.add_theme_stylebox_override("normal", style)
-		var pressed_style := style.duplicate() as StyleBoxFlat
-		pressed_style.bg_color = C_BUTTON
-		pressed_style.border_width_left = 4
-		pressed_style.border_color = C_GOLD
-		btn.add_theme_stylebox_override("pressed", pressed_style)
-
-		var unit_id: String = str(id)
-		btn.pressed.connect(func() -> void:
-			_position_unit = unit_id
-			status.text = "%s en main — clique une case." % str(unit.get("name", "?"))
-			_rebuild_positions())
-		column.add_child(btn)
-
-
-## La zone de déploiement, case par case, terrain compris.
-func _build_position_grid(campaign: Node, status: Label) -> Control:
-	var slots: Array = _map["slots"]
-	var min_col: int = 9999
-	var max_col: int = -1
-	var min_row: int = 9999
-	var max_row: int = -1
-	for pos: Vector2i in slots:
-		min_col = mini(min_col, pos.x)
-		max_col = maxi(max_col, pos.x)
-		min_row = mini(min_row, pos.y)
-		max_row = maxi(max_row, pos.y)
-
-	# Qui occupe quoi, pour marquer les cases prises d'un coup d'œil.
-	var occupants: Dictionary = {}
-	for id in _selected:
-		var pos: Vector2i = campaign.deployment_tile(str(id))
-		if pos.x >= 0:
-			occupants[pos] = str(campaign.get_unit(str(id)).get("name", "?"))
-
-	var grid := GridContainer.new()
-	grid.columns = max_col - min_col + 1
-	grid.add_theme_constant_override("h_separation", 3)
-	grid.add_theme_constant_override("v_separation", 3)
-
-	for row: int in range(min_row, max_row + 1):
-		for col: int in range(min_col, max_col + 1):
-			var pos := Vector2i(col, row)
-			grid.add_child(_make_tile_button(pos, slots.has(pos), occupants, campaign, status))
-
-	var wrapper := VBoxContainer.new()
-	wrapper.add_theme_constant_override("separation", 6)
-	wrapper.add_child(grid)
-
-	var legend := Label.new()
-	legend.text = "♣ Forêt +1 DÉF     ▲ Montagne +3 DÉF (infranchissable)     · Plaine     ─ Chemin     ≈ Eau"
-	legend.add_theme_font_size_override("font_size", 12)
-	legend.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
-	wrapper.add_child(legend)
-	return wrapper
-
-
-## Une case de la zone : son terrain, son bonus, et qui s'y tient.
-func _make_tile_button(pos: Vector2i, open: bool, occupants: Dictionary,
-		campaign: Node, status: Label) -> Button:
-	var terrain: int = CMAP.terrain_at(_map, pos)
-	var bonus: int = CMAP.defense_at(_map, pos)
-	var occupant: String = str(occupants.get(pos, ""))
-
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(52, 46)
-	btn.disabled = not open
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.text = ("%s\n%s" % [
-		occupant.substr(0, 4) if not occupant.is_empty() else str(TERRAIN_GLYPH.get(terrain, "?")),
-		"+%d" % bonus if bonus > 0 else "",
-	]).strip_edges()
-	btn.add_theme_font_size_override("font_size", 12)
-	btn.tooltip_text = "(%d, %d) — %s%s" % [
-		pos.x, pos.y, _terrain_name(terrain),
-		"" if occupant.is_empty() else "\n%s s'y tient" % occupant,
-	]
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = TERRAIN_COLOR.get(terrain, C_PANEL)
-	if not open:
-		style.bg_color = style.bg_color.darkened(0.55)
-	style.set_corner_radius_all(4)
-	if not occupant.is_empty():
-		style.border_width_bottom = 3
-		style.border_width_top = 3
-		style.border_width_left = 3
-		style.border_width_right = 3
-		style.border_color = C_GOLD
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("disabled", style)
-	btn.add_theme_stylebox_override("hover", style.duplicate())
-	btn.add_theme_color_override("font_color", C_TEXT)
-	btn.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.35))
-
-	if not open:
-		return btn
-
-	btn.pressed.connect(func() -> void:
-		# Une unité décochée entre-temps ne se pose plus : sa case serait effacée
-		# au lancement de la bataille, et le clic aurait menti.
-		if _position_unit.is_empty() or not _position_unit in _selected:
-			status.text = "Choisis d'abord une unité déployée, à gauche."
-			return
-		campaign.set_deployment_tile(_position_unit, pos)
-		var unit: Dictionary = campaign.get_unit(_position_unit)
-		status.text = "%s se poste en (%d, %d) — %s." % [
-			str(unit.get("name", "?")), pos.x, pos.y, _terrain_note(pos, bonus)
-		]
-		_rebuild_positions())
-	return btn
-
-
-## Reconstruit les deux colonnes sans refermer le panneau.
-func _rebuild_positions() -> void:
-	if not _positions_panel or not is_instance_valid(_positions_panel):
-		return
-	if not has_meta("positions_rebuild"):
-		return
-	var rebuild: Callable = get_meta("positions_rebuild")
-	if rebuild.is_valid():
-		rebuild.call()
-
-
-func _terrain_note(pos: Vector2i, bonus: int) -> String:
-	var name: String = _terrain_name(CMAP.terrain_at(_map, pos))
-	return "%s 🛡+%d" % [name, bonus] if bonus > 0 else name
-
-
-func _terrain_name(terrain: int) -> String:
-	return UnitSheet.terrain_label(TacticsGrid.terrain_type_name(terrain))
-#endregion
 
 
 ## Reconstruit le panneau après un achat (les prix et l'or ont changé).

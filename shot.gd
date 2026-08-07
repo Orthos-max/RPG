@@ -11,8 +11,9 @@ extends SceneTree
 ##
 ## Écrans : title, battle, editor, prep.
 ##
-## `prep` accepte un troisième argument — `equip`, `positions` ou `shop` — pour
-## ouvrir directement le panneau à regarder.
+## `prep` accepte un troisième argument — `equip` ou `shop` — pour ouvrir
+## directement le panneau à regarder. (`positions` a disparu avec son écran le
+## 2026-08-07 : les cases de départ se choisissent sur le plateau.)
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 
@@ -103,8 +104,6 @@ func _open_prep(main: Node, panel: String) -> void:
 	match panel:
 		"equip":
 			prep._toggle_equipment()
-		"positions":
-			prep._toggle_positions()
 		"shop":
 			prep._toggle_shop()
 		_:

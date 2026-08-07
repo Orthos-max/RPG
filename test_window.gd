@@ -138,21 +138,55 @@ func _test_deployment(phase: Node) -> void:
 		"une unité se pose sur une case ouverte (%s → %s)" % [before, free],
 		"elle est en %s" % _cell_of(first))
 
+	# --- Enchaîner deux unités : le bug remonté par Aurèle le 2026-08-07 ---
+	# L'unité restait **en main** après avoir été posée. Le clic suivant sur une
+	# autre unité tombait donc dans le cas « échange » au lieu de la choisir : on
+	# ne pouvait jamais passer à la suivante, on permutait sans fin les deux
+	# mêmes. Poser doit relâcher.
+	var second_before: Vector2i = _cell_of(second)
+	var first_after: Vector2i = _cell_of(first)
+	await _click_world(second.global_position)
+
+	_check(_cell_of(second) == second_before and _cell_of(first) == first_after,
+		"poser une unité la relâche : cliquer la suivante la choisit, sans échanger",
+		"%s a bougé en %s, %s en %s" % [
+			second.display_name(), _cell_of(second), first.display_name(), _cell_of(first)])
+
+	# Et elle est bien en main : elle répond à un clic sur une case.
+	var elsewhere: Vector2i = _free_slot_away_from(phase, pawns)
+	if elsewhere.x >= 0 and _tile_at_cell(elsewhere):
+		await _click_world(_tile_at_cell(elsewhere).global_position)
+		_check(_cell_of(second) == elsewhere,
+			"l'unité choisie juste après se pose normalement (%s → %s)"
+				% [second_before, elsewhere],
+			"elle est en %s" % _cell_of(second))
+
 	# --- Tout remettre où on l'a trouvé ---
 	# Les étapes suivantes (déplacement, attaque) jouent la position de départ du
 	# chapitre : la laisser défaite ferait passer l'attaque hors de portée, et le
 	# test d'attaque se déclarerait « non testable » au lieu d'échouer. Ce
 	# retour en arrière est aussi la seule preuve qu'on sait défaire un placement.
-	var origin: Node = _tile_at_cell(second_cell)
-	if origin:
-		await _click_world(first.global_position)
-		await _click_world(origin.global_position)
-	await _click_world(first.global_position)
-	await _click_world(second.global_position)
+	#
+	# On repose chacune sur sa case d'origine, dans l'ordre. Si l'autre s'y
+	# trouve encore, la pose les échange — et le tour suivant la remet en place.
+	# Le résultat ne dépend donc pas de l'état intermédiaire.
+	await _send_home(first, first_cell)
+	await _send_home(second, second_cell)
 
 	_check(_cell_of(first) == first_cell and _cell_of(second) == second_cell,
 		"le placement se défait : chacun retrouve sa case de départ",
 		"%s et %s" % [_cell_of(first), _cell_of(second)])
+
+
+## Reprend une unité et la repose sur la case indiquée.
+func _send_home(pawn: Node, cell: Vector2i) -> void:
+	if _cell_of(pawn) == cell:
+		return
+	var tile: Node = _tile_at_cell(cell)
+	if not tile:
+		return
+	await _click_world(pawn.global_position)
+	await _click_world(tile.global_position)
 
 
 ## Cliquer une unité doit la sélectionner et ouvrir son menu d'actions.

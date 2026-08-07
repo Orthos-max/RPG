@@ -156,15 +156,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	var pawn: Node = _raycast(2)
 	if pawn is TacticsPawn and pawn.get_parent() == level.player:
-		# Une unité déjà en main + un clic sur une autre = l'échange annoncé par
-		# l'aide en bas d'écran. Le pion masque toujours sa case au rayon : sans
-		# ce cas, le clic ne faisait que reprendre l'unité cliquée, et les deux
-		# unités ne pouvaient jamais permuter — quoi qu'en dise l'aide.
-		if _selected and is_instance_valid(_selected) and pawn != _selected:
-			_drop_on(_grid_of(pawn))
-			return
-		_selected = pawn
-		_refresh_hud()
+		_click_on_pawn(pawn)
 		return
 
 	var tile: Node = _raycast(1)
@@ -172,16 +164,49 @@ func _unhandled_input(event: InputEvent) -> void:
 		_drop_on(TacticsGrid.tile_to_grid(level.arena, tile))
 
 
-## Pose l'unité sélectionnée sur une case (échange si elle est déjà prise).
+## Un clic sur une unité du joueur.
+##
+## Trois cas, et l'ordre compte. Un pion masque toujours sa case au rayon : on ne
+## peut pas cliquer « la case sous une unité », donc c'est le clic sur l'unité
+## elle-même qui doit porter l'échange.
+##
+## Le piège d'avant (remonté par Aurèle le 2026-08-07) : l'unité **restait en
+## main** après avoir été posée. Le clic suivant, sur une autre unité, tombait
+## donc dans le cas « échange » au lieu de simplement la choisir — impossible de
+## passer à l'unité suivante, on permutait sans arrêt les deux mêmes. Poser une
+## unité la relâche désormais ([method _drop_on]), et l'échange ne se déclenche
+## que si l'on tient délibérément quelqu'un.
+func _click_on_pawn(pawn: Node) -> void:
+	# Reprendre celle qu'on tient déjà : on la relâche. Sans cela, on ne pouvait
+	# pas revenir sur un choix sans poser l'unité quelque part.
+	if _selected == pawn:
+		_selected = null
+		_set_hud_line("%s repose. Choisis une unité." % EXECUTOR.display_name(pawn))
+		return
+
+	if is_instance_valid(_selected):
+		_drop_on(_grid_of(pawn))
+		return
+
+	_selected = pawn
+	_refresh_hud()
+
+
+## Pose l'unité en main sur une case (échange si elle est déjà prise).
+##
+## Poser **relâche** l'unité : le geste est terminé, et le clic suivant doit
+## pouvoir en désigner une autre.
 func _drop_on(pos: Vector2i) -> void:
-	if not _selected or not is_instance_valid(_selected):
-		_set_hud_line("Choisis d'abord une unité.")
+	if not is_instance_valid(_selected):
+		_set_hud_line("Choisis d'abord une unité, puis sa case.")
 		return
 
 	var mover: String = EXECUTOR.display_name(_selected)
 	var origin: Vector2i = plan.position_of(mover)
 	var result: Dictionary = plan.place(mover, pos)
 	if not bool(result["ok"]):
+		# Le refus garde l'unité en main : elle vient d'être choisie, la lui
+		# retirer parce qu'on a visé à côté serait puni deux fois.
 		_set_hud_line("⛔ %s" % str(result["error"]))
 		return
 
@@ -191,7 +216,11 @@ func _drop_on(pos: Vector2i) -> void:
 		var other: Node = EXECUTOR.find_pawn_by_name(level.player, swapped)
 		if other:
 			_move_pawn(other, origin)
-	_refresh_hud()
+
+	var placed: String = mover
+	_selected = null
+	_refresh_hud("%s en place%s." % [
+		placed, " — échange avec %s" % swapped if not swapped.is_empty() else ""])
 
 
 ## Téléporte un pion sur sa case : avant la bataille, pas de trajet à jouer.
@@ -238,17 +267,42 @@ func _build_hud() -> void:
 	layer.add_child(btn)
 
 
-func _refresh_hud() -> void:
-	var who: String = EXECUTOR.display_name(_selected) if _selected and is_instance_valid(_selected) \
-		else "aucune"
-	_set_hud_line("Déploiement — unité choisie : %s  ·  %d case(s) ouverte(s), %d libre(s)" % [
-		who, plan.slots.size(), plan.free_slots().size()
+## Remet le bandeau à jour, et marque la case de l'unité en main.
+## [param message] Ligne à afficher à la place de l'état courant (facultatif).
+func _refresh_hud(message: String = "") -> void:
+	_mark_held()
+	if not message.is_empty():
+		_set_hud_line(message)
+		return
+
+	if is_instance_valid(_selected):
+		_set_hud_line("%s en main — clique sa case." % EXECUTOR.display_name(_selected))
+		return
+	_set_hud_line("Choisis une unité.  %d case(s) ouverte(s), %d libre(s)." % [
+		plan.slots.size(), plan.free_slots().size()
 	])
+
+
+## Signale sous les pieds de l'unité en main la case qu'elle occupe.
+##
+## Sans repère, rien ne distinguait « j'ai choisi une unité » de « je n'ai rien
+## choisi » : les deux montraient le même plateau. Le survol seul ne suffit pas,
+## il ne dit pas *qui* on tient.
+func _mark_held() -> void:
+	for tile: Variant in TacticsGrid.tiles(level.arena):
+		if tile is TacticsTile:
+			(tile as TacticsTile).hover = false
+	if not is_instance_valid(_selected):
+		return
+	var cell: Vector2i = _grid_of(_selected)
+	var tile: Node = _tiles.get("%d,%d" % [cell.x, cell.y], null)
+	if tile:
+		tile.hover = true
 
 
 func _set_hud_line(text: String) -> void:
 	if _hud:
-		_hud.text = "%s\nClic sur une unité, puis sur une case surlignée. Deux unités échangent leurs places." % text
+		_hud.text = "%s\nUne unité, puis sa case. Cliquer une autre unité les échange ; recliquer la sienne la repose. Entrée pour commencer." % text
 #endregion
 
 
