@@ -25,8 +25,6 @@ const SAVE_VERSION: int = 1
 const SAVE_SLOTS: int = 4
 ## Emplacement écrit automatiquement par la campagne.
 const AUTO_SLOT: int = 0
-## Coût en or d'un point de vie rendu à l'intendance
-const HEAL_COST_PER_HP: int = 6
 
 ## Prix d'un personnage écrit par le joueur, à l'intendance.
 ##
@@ -108,14 +106,6 @@ func complete_chapter(bonuses: Array = []) -> void:
 	for path: String in chapter.recruits:
 		recruit(path)
 
-	# On repart d'aplomb. Les blessures traversaient les chapitres et rien ne les
-	# effaçait : il fallait payer l'intendance pour se relever, et une campagne
-	# mal engagée n'avait aucun moyen de se redresser. C'est aussi la convention
-	# de Fire Emblem — une bataille finie, l'armée se soigne.
-	#
-	# Les morts ne reviennent pas : la mort permanente reste ce qu'elle est.
-	rest_army()
-
 	chapter_completed.emit(chapter.id, bonuses)
 	chapter_index += 1
 	turn_count = 1
@@ -139,6 +129,10 @@ func unit_from_resource(path: String) -> Dictionary:
 		"name": unit_name,
 		"source": path,
 		"class_id": res.character_class,
+		# L'apparence voyage avec l'unité. Sans elle, une recrue déployée prenait
+		# la figurine du pion de la scène qu'elle occupait : Sully et Cordelia
+		# entraient en bataille sous les traits de quelqu'un d'autre.
+		"sprite": str(res.sprite),
 		"level": res.level,
 		"exp": res.exp,
 		"max_hp": res.hp,
@@ -321,9 +315,10 @@ func unit_class_name(unit: Dictionary) -> String:
 #region Intendance (économie entre chapitres)
 ## Remet toute l'armée d'aplomb, sans rien coûter.
 ##
-## Le repos entre deux chapitres, par opposition à [method heal_all] qui est le
-## service **payant** de l'intendance — celui-là sert encore à se soigner en
-## cours de chapitre, avant d'engager une bataille avec des blessés.
+## Le repos entre deux batailles, **quelle qu'en soit l'issue** : gagnée ou
+## perdue, on repart entier. C'est le seul soin du jeu, et il n'est pas
+## négociable — l'intendance n'en vend plus. Payer pour se relever tirait la
+## difficulté dans le mauvais sens : l'or manque justement quand ça va mal.
 ##
 ## Ne ressuscite personne : une unité tombée en mort permanente le reste.
 ## [returns] le nombre d'unités qui en avaient besoin.
@@ -340,61 +335,6 @@ func rest_army() -> int:
 	if healed > 0:
 		roster_changed.emit()
 	return healed
-
-
-## Coût de soin d'une unité (par point de vie manquant).
-func heal_cost(unit_id: String) -> int:
-	var unit: Dictionary = get_unit(unit_id)
-	if unit.is_empty() or not bool(unit.get("alive", true)):
-		return 0
-	var missing: int = maxi(0, int(unit.get("max_hp", 0)) - int(unit.get("hp", 0)))
-	return missing * HEAL_COST_PER_HP
-
-
-## Soigne une unité si l'or suffit.
-## [returns] {ok, cost, healed, reason}
-func heal_unit(unit_id: String) -> Dictionary:
-	var unit: Dictionary = get_unit(unit_id)
-	if unit.is_empty():
-		return {"ok": false, "reason": "unité inconnue"}
-	var cost: int = heal_cost(unit_id)
-	if cost <= 0:
-		return {"ok": false, "reason": "%s est déjà au maximum" % str(unit.get("name", ""))}
-	if gold < cost:
-		return {"ok": false, "reason": "il manque %d or" % (cost - gold)}
-
-	var healed: int = int(unit["max_hp"]) - int(unit["hp"])
-	gold -= cost
-	unit["hp"] = int(unit["max_hp"])
-	roster_changed.emit()
-	return {"ok": true, "cost": cost, "healed": healed, "reason": ""}
-
-
-## Coût total pour remettre toute l'armée d'aplomb.
-func heal_all_cost() -> int:
-	var total: int = 0
-	for u: Dictionary in available_units():
-		total += heal_cost(str(u.get("id", "")))
-	return total
-
-
-## Soigne toutes les unités abordables, de la moins chère à la plus chère.
-## [returns] {ok, cost, healed_units}
-func heal_all() -> Dictionary:
-	var ids: Array = []
-	for u: Dictionary in available_units():
-		if heal_cost(str(u["id"])) > 0:
-			ids.append(str(u["id"]))
-	ids.sort_custom(func(a, b): return heal_cost(a) < heal_cost(b))
-
-	var spent: int = 0
-	var healed: int = 0
-	for id: String in ids:
-		var result: Dictionary = heal_unit(id)
-		if bool(result.get("ok", false)):
-			spent += int(result["cost"])
-			healed += 1
-	return {"ok": healed > 0, "cost": spent, "healed_units": healed}
 
 
 ## Achète un objet et le remet à une unité.

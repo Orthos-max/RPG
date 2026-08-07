@@ -332,6 +332,12 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 	for snapshot: Dictionary in _runner.player_unit_snapshots():
 		campaign.apply_battle_result(snapshot)
 
+	# Puis l'armée se repose — victoire ou défaite, c'est pareil, et ce n'est pas
+	# négociable : il n'y a plus de soin payant à l'intendance. Placé ici, donc
+	# avant les `save_game` des deux branches : la sauvegarde tient des unités
+	# entières.
+	campaign.rest_army()
+
 	var chapter_title: String = _chapter.title if _chapter else "Chapitre"
 	var outro: String = "\n".join(_chapter.outro_lines) if _chapter and victory else ""
 

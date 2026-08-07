@@ -346,27 +346,9 @@ func _build_shop() -> Control:
 			return ""
 		return str(target.get_item_metadata(target.selected))
 
-	# --- Soins ---
-	var heal_row := HBoxContainer.new()
-	heal_row.add_theme_constant_override("separation", 8)
-	var heal_one := _make_button("⚕ Soigner l'unité", false)
-	heal_one.custom_minimum_size = Vector2(260, 36)
-	heal_one.pressed.connect(func() -> void:
-		var r: Dictionary = campaign.heal_unit(selected_id.call())
-		status.text = ("Soigné de %d PV pour %d or." % [int(r.get("healed", 0)), int(r.get("cost", 0))]) \
-			if bool(r.get("ok", false)) else str(r.get("reason", ""))
-		_rebuild_shop())
-	heal_row.add_child(heal_one)
-
-	var heal_all := _make_button("⚕ Tout soigner (%d or)" % campaign.heal_all_cost(), false)
-	heal_all.custom_minimum_size = Vector2(260, 36)
-	heal_all.pressed.connect(func() -> void:
-		var r: Dictionary = campaign.heal_all()
-		status.text = "%d unité(s) soignée(s) pour %d or." % [
-			int(r.get("healed_units", 0)), int(r.get("cost", 0))]
-		_rebuild_shop())
-	heal_row.add_child(heal_all)
-	box.add_child(heal_row)
+	# Plus de soins à vendre : l'armée se repose toute seule entre deux batailles,
+	# gagnées ou perdues. Faire payer tirait la difficulté dans le mauvais sens —
+	# l'or manque justement quand la campagne va mal.
 
 	# --- Boutique ---
 	var shop_scroll := ScrollContainer.new()

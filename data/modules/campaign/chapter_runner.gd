@@ -310,6 +310,23 @@ static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	_apply_arsenal(stats, unit)
 	stats.attack_power = stats.get_total_attack()
 
+	# L'apparence, et le nom qui va avec. Le pion a déjà monté sa figurine à son
+	# `_ready` : la changer maintenant demande de la lui faire relire.
+	var look: String = str(unit.get("sprite", ""))
+	if not look.is_empty():
+		stats.sprite = look
+	stats.override_name = str(unit.get("name", stats.override_name))
+	_refresh_look(stats)
+
+
+## Fait relire au pion sa figurine et son nom, après coup.
+static func _refresh_look(stats: Stats) -> void:
+	var pawn: Node = stats.get_parent()
+	while pawn and not (pawn is TacticsPawn):
+		pawn = pawn.get_parent()
+	if pawn and pawn.character and pawn.character.has_method("setup"):
+		pawn.character.setup(stats, pawn.expertise)
+
 
 ## Reporte l'arsenal du roster sur le pion : sans cela, l'arme achetée et
 ## équipée à l'écran de préparation restait dans la sauvegarde et le pion

@@ -838,50 +838,82 @@ func _test_economy() -> void:
 	_check(not bool(campaign.use_booster(id, "Vulnerary")["ok"]),
 		"objet de combat refusé à l'intendance")
 
-	# Soins payants
+	# --- Le repos entre deux batailles ---
+	# Il n'y a plus de soin payant : l'armée se repose toute seule, victoire ou
+	# défaite. Faire payer tirait la difficulté dans le mauvais sens — l'or
+	# manque justement quand la campagne va mal.
 	campaign.gold = 1000
-	unit["hp"] = int(unit["max_hp"]) - 10
-	var cost: int = campaign.heal_cost(id)
-	_check(cost == 10 * campaign.HEAL_COST_PER_HP, "coût de soin proportionnel (%d or)" % cost)
-	var healed: Dictionary = campaign.heal_unit(id)
-	_check(bool(healed["ok"]) and int(campaign.get_unit(id)["hp"]) == int(unit["max_hp"]),
-		"unité soignée à plein")
-	_check(not bool(campaign.heal_unit(id)["ok"]), "soin refusé si déjà au maximum")
-
-	# Les blessures survivent à la bataille : c'est ce qui rend l'intendance utile
-	# après une défaite, où le chapitre n'est pas bouclé et rien ne les efface.
-	campaign.apply_battle_result({"id": id, "hp": 3})
-	_check(int(campaign.get_unit(id)["hp"]) == 3, "blessures conservées après la bataille")
-
-	# Mais un chapitre bouclé remet l'armée d'aplomb, sans rien coûter. Sans cela
-	# une campagne mal engagée n'avait aucun moyen de se redresser : il fallait
-	# payer, et l'or manque justement quand ça va mal.
 	var purse: int = campaign.gold
-	var wounded_id: String = id
-	campaign.apply_battle_result({"id": wounded_id, "hp": 2})
+	campaign.apply_battle_result({"id": id, "hp": 2})
+	_check(int(campaign.get_unit(id)["hp"]) == 2, "blessures conservées après la bataille")
 
 	# Une unité tombée ne doit pas se relever pour autant.
 	var fallen: Dictionary = {}
 	for u: Dictionary in campaign.roster:
-		if str(u.get("id", "")) != wounded_id:
+		if str(u.get("id", "")) != id:
 			fallen = u
 			break
 	if not fallen.is_empty():
 		fallen["alive"] = false
 		fallen["hp"] = 0
 
-	campaign.complete_chapter([])
-	_check(int(campaign.get_unit(wounded_id)["hp"])
-			== int(campaign.get_unit(wounded_id)["max_hp"]),
-		"un chapitre bouclé rend tous ses PV à l'unité blessée",
-		"%d PV" % int(campaign.get_unit(wounded_id)["hp"]))
-	_check(campaign.gold >= purse, "et ce repos ne coûte rien")
+	_check(campaign.rest_army() >= 1, "le repos soigne qui en a besoin")
+	_check(int(campaign.get_unit(id)["hp"]) == int(campaign.get_unit(id)["max_hp"]),
+		"l'unité blessée retrouve tous ses PV",
+		"%d PV" % int(campaign.get_unit(id)["hp"]))
+	_check(campaign.gold == purse, "et ce repos ne coûte rien")
 	if not fallen.is_empty():
 		_check(not bool(fallen.get("alive", true)) and int(fallen.get("hp", 1)) == 0,
 			"la mort permanente reste permanente : personne ne se relève")
-
 	_check(campaign.rest_army() == 0,
 		"l'armée déjà d'aplomb, le repos n'a plus rien à soigner")
+
+	# Le repos ne dépend plus d'un chapitre gagné : c'est la fin de bataille qui
+	# l'appelle, dans les deux branches ([Main._on_chapter_finished]).
+	campaign.apply_battle_result({"id": id, "hp": 4})
+	campaign.complete_chapter([])
+	_check(int(campaign.get_unit(id)["hp"]) == 4,
+		"gagner un chapitre ne soigne pas de lui-même : c'est le repos qui le fait",
+		"%d PV" % int(campaign.get_unit(id)["hp"]))
+	campaign.rest_army()
+
+	# --- L'apparence voyage avec l'unité ---
+	# Sully et Cordelia entraient en bataille sous les traits du pion de la scène
+	# qu'elles occupaient : leur `sprite` ne sortait jamais de leur fiche.
+	var sully: Dictionary = campaign.unit_from_resource(
+		"res://data/models/world/stats/hero/cavalier.tres")
+	_check(not str(sully.get("sprite", "")).is_empty(),
+		"une recrue emporte son apparence au roster", str(sully.get("sprite", "aucune")))
+
+	# On applique une fiche d'archer sur un pion de seigneur : les deux figurines
+	# diffèrent, donc le report se voit. (Sully, elle, partage la figurine du
+	# seigneur — voir plus bas.)
+	var virion: Dictionary = campaign.unit_from_resource(
+		"res://data/models/world/stats/hero/archer.tres")
+	var carried := CharStats.new()
+	carried.import_stats(load("res://data/models/world/stats/hero/lord.tres"))
+	var before_look: String = carried.sprite
+	ChapterRunner.apply_roster_unit(carried, virion)
+	_check(carried.sprite == str(virion["sprite"]) and carried.sprite != before_look,
+		"et le roster la repose sur le pion (%s → %s)" % [
+			before_look.get_file(), carried.sprite.get_file()])
+	_check(carried.override_name == str(virion["name"]),
+		"le nom suit l'apparence : le pion s'appelle %s" % carried.override_name)
+
+	# Ce que le report ne peut pas régler : plusieurs classes se partagent la même
+	# figurine, faute d'en avoir d'autres. Sully porte celle du seigneur, Cordelia
+	# celle de la clerc. Ce test le constate pour que ça ne se découvre pas en jeu.
+	var shared: Dictionary = {}
+	for path: String in ["hero/lord", "hero/cleric", "hero/archer", "hero/great_knight",
+			"hero/cavalier", "hero/pegasus_knight"]:
+		var u: Dictionary = campaign.unit_from_resource(
+			"res://data/models/world/stats/%s.tres" % path)
+		var look: String = str(u.get("sprite", ""))
+		shared[look] = shared.get(look, 0) + 1
+	var distinct: int = shared.size()
+	_check(distinct < 6,
+		"figurines distinctes : %d pour 6 classes de héros — deux paires se ressemblent"
+			% distinct)
 
 	# --- Enrôler un personnage écrit par le joueur ---
 	# L'éditeur savait créer et enregistrer, mais rien ne faisait entrer la
