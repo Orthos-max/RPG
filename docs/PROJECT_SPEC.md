@@ -1626,3 +1626,32 @@ blessés.
 ```
 bash scripts/test_all.sh --window   # 58 / 561 / 77 OK + test_map + 18 + 14 OK
 ```
+
+### Passe du 2026-08-07 (6) — enrôler ses créations, et le reste du balayage
+
+**Un personnage écrit entre enfin en campagne.** `enlist_custom()` existait sans
+appelant : on pouvait créer une recrue, l'enregistrer, la relire — et rien de
+plus. L'intendance la propose désormais sur la même ligne que les autres
+recrues, avec un bouton « Enrôler ».
+
+**Gratuit pour l'instant**, choix d'Aurèle : on veut d'abord pouvoir jouer ses
+créations. Le chemin de paiement est en place — `hire_custom()` vérifie l'or et
+le déduit, l'affichage dit « gratuit » ou le prix — donc leur donner un coût un
+jour ne demandera que de changer `CUSTOM_RECRUIT_COST`.
+
+**Le reste du balayage des références pendantes.** Deux endroits du tour adverse
+restaient exposés à la classe de bug qui a fait tomber le jeu deux fois :
+
+- `attack_pawn` écrivait sur `res.curr_pawn` sans vérifier qu'il existe encore —
+  or une riposte peut tuer l'assaillant à la frame précédente ;
+- `get_nearest_target_adjacent_tile` et `get_weakest_attackable_pawn`
+  appelaient `.get_neighbors()` et `.attackable` sur le retour de `get_tile()`,
+  qui vaut `null` pour une unité hors grille.
+
+Aucun n'est prouvé par un test — ils ne tombent que dans une build exportée, et
+les suites tournent en debug. C'est le prix de cette classe de bug, et la raison
+de la balayer à la main plutôt que d'attendre qu'elle se manifeste.
+
+```
+bash scripts/test_all.sh --window   # 58 / 570 / 77 OK + test_map + 18 + 14 OK
+```

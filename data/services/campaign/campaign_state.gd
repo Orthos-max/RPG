@@ -28,6 +28,14 @@ const AUTO_SLOT: int = 0
 ## Coût en or d'un point de vie rendu à l'intendance
 const HEAL_COST_PER_HP: int = 6
 
+## Prix d'un personnage écrit par le joueur, à l'intendance.
+##
+## **Gratuit pour l'instant** (choix d'Aurèle, 2026-08-07) : on veut d'abord
+## pouvoir jouer ses créations. Le chemin de paiement est en place —
+## [method hire_custom] vérifie l'or et le déduit — donc lui donner un prix un
+## jour ne demandera que de changer ce chiffre.
+const CUSTOM_RECRUIT_COST: int = 0
+
 ## Roster complet du joueur (unités recrutées, vivantes ou tombées)
 var roster: Array = []
 ## Index du chapitre courant
@@ -603,6 +611,54 @@ func available_recruits() -> Array:
 
 
 ## Recrute une unité contre de l'or.
+## Personnages écrits par le joueur, encore absents de l'armée.
+##
+## Même forme que [method available_recruits] : l'intendance les affiche sur la
+## même ligne, avec le même bouton, et n'a pas à savoir d'où ils viennent.
+## [returns] [{slug, name, class, level, cost}]
+func custom_recruits() -> Array:
+	var out: Array = []
+	for entry: Dictionary in UnitLibrary.list_units():
+		# Une fiche invalide entrerait en bataille sans qu'on sache quoi en faire.
+		if not bool(entry.get("valid", false)):
+			continue
+		var slug: String = str(entry["slug"])
+		if not get_unit(slug).is_empty():
+			continue  # déjà enrôlé
+		out.append({
+			"slug": slug,
+			"name": str(entry.get("name", slug)),
+			"class": str(entry.get("class_name", "")),
+			"level": int(entry.get("level", 1)),
+			"cost": CUSTOM_RECRUIT_COST,
+		})
+	return out
+
+
+## Enrôle un personnage écrit par le joueur, contre son prix.
+##
+## Le prix vit dans [constant CUSTOM_RECRUIT_COST] et vaut zéro pour l'instant :
+## le chemin de paiement est en place, il ne reste qu'à poser un chiffre le jour
+## où l'on voudra que ça coûte.
+## [returns] {ok, cost, id, reason}
+func hire_custom(slug: String) -> Dictionary:
+	var doc: UnitDocument = UnitLibrary.load_unit(slug)
+	if not doc:
+		return {"ok": false, "cost": 0, "reason": "personnage introuvable : %s" % slug}
+	if gold < CUSTOM_RECRUIT_COST:
+		return {"ok": false, "cost": CUSTOM_RECRUIT_COST,
+			"reason": "il manque %d or" % (CUSTOM_RECRUIT_COST - gold)}
+
+	var result: Dictionary = enlist_custom(doc)
+	if not bool(result.get("ok", false)):
+		result["cost"] = 0
+		return result
+
+	gold -= CUSTOM_RECRUIT_COST
+	result["cost"] = CUSTOM_RECRUIT_COST
+	return result
+
+
 func hire(path: String) -> Dictionary:
 	var cost: int = 0
 	var found: bool = false

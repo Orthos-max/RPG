@@ -28,8 +28,16 @@ func _init(_res: TacticsParticipantResource, _camera: TacticsCameraResource, _co
 ## @param delta: Time elapsed since the last frame
 ## @param is_player: Whether the attacking pawn belongs to the player
 func attack_pawn(delta: float, is_player: bool) -> void:
+	# L'assaillant peut être tombé sous une riposte à la frame précédente, et
+	# avoir quitté la scène. Sans cette garde, l'étape d'attaque écrivait sur un
+	# nœud disparu — invisible en debug, fatal dans une build exportée.
+	if not is_instance_valid(res.curr_pawn):
+		res.attackable_pawn = null
+		res.stage = res.STAGE_SELECT_PAWN
+		return
+
 	# Handle case when no attackable pawn is available
-	if not res.attackable_pawn:
+	if not is_instance_valid(res.attackable_pawn):
 		res.curr_pawn.res.can_attack = false
 	else:
 		# Attempt to attack the target pawn

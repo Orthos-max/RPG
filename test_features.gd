@@ -883,6 +883,45 @@ func _test_economy() -> void:
 	_check(campaign.rest_army() == 0,
 		"l'armée déjà d'aplomb, le repos n'a plus rien à soigner")
 
+	# --- Enrôler un personnage écrit par le joueur ---
+	# L'éditeur savait créer et enregistrer, mais rien ne faisait entrer la
+	# créature dans une campagne : `enlist_custom` existait sans appelant.
+	var made := UnitDocument.from_class(CDB.Id.ARCHER)
+	made.name = "Essai Recrue"
+	var written: Dictionary = UnitLibrary.save(made)
+	_check(bool(written["ok"]), "personnage d'essai écrit sur le disque",
+		str(written.get("error", "")))
+
+	var offered: Array = campaign.custom_recruits()
+	var listed: bool = false
+	for entry: Dictionary in offered:
+		if str(entry["slug"]) == made.slug():
+			listed = true
+			_check(int(entry["cost"]) == campaign.CUSTOM_RECRUIT_COST,
+				"il est proposé à son prix (%d or)" % int(entry["cost"]))
+	_check(listed, "un personnage écrit est proposé à l'intendance",
+		"%d proposition(s)" % offered.size())
+
+	var purse_before: int = campaign.gold
+	var enlisted: Dictionary = campaign.hire_custom(made.slug())
+	_check(bool(enlisted["ok"]), "il s'enrôle", str(enlisted.get("reason", "")))
+	_check(not campaign.get_unit(made.slug()).is_empty(),
+		"et il est bien dans l'armée")
+	_check(campaign.gold == purse_before - campaign.CUSTOM_RECRUIT_COST,
+		"le prix est déduit (gratuit pour l'instant : %d or)" % campaign.CUSTOM_RECRUIT_COST)
+
+	# Une fois enrôlé, il ne doit plus être proposé.
+	var still_offered: bool = false
+	for entry: Dictionary in campaign.custom_recruits():
+		if str(entry["slug"]) == made.slug():
+			still_offered = true
+	_check(not still_offered, "il disparaît des propositions une fois dans l'armée")
+	_check(not bool(campaign.hire_custom(made.slug())["ok"]),
+		"et on ne peut pas l'enrôler deux fois")
+	_check(not bool(campaign.hire_custom("personne_de_ce_nom")["ok"]),
+		"un personnage inexistant se refuse proprement")
+	UnitLibrary.delete_unit(made.slug())
+
 	# Recrutement
 	campaign.gold = 2000
 	var recruits: Array = campaign.available_recruits()

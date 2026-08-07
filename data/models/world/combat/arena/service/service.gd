@@ -123,8 +123,14 @@ func get_nearest_target_adjacent_tile(pawn: TacticsPawn, target_pawns: Array) ->
 	var _nearest_target: TacticsTile = null
 
 	for _p: TacticsPawn in target_pawns:
-		if not _p.stats or _p.stats.curr_health <= 0: continue
-		for _n: TacticsTile in _p.get_tile().get_neighbors(pawn.stats.jump):
+		if not is_instance_valid(_p) or not _p.stats or _p.stats.curr_health <= 0:
+			continue
+		# Une unité hors grille n'a pas de case : `get_tile()` rend `null`, et le
+		# parcours de ses voisines faisait tomber le tour adverse.
+		var stand: TacticsTile = _p.get_tile()
+		if not stand:
+			continue
+		for _n: TacticsTile in stand.get_neighbors(pawn.stats.jump):
 			if not _nearest_target or _distance_of(_n) < _distance_of(_nearest_target):
 				if _distance_of(_n) > 0 and not _n.is_taken():
 					_nearest_target = _n
@@ -164,10 +170,11 @@ func get_weakest_attackable_pawn(pawn_arr: Array) -> TacticsPawn:
 	var _weakest: TacticsPawn = null
 	
 	for _p: TacticsPawn in pawn_arr:
-		if not _p.stats:
+		if not is_instance_valid(_p) or not _p.stats:
 			continue
 		if not _weakest or _p.stats.curr_health < _weakest.stats.curr_health:
-			if _p.stats.curr_health > 0 and _p.get_tile().attackable:
+			var stand: TacticsTile = _p.get_tile()
+			if _p.stats.curr_health > 0 and stand and stand.attackable:
 				_weakest = _p
 	
 	return _weakest

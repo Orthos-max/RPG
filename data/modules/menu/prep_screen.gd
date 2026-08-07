@@ -475,6 +475,34 @@ func _build_shop() -> Control:
 		row.add_child(hire)
 		shop_list.add_child(row)
 
+	# --- Personnages écrits par le joueur ---
+	# L'éditeur de personnages savait les créer et les enregistrer, mais rien ne
+	# les faisait entrer dans une campagne : `enlist_custom` existait sans que
+	# personne l'appelle. C'est ici que le pont se fait, sur la même ligne que
+	# les autres recrues.
+	for made: Dictionary in campaign.custom_recruits():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var label := Label.new()
+		var price: int = int(made["cost"])
+		label.text = "✎ %s — %s Lv.%d — %s" % [
+			str(made["name"]), str(made["class"]), int(made["level"]),
+			"%d or" % price if price > 0 else "gratuit"]
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_color_override("font_color", C_GOLD)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var enlist := _make_button("Enrôler", false)
+		enlist.custom_minimum_size = Vector2(120, 30)
+		enlist.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.hire_custom(str(made["slug"]))
+			status.text = ("%s rejoint l'armée." % str(made["name"])) \
+				if bool(r.get("ok", false)) else str(r.get("reason", ""))
+			_rebuild_shop())
+		row.add_child(enlist)
+		shop_list.add_child(row)
+
 	var close := _make_button("Fermer", true)
 	close.pressed.connect(_toggle_shop)
 	box.add_child(close)
