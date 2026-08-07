@@ -263,10 +263,18 @@ func place_occupant(coord: Vector2i, pawn: Object) -> void:
 
 ## Parcourt l'arbre à la recherche des pions. On ne descend pas dans un pion :
 ## ses enfants sont sa figurine et son interface, jamais un autre pion.
+##
+## **Un mort n'occupe plus rien.** Il reste en scène une demi-seconde après sa
+## chute, le temps de l'animation. Tant que l'occupation se lisait par un rayon,
+## il cessait de compter dès que sa collision était coupée ; l'index, lui, ne
+## regarde pas les collisions — sans ce test, un cadavre bloquait sa case et le
+## survivant ne pouvait pas avancer dessus.
 func _collect_pawns(node: Node) -> void:
 	for child: Node in node.get_children():
 		if child is TacticsPawn:
-			_occupant_at[coord_at_position((child as Node3D).global_position)] = child
+			var pawn: TacticsPawn = child as TacticsPawn
+			if pawn.is_alive() and not pawn.is_queued_for_deletion():
+				_occupant_at[coord_at_position(pawn.global_position)] = pawn
 		else:
 			_collect_pawns(child)
 

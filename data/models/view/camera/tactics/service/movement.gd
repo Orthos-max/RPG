@@ -22,7 +22,7 @@ func _init(_res: TacticsCameraResource, _controls: TacticsControlsResource) -> v
 
 ## Moves the camera based on input and applies boundary constraints
 func move_camera(h: float, v: float, joystick: bool, delta: float, camera: TacticsCamera) -> void:
-	if res.target or (h == 0 and v == 0):
+	if is_instance_valid(res.target) or (h == 0 and v == 0):
 		return
 	
 	var angle: float = (atan2(-h, v)) + camera.t_pivot.get_rotation().y
@@ -51,8 +51,22 @@ func move_camera(h: float, v: float, joystick: bool, delta: float, camera: Tacti
 
 
 ## Moves the camera to focus on a target, respecting boundary constraints
+## La caméra suit souvent un **pion**, et un pion meurt. Il est retiré de la
+## scène une demi-seconde après sa mort ([TacticsPawnCombatService._check_death]),
+## et la caméra tient encore la référence.
+##
+## `if not res.target` ne suffit pas. En **debug**, Godot annule les références
+## aux objets libérés, donc cette garde marche et la partie tourne. Dans une
+## build **exportée**, cette protection n'existe pas : la référence reste
+## pendante et lire `global_position` fait tomber le jeu. Le plantage ne se voit
+## donc que chez le joueur, jamais en développement — remonté par Aurèle le
+## 2026-08-07 (mort de Virion pendant le tour adverse, qui venait de le viser).
+##
+## `is_instance_valid` répond juste dans les deux cas. C'est la seule garde qui
+## vaille dès qu'une référence peut désigner un nœud disparu.
 func focus_on_target(camera: TacticsCamera, delta: float) -> void:
-	if not res.target or res.target == null:
+	if not is_instance_valid(res.target):
+		res.target = null
 		return
 
 	var from: Vector3 = camera.global_position
@@ -86,7 +100,7 @@ func focus_on_target(camera: TacticsCamera, delta: float) -> void:
 
 ## Gradually reduces camera velocity to stabilize its movement
 func stabilize_camera(delta: float, camera: TacticsCamera) -> void:
-	if res.target:
+	if is_instance_valid(res.target):
 		return
 	
 	res.target_velocity = Vector3.ZERO

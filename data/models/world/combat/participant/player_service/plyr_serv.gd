@@ -57,7 +57,7 @@ func is_pawn_configured(player: TacticsPlayer) -> bool:
 
 ## Displays available actions for the current pawn
 func show_available_pawn_actions() -> void:
-	if not res.curr_pawn:
+	if not is_instance_valid(res.curr_pawn):
 		return
 	controls.set_actions_menu_visibility(true, res.curr_pawn)
 	arena.reset_all_tile_markers()

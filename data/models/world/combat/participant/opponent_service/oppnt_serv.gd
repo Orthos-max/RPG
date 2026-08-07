@@ -62,7 +62,11 @@ func choose_pawn(opponent: TacticsOpponent) -> void:
 ## @param opponent: The TacticsOpponent node
 ## @param player_node: The player's node
 func chase_nearest_enemy(opponent: TacticsOpponent, player_node: Node) -> void:
-	if not res.curr_pawn:
+	# `is_instance_valid` et pas seulement « non nul » : une riposte peut tuer
+	# l'assaillant, et le pion quitte la scène une demi-seconde plus tard. Dans
+	# une build exportée, une référence pendante répond « vrai ».
+	if not is_instance_valid(res.curr_pawn):
+		res.stage = res.STAGE_SELECT_PAWN
 		return
 	if not res.curr_pawn.res.can_move:
 		res.stage = res.STAGE_SELECT_PAWN
@@ -90,6 +94,9 @@ func chase_nearest_enemy(opponent: TacticsOpponent, player_node: Node) -> void:
 
 ## Checks if the opponent's pawn has finished moving
 func is_pawn_done_moving() -> void:
+	if not is_instance_valid(res.curr_pawn):
+		res.stage = res.STAGE_SELECT_PAWN
+		return
 	if res.curr_pawn.res.pathfinding_tilestack.is_empty():
 		if DebugLog.debug_enabled:
 			print_rich("[color=orange]Pawn is done moving.[/color]")
@@ -98,7 +105,8 @@ func is_pawn_done_moving() -> void:
 
 ## Selects a pawn for the opponent to attack
 func choose_pawn_to_attack() -> void:
-	if not res.curr_pawn:
+	if not is_instance_valid(res.curr_pawn):
+		res.stage = res.STAGE_SELECT_PAWN
 		return
 	arena.reset_all_tile_markers()
 	# Don't filter by allies — enemy tiles must be reachable for attack targeting
@@ -110,7 +118,7 @@ func choose_pawn_to_attack() -> void:
 	res.attackable_pawn = _resolve_planned_target()
 	if not res.attackable_pawn:
 		res.attackable_pawn = arena.get_weakest_attackable_pawn(_hostile_pawns())
-	if res.attackable_pawn:
+	if is_instance_valid(res.attackable_pawn):
 		if DebugLog.debug_enabled:
 			print_rich("[color=orange]Weakest target detected:", res.attackable_pawn, "[/color]")
 		controls.set_actions_menu_visibility(true, res.attackable_pawn)
