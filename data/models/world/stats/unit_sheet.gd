@@ -16,6 +16,9 @@ const CD = preload("res://data/models/world/stats/class_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 
 
+const MapDataRef = preload("res://data/models/world/map/map_data.gd")
+
+
 ## Construit la fiche d'une unité.
 ##
 ## [param opts] {"terrain": String, "terrain_def": int, "team": String}
@@ -80,23 +83,11 @@ static func _weapon_label(stats: Stats) -> String:
 
 
 ## Nom lisible d'un terrain, depuis la clé technique de [TacticsGrid].
+##
+## Les noms vivent avec les terrains, dans [MapData] : une case de village
+## ajoutée là s'affiche ici sans qu'on y revienne.
 static func terrain_label(key: String) -> String:
-	match key:
-		"grass": return "Plaine"
-		"forest": return "Forêt"
-		"mountain": return "Montagne"
-		"water": return "Eau"
-		"path": return "Chemin"
-		"wall": return "Mur"
-		"pit": return "Fosse"
-		_: return ""
-
-
-## Ligne d'en-tête prête à afficher (PV compris).
-static func header_line(sheet: Dictionary) -> String:
-	if sheet.is_empty():
-		return ""
-	return "%s     PV %d/%d" % [sheet["title"], sheet["hp"], sheet["max_hp"]]
+	return MapDataRef.label_for_key(key)
 
 
 ## Ligne des stats principales, séparées par des espaces.

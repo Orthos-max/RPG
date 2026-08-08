@@ -21,27 +21,6 @@ const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
-const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
-
-## Glyphe et couleur de chaque terrain, pour lire la carte d'un coup d'œil.
-const TERRAIN_GLYPH: Dictionary = {
-	MAP_DATA.TerrainType.GRASS: "·",
-	MAP_DATA.TerrainType.FOREST: "♣",
-	MAP_DATA.TerrainType.MOUNTAIN: "▲",
-	MAP_DATA.TerrainType.WATER: "≈",
-	MAP_DATA.TerrainType.PATH: "─",
-	MAP_DATA.TerrainType.WALL: "█",
-	MAP_DATA.TerrainType.PIT: "▒",
-}
-const TERRAIN_COLOR: Dictionary = {
-	MAP_DATA.TerrainType.GRASS: Color("#5a8f4a"),
-	MAP_DATA.TerrainType.FOREST: Color("#2f6b34"),
-	MAP_DATA.TerrainType.MOUNTAIN: Color("#7a6a55"),
-	MAP_DATA.TerrainType.WATER: Color("#2b5a8f"),
-	MAP_DATA.TerrainType.PATH: Color("#8a7a5c"),
-	MAP_DATA.TerrainType.WALL: Color("#3a3a44"),
-	MAP_DATA.TerrainType.PIT: Color("#15151c"),
-}
 
 var _selected: Array = []
 var _slots_label: Label

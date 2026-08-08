@@ -33,17 +33,27 @@ func _ready() -> void:
 
 ## Procedurally generates the arena tiles from MapData.
 ## Creates a Tiles node with MeshInstance3D children, then converts them via the tile service.
+##
+## **Rien n'attend ici, et c'est délibéré.** Cette fonction cédait la main le
+## temps d'une frame après avoir libéré les tuiles existantes ; `_ready` l'appelle
+## sans l'attendre, si bien que `serv.setup(self)` passait sur une arène encore
+## vide. Le cas ne se présentait pas — aucune arène livrée n'a à la fois un nœud
+## `Tiles` posé à la main et un `MapData` — mais c'est exactement ce qu'on
+## obtiendrait en convertissant `map_level.tscn`, ce qui reste à faire pour cinq
+## chapitres. Deuxième raison, la même que dans l'éditeur de cartes : un nœud
+## seulement `queue_free` garde son nom jusqu'à la fin de la frame, et le nouveau
+## `Tiles` naîtrait « @Tiles@2 » — introuvable pour tout ce qui le cherche par son nom.
 func _generate_from_map_data() -> void:
 	var md = res.map_data  # MapData, dynamically typed to avoid class_name load order issues
 	if not md:
 		return
-	
+
 	# Remove existing Tiles node if present
 	var existing: Node = get_node_or_null("Tiles")
 	if existing:
+		remove_child(existing)
 		existing.queue_free()
-		await get_tree().process_frame
-	
+
 	var tiles_node := Node3D.new()
 	tiles_node.name = "Tiles"
 	add_child(tiles_node)

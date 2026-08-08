@@ -48,6 +48,12 @@ func _init() -> void:
 					editor.get_node("EditorUI").open_unit_picker("opponent", 8)
 				else:
 					push_error("[shot] éditeur introuvable pour ouvrir le sélecteur")
+			# `editor terrains` charge une carte qui montre les seize terrains à la
+			# fois : une carte vierge ne dit rien d'une passe artistique.
+			elif args.size() > 2 and args[2] == "terrains":
+				for _i in 20:
+					await physics_frame
+				await _show_terrains(main)
 		"range":
 			# Une unité en main, sa portée de déplacement affichée : c'est le seul
 			# moyen de juger le surlignage autrement qu'en lisant du code.
@@ -85,6 +91,69 @@ func _init() -> void:
 	else:
 		printerr("[shot] échec de l'enregistrement : %d" % error)
 	quit(0 if error == OK else 1)
+
+
+## Charge dans l'éditeur une carte qui montre tous les terrains à la fois.
+##
+## Une carte vierge ne dit rien d'une passe artistique : elle est verte d'un bord
+## à l'autre. Celle-ci met un hameau, un rempart percé d'une porte, une tour, des
+## ruines, une rivière franchie par un pont, un marais, du sable et de la neige
+## dans le même cadre — de quoi juger l'ensemble d'un coup d'œil.
+func _show_terrains(main: Node) -> void:
+	var editor: Node = main._level
+	if not editor or not editor.get("doc"):
+		push_error("[shot] éditeur introuvable pour charger la carte de démonstration")
+		return
+
+	var T := MapData.TerrainType
+	var doc: MapDocument = MapDocument.create_empty("Les seize terrains", Vector2i(20, 12))
+
+	# Un relief doux, pour que les ombres portées aient de quoi mordre.
+	for row: int in 12:
+		for col: int in 20:
+			if col < 4 and row < 4:
+				doc.set_height_at(Vector2i(col, row), 0.5)
+
+	var paint := func(rect: Rect2i, terrain: int) -> void:
+		for row: int in range(rect.position.y, rect.end.y):
+			for col: int in range(rect.position.x, rect.end.x):
+				doc.set_terrain_at(Vector2i(col, row), terrain)
+
+	paint.call(Rect2i(0, 0, 4, 3), T.MOUNTAIN)      # massif au nord-ouest
+	paint.call(Rect2i(0, 3, 3, 3), T.FOREST)        # bois à son pied
+	paint.call(Rect2i(0, 9, 4, 3), T.SAND)          # grève au sud-ouest
+	paint.call(Rect2i(16, 0, 4, 3), T.SNOW)         # névé au nord-est
+	paint.call(Rect2i(5, 8, 3, 3), T.SWAMP)         # marais au sud
+
+	# Un hameau au bord du chemin, à l'ouest.
+	paint.call(Rect2i(2, 6, 1, 12 - 6), T.PATH)
+	for cell: Vector2i in [Vector2i(3, 6), Vector2i(1, 7), Vector2i(3, 8)]:
+		doc.set_terrain_at(cell, T.VILLAGE)
+
+	# La rivière et son pont, au milieu.
+	paint.call(Rect2i(9, 0, 2, 12), T.WATER)
+	paint.call(Rect2i(2, 5, 7, 1), T.PATH)
+	paint.call(Rect2i(9, 5, 2, 1), T.BRIDGE)
+	paint.call(Rect2i(11, 5, 3, 1), T.PATH)
+
+	# Un fort à l'est : rempart percé d'une porte, tours d'angle, ruines dehors.
+	paint.call(Rect2i(14, 2, 1, 7), T.WALL)
+	doc.set_terrain_at(Vector2i(14, 5), T.GATE)
+	doc.set_terrain_at(Vector2i(14, 2), T.TOWER)
+	doc.set_terrain_at(Vector2i(14, 8), T.TOWER)
+	paint.call(Rect2i(16, 4, 2, 3), T.FORT)
+	paint.call(Rect2i(12, 8, 2, 2), T.RUINS)
+	doc.set_terrain_at(Vector2i(19, 11), T.PIT)
+
+	editor.doc = doc
+	editor._forget_history()
+	editor._rebuild_all()
+	# Reculer : le cadrage par défaut est réglé pour une carte de 16 × 10.
+	editor._cam_dist = 21.0
+	editor._cam_pitch = -46.0
+	editor._refresh_camera()
+	for _i in 10:
+		await physics_frame
 
 
 ## Nouvelle partie → écran de préparation, panneau demandé ouvert.

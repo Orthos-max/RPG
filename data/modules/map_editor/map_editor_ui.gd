@@ -7,6 +7,16 @@ extends CanvasLayer
 ## logique d'édition ([MapDocument]) sans jamais instancier cette interface.
 
 signal tool_selected(tool_id: int)
+
+
+## Côté du pinceau, en cases (1, 3 ou 5).
+signal brush_size_changed(size: int)
+
+
+## Le clic peint-il la zone d'un seul tenant au lieu de quelques cases ?
+signal fill_mode_changed(on: bool)
+
+
 signal unit_picked(path: String)
 ## Niveau retenu pour les prochaines unités posées.
 signal unit_level_changed(level: int)
@@ -37,24 +47,71 @@ const C_GOLD: Color = Color("#f5c842")
 const C_TEXT: Color = Color("#e8e6f0")
 const C_DIM: Color = Color(1, 1, 1, 0.5)
 
-## Outils, dans l'ordre de la palette
+## Outils de l'éditeur.
+##
+## **Un outil de terrain porte le numéro du terrain qu'il peint** — c'est ce qui
+## permet à l'éditeur de le poser sans table de correspondance. Les autres outils
+## commencent à 100 : la place est donc libre pour les terrains à venir, sans
+## renuméroter ni rendre illisibles les cartes déjà enregistrées.
 enum Tool {
-	GRASS = 0, FOREST = 1, MOUNTAIN = 2, WATER = 3, PATH = 4, WALL = 5, PIT = 6,
-	RAISE = 7, LOWER = 8,
-	UNIT_PLAYER = 9, UNIT_OPPONENT = 10, ERASE = 11,
-	DEPLOY = 12, SEIZE = 13,
+	GRASS = MapData.TerrainType.GRASS,
+	FOREST = MapData.TerrainType.FOREST,
+	MOUNTAIN = MapData.TerrainType.MOUNTAIN,
+	WATER = MapData.TerrainType.WATER,
+	PATH = MapData.TerrainType.PATH,
+	WALL = MapData.TerrainType.WALL,
+	PIT = MapData.TerrainType.PIT,
+	VILLAGE = MapData.TerrainType.VILLAGE,
+	FORT = MapData.TerrainType.FORT,
+	GATE = MapData.TerrainType.GATE,
+	RUINS = MapData.TerrainType.RUINS,
+	TOWER = MapData.TerrainType.TOWER,
+	BRIDGE = MapData.TerrainType.BRIDGE,
+	SAND = MapData.TerrainType.SAND,
+	SNOW = MapData.TerrainType.SNOW,
+	SWAMP = MapData.TerrainType.SWAMP,
+
+	RAISE = 100, LOWER = 101,
+	UNIT_PLAYER = 110, UNIT_OPPONENT = 111, ERASE = 112,
+	DEPLOY = 120, SEIZE = 121,
 }
 
-const TERRAIN_LABELS: Array[String] = [
-	"🌿 Herbe", "🌲 Forêt", "⛰️ Montagne", "💧 Eau", "🛤️ Chemin", "🧱 Mur", "🕳️ Fosse",
+## Un outil de terrain, ou un des autres ?
+static func is_terrain_tool(tool_id: int) -> bool:
+	return MapData.TERRAINS.has(tool_id)
+
+
+## Pictogramme de chaque terrain. Le nom, lui, vient de [MapData] : un terrain
+## s'appelle pareil dans la palette, sur la fiche d'unité et dans le journal.
+const TERRAIN_ICONS: Dictionary = {
+	MapData.TerrainType.GRASS: "🌿",
+	MapData.TerrainType.FOREST: "🌲",
+	MapData.TerrainType.MOUNTAIN: "⛰️",
+	MapData.TerrainType.WATER: "💧",
+	MapData.TerrainType.PATH: "🛤️",
+	MapData.TerrainType.WALL: "🧱",
+	MapData.TerrainType.PIT: "🕳️",
+	MapData.TerrainType.VILLAGE: "🏘️",
+	MapData.TerrainType.FORT: "🏰",
+	MapData.TerrainType.GATE: "🚪",
+	MapData.TerrainType.RUINS: "🏛️",
+	MapData.TerrainType.TOWER: "🗼",
+	MapData.TerrainType.BRIDGE: "🌉",
+	MapData.TerrainType.SAND: "🏜️",
+	MapData.TerrainType.SNOW: "❄️",
+	MapData.TerrainType.SWAMP: "🌾",
+}
+
+## Première ligne de la palette : ce que personne n'a bâti.
+const NATURE_TOOLS: Array[int] = [
+	Tool.GRASS, Tool.FOREST, Tool.SWAMP, Tool.WATER,
+	Tool.SAND, Tool.SNOW, Tool.MOUNTAIN, Tool.PIT,
 ]
-## Pastilles de la palette — les teintes viennent du décor, pour que le bouton
-## annonce la couleur que la case prendra vraiment.
-const TERRAIN_COLORS: Array[Color] = [
-	Color(TacticsScenery.TERRAIN_COLORS[0]), Color(TacticsScenery.TERRAIN_COLORS[1]),
-	Color(TacticsScenery.TERRAIN_COLORS[2]), Color(TacticsScenery.TERRAIN_COLORS[3]),
-	Color(TacticsScenery.TERRAIN_COLORS[4]), Color(TacticsScenery.TERRAIN_COLORS[5]),
-	Color(TacticsScenery.TERRAIN_COLORS[6]),
+
+## Deuxième ligne : ce qui se construit — l'héroïc fantasy tient là-dedans.
+const BUILT_TOOLS: Array[int] = [
+	Tool.PATH, Tool.BRIDGE, Tool.VILLAGE, Tool.FORT,
+	Tool.RUINS, Tool.GATE, Tool.TOWER, Tool.WALL,
 ]
 
 ## Dossiers de fiches livrées avec le jeu, par camp par défaut.
@@ -75,6 +132,16 @@ var _panel_host: Control = null
 var _tool_buttons: Dictionary = {}
 var _undo_button: Button = null
 var _redo_button: Button = null
+
+
+var _brush_button: Button = null
+
+
+var _fill_button: Button = null
+
+
+## Côté du pinceau affiché sur son bouton — le niveau en est la source.
+var _brush_size: int = 1
 
 
 func _ready() -> void:
@@ -140,9 +207,25 @@ static func tool_name(tool_id: int) -> String:
 		Tool.DEPLOY: return "🪧 Case de déploiement"
 		Tool.SEIZE: return "⚑ Point de commandement"
 		_:
-			if tool_id >= 0 and tool_id < TERRAIN_LABELS.size():
-				return TERRAIN_LABELS[tool_id]
-			return "—"
+			return terrain_label(tool_id) if is_terrain_tool(tool_id) else "—"
+
+
+## Nom d'un terrain sur un bouton : son pictogramme et son nom français.
+static func terrain_label(terrain: int) -> String:
+	return "%s %s" % [str(TERRAIN_ICONS.get(terrain, "▪")), MapData.type_label(terrain)]
+
+
+## Ce que dit un terrain de plus que sa couleur : ce qu'il coûte, ce qu'il donne.
+static func terrain_tooltip(terrain: int) -> String:
+	var lines: Array[String] = [MapData.type_label(terrain)]
+	if not MapData.is_walkable(terrain):
+		lines.append("Infranchissable.")
+	var bonus: int = MapData.get_defense_bonus(terrain)
+	if bonus > 0:
+		lines.append("+%d DÉF pour qui s'y tient." % bonus)
+	return "\n".join(lines)
+
+
 #endregion
 
 
@@ -216,41 +299,76 @@ func _action(text: String, color: Color, callback: Callable, width: float = 108.
 
 
 #region Palette
+## Trois rangées : la nature, les constructions, puis ce qui se pose dessus.
+##
+## Une seule rangée tenait tant qu'il y avait sept terrains. À seize, elle
+## dépassait de l'écran — et mélangeait de toute façon un lac et un point de
+## commandement, qui ne sont pas la même sorte de geste.
 func _build_palette() -> void:
-	var palette := HBoxContainer.new()
+	var palette := VBoxContainer.new()
 	palette.add_theme_constant_override("separation", 4)
 	palette.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	palette.offset_top = -62
+	palette.offset_top = -156
 	palette.offset_bottom = -8
-	palette.offset_left = -560
-	palette.offset_right = 560
-	palette.alignment = BoxContainer.ALIGNMENT_CENTER
+	palette.offset_left = -500
+	palette.offset_right = 500
+	palette.alignment = BoxContainer.ALIGNMENT_END
 	add_child(palette)
 
-	for i: int in TERRAIN_LABELS.size():
-		palette.add_child(_tool_button(i, TERRAIN_LABELS[i], TERRAIN_COLORS[i]))
+	var nature: HBoxContainer = _palette_row(palette)
+	for terrain: int in NATURE_TOOLS:
+		nature.add_child(_terrain_button(terrain))
 
-	palette.add_child(VSeparator.new())
-	palette.add_child(_tool_button(Tool.RAISE, "⬆ Élever", Color("#6b7a8f")))
-	palette.add_child(_tool_button(Tool.LOWER, "⬇ Abaisser", Color("#4a5568")))
+	var built: HBoxContainer = _palette_row(palette)
+	for terrain: int in BUILT_TOOLS:
+		built.add_child(_terrain_button(terrain))
 
-	palette.add_child(VSeparator.new())
-	palette.add_child(_tool_button(Tool.UNIT_PLAYER, "🟢 Joueur", Color("#1b6b3a")))
-	palette.add_child(_tool_button(Tool.UNIT_OPPONENT, "🔴 Ennemi", Color("#b71c1c")))
-	palette.add_child(_tool_button(Tool.ERASE, "🗑 Effacer", Color("#444455")))
+	var tools: HBoxContainer = _palette_row(palette)
+	tools.add_child(_tool_button(Tool.RAISE, "⬆ Élever", Color("#6b7a8f")))
+	tools.add_child(_tool_button(Tool.LOWER, "⬇ Abaisser", Color("#4a5568")))
+	tools.add_child(VSeparator.new())
+	tools.add_child(_build_brush_button())
+	tools.add_child(_build_fill_button())
+	tools.add_child(VSeparator.new())
+	tools.add_child(_tool_button(Tool.UNIT_PLAYER, "🟢 Joueur", Color("#1b6b3a")))
+	tools.add_child(_tool_button(Tool.UNIT_OPPONENT, "🔴 Ennemi", Color("#b71c1c")))
+	tools.add_child(_tool_button(Tool.ERASE, "🗑 Effacer", Color("#444455")))
+	tools.add_child(VSeparator.new())
+	tools.add_child(_tool_button(Tool.DEPLOY, "🪧 Départ", Color("#1f9c8e")))
+	tools.add_child(_tool_button(Tool.SEIZE, "⚑ Point", Color("#b8860b")))
 
-	palette.add_child(VSeparator.new())
-	palette.add_child(_tool_button(Tool.DEPLOY, "🪧 Départ", Color("#1f9c8e")))
-	palette.add_child(_tool_button(Tool.SEIZE, "⚑ Point", Color("#b8860b")))
+
+func _palette_row(host: VBoxContainer) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	host.add_child(row)
+	return row
+
+
+## Bouton d'un terrain : sa teinte réelle, son nom, et ce qu'il vaut au combat.
+func _terrain_button(terrain: int) -> Button:
+	var btn: Button = _tool_button(terrain, terrain_label(terrain), _terrain_color(terrain))
+	btn.tooltip_text = terrain_tooltip(terrain)
+	return btn
+
+
+## Teinte du bouton : celle que la case prendra vraiment, prise au décor.
+static func _terrain_color(terrain: int) -> Color:
+	return Color(str(TacticsScenery.TERRAIN_COLORS.get(terrain, "#4a8c3f")))
 
 
 func _tool_button(tool_id: int, text: String, color: Color) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.toggle_mode = true
-	btn.custom_minimum_size = Vector2(76, 46)
+	btn.custom_minimum_size = Vector2(76, 44)
 	btn.add_theme_font_size_override("font_size", 10)
-	btn.add_theme_color_override("font_color", Color.WHITE)
+	# La neige et le sable sont plus clairs que le texte blanc : sur ces
+	# boutons-là, c'est l'encre du fond de l'éditeur qui se lit.
+	btn.add_theme_color_override("font_color",
+		C_BG if color.get_luminance() > 0.55 else Color.WHITE)
+	btn.clip_text = true
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
@@ -270,14 +388,60 @@ func _tool_button(tool_id: int, text: String, color: Color) -> Button:
 	return btn
 
 
+## Taille du pinceau : un bouton qui tourne, 1 → 3 → 5 → 1.
+##
+## Trois boutons pour trois tailles auraient pris la place de trois terrains,
+## pour un réglage qu'on change en passant.
+func _build_brush_button() -> Button:
+	_brush_button = _action("▦ Pinceau 1×1", Color("#3b3b52"), func() -> void:
+		var sizes: Array[int] = MapDocument.BRUSH_SIZES
+		var next: int = sizes[(maxi(0, sizes.find(_brush_size)) + 1) % sizes.size()]
+		brush_size_changed.emit(next), 92.0)
+	_brush_button.custom_minimum_size = Vector2(92, 44)
+	_brush_button.tooltip_text = "Nombre de cases peintes d'un coup (1, 3 ou 5 de côté)"
+	return _brush_button
+
+
+## Remplissage : le clic peint toute l'étendue d'un seul tenant.
+func _build_fill_button() -> Button:
+	_fill_button = Button.new()
+	_fill_button.text = "🪣 Remplir"
+	_fill_button.toggle_mode = true
+	_fill_button.custom_minimum_size = Vector2(80, 44)
+	_fill_button.add_theme_font_size_override("font_size", 10)
+	_fill_button.add_theme_color_override("font_color", Color.WHITE)
+	_fill_button.tooltip_text = "Un clic peint toute la zone de même terrain, d'un seul tenant"
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#3b3b52")
+	style.set_corner_radius_all(5)
+	_fill_button.add_theme_stylebox_override("normal", style)
+	var pressed := style.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color("#6b5a1f")
+	pressed.border_width_bottom = 3
+	pressed.border_color = C_GOLD
+	_fill_button.add_theme_stylebox_override("pressed", pressed)
+	_fill_button.add_theme_stylebox_override("hover_pressed", pressed)
+
+	_fill_button.toggled.connect(func(on: bool) -> void: fill_mode_changed.emit(on))
+	return _fill_button
+
+
+## Montre la taille de pinceau retenue par le niveau.
+func show_brush(size: int) -> void:
+	_brush_size = size
+	if _brush_button:
+		_brush_button.text = "▦ Pinceau %d×%d" % [size, size]
+
+
 func _build_status() -> void:
 	_tool_label = Label.new()
 	_tool_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tool_label.add_theme_font_size_override("font_size", 12)
 	_tool_label.add_theme_color_override("font_color", C_GOLD)
 	_tool_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_tool_label.offset_top = -82
-	_tool_label.offset_bottom = -66
+	_tool_label.offset_top = -176
+	_tool_label.offset_bottom = -160
 	add_child(_tool_label)
 
 	_unit_label = Label.new()
@@ -285,8 +449,8 @@ func _build_status() -> void:
 	_unit_label.add_theme_font_size_override("font_size", 11)
 	_unit_label.add_theme_color_override("font_color", C_DIM)
 	_unit_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_unit_label.offset_top = -98
-	_unit_label.offset_bottom = -84
+	_unit_label.offset_top = -192
+	_unit_label.offset_bottom = -178
 	add_child(_unit_label)
 
 	_status = Label.new()

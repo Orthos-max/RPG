@@ -62,7 +62,15 @@ Le chemin résolu est affiché par `bash scripts/ciel_game/state.sh --path`.
   "tile_size": 1.0,
   "grid_size": {"x": 16, "y": 10},
   "terrain": {
-    "legend": {"g": "grass", "f": "forest (+1 DEF)", "m": "mountain (bloqué)", "...": "..."},
+    // La légende est engendrée depuis la table des terrains : elle liste les
+    // seize, et ses lettres sont exactement celles employées par `rows`.
+    // Elles ne sont plus l'initiale du nom — `water` et `wall` la partageaient,
+    // `path` et `pit` aussi. Lire la légende, jamais deviner.
+    "legend": {"g": "grass", "f": "forest (+1 DEF)", "m": "mountain (bloqué)",
+               "w": "water (bloqué)", "p": "path", "#": "wall (bloqué)",
+               "x": "pit (bloqué)", "v": "village (+1 DEF)", "F": "fort (+2 DEF)",
+               "G": "gate (+1 DEF)", "r": "ruins (+1 DEF)", "T": "tower (bloqué)",
+               "b": "bridge", "s": "sand", "n": "snow", "~": "swamp"},
     "rows": ["ggggffgggggggggg", "..."]   // Une chaîne par rangée, un caractère par case
   },
   "pawns": [ /* voir ci-dessous */ ],

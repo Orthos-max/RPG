@@ -152,6 +152,55 @@ func set_height_at(pos: Vector2i, value: float) -> void:
 ## Une unité peut-elle tenir sur cette case ?
 func is_placeable(pos: Vector2i) -> bool:
 	return in_bounds(pos) and MapDataClass.is_walkable(terrain_at(pos))
+
+
+## Tailles de pinceau proposées, en cases de côté.
+##
+## Impaires, pour que le pinceau soit centré sur la case visée : avec un côté
+## pair, la case cliquée ne serait pas au milieu de ce qu'on peint, et viser
+## deviendrait un exercice de patience.
+const BRUSH_SIZES: Array[int] = [1, 3, 5]
+
+## Cases couvertes par un pinceau carré de [param size] cases de côté.
+##
+## Bornées à la grille : peindre au bord ne déborde pas, il peint simplement
+## moins large.
+func brush_cells(pos: Vector2i, size: int = 1) -> Array[Vector2i]:
+	var radius: int = clampi(size, 1, BRUSH_SIZES[-1]) / 2
+	var out: Array[Vector2i] = []
+	for row: int in range(pos.y - radius, pos.y + radius + 1):
+		for col: int in range(pos.x - radius, pos.x + radius + 1):
+			var cell := Vector2i(col, row)
+			if in_bounds(cell):
+				out.append(cell)
+	return out
+
+
+## Cases d'un seul tenant partageant le terrain de celle-ci — le remplissage.
+##
+## Voisinage à quatre, pas à huit : deux étendues qui ne se touchent que par un
+## coin sont deux étendues. C'est aussi la règle du déplacement, donc ce que
+## remplit le pinceau correspond à ce que parcourt une unité.
+func region_of(pos: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not in_bounds(pos):
+		return out
+
+	var target: int = terrain_at(pos)
+	var seen: Dictionary = {pos: true}
+	var queue: Array[Vector2i] = [pos]
+	while not queue.is_empty():
+		var cell: Vector2i = queue.pop_back()
+		out.append(cell)
+		for step: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = cell + step
+			if seen.has(next) or not in_bounds(next) or terrain_at(next) != target:
+				continue
+			seen[next] = true
+			queue.push_back(next)
+	return out
+
+
 #endregion
 
 
@@ -389,14 +438,6 @@ func to_map_data() -> MapData:
 	md.terrain_grid = terrain.duplicate()
 	md.height_grid = heights.duplicate()
 	return md
-
-
-## Reprend le relief d'une carte existante (import d'une carte du jeu).
-func from_map_data(md: MapData) -> void:
-	grid_size = md.grid_size
-	tile_size = md.tile_size
-	terrain = md.terrain_grid.duplicate()
-	heights = md.height_grid.duplicate()
 
 
 ## Chapitre jouable correspondant à cette carte.

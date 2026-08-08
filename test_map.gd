@@ -5,7 +5,6 @@ extends SceneTree
 const _MD = preload("res://data/models/world/map/map_data.gd")
 const _TC = preload("res://data/models/config/tactics_config.gd")
 const TERRAIN = {GRASS=0, FOREST=1, MOUNTAIN=2, WATER=3, PATH=4, WALL=5, PIT=6}
-const TERRAIN_NAMES = ["GRASS", "FOREST", "MOUNTAIN", "WATER", "PATH", "WALL", "PIT"]
 
 
 func _init() -> void:
@@ -15,6 +14,7 @@ func _init() -> void:
 	all_ok = _test_scene_loading() and all_ok
 	all_ok = _test_framing() and all_ok
 	all_ok = _test_props() and all_ok
+	all_ok = _test_arena_regeneration() and all_ok
 
 	if all_ok:
 		print_rich("[color=green][b]=== ALL TESTS PASSED ===[/b][/color]")
@@ -77,28 +77,102 @@ func _test_map_data() -> bool:
 	if md.get_defense_bonus(TERRAIN.MOUNTAIN) != 3:  ok = false; print_rich("[color=red]  FAIL: MOUNTAIN def[/color]")
 	if md.get_defense_bonus(TERRAIN.GRASS) != 0:     ok = false; print_rich("[color=red]  FAIL: GRASS def[/color]")
 	print_rich("  OK: Defense bonus checks passed")
-	
+
+	ok = _test_terrain_table() and ok
+
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
+## La table des terrains : les nouveaux venus, et l'unicité de leurs codes.
+##
+## L'unicité n'est pas une coquetterie. La carte ASCII envoyée à Ciel se lit à
+## la lettre : tant qu'elle tirait la première du nom, `water` et `wall` étaient
+## tous deux `w`, `path` et `pit` tous deux `p` — Ciel voyait un lac là où il y
+## avait un mur, pendant que la légende annonçait des lettres distinctes.
+func _test_terrain_table() -> bool:
+	var ok := true
+
+	var bâti := {
+		_MD.TerrainType.VILLAGE: 1, _MD.TerrainType.FORT: 2,
+		_MD.TerrainType.GATE: 1, _MD.TerrainType.RUINS: 1,
+	}
+	for terrain: int in bâti:
+		if not _MD.is_walkable(terrain):
+			ok = false
+			print_rich("[color=red]  FAIL: %s devrait se traverser[/color]" % _MD.type_key(terrain))
+		if _MD.get_defense_bonus(terrain) != int(bâti[terrain]):
+			ok = false
+			print_rich("[color=red]  FAIL: %s donne %d DÉF (attendu %d)[/color]" % [
+				_MD.type_key(terrain), _MD.get_defense_bonus(terrain), int(bâti[terrain])])
+	if _MD.is_walkable(_MD.TerrainType.TOWER):
+		ok = false
+		print_rich("[color=red]  FAIL: une tour devrait bloquer[/color]")
+	for terrain: int in [_MD.TerrainType.BRIDGE, _MD.TerrainType.SAND,
+			_MD.TerrainType.SNOW, _MD.TerrainType.SWAMP]:
+		if not _MD.is_walkable(terrain):
+			ok = false
+			print_rich("[color=red]  FAIL: %s devrait se traverser[/color]" % _MD.type_key(terrain))
+	if ok:
+		print_rich("  OK: village +1, fortin +2, porte +1, ruines +1 ; tour bloquée")
+
+	var codes := {}
+	var keys := {}
+	for terrain: int in _MD.all_types():
+		var code: String = _MD.type_code(terrain)
+		var key: String = _MD.type_key(terrain)
+		if code.length() != 1:
+			ok = false
+			print_rich("[color=red]  FAIL: %s a un code de %d caractère(s)[/color]" % [
+				key, code.length()])
+		if codes.has(code):
+			ok = false
+			print_rich("[color=red]  FAIL: %s et %s partagent le code « %s »[/color]" % [
+				str(codes[code]), key, code])
+		if keys.has(key):
+			ok = false
+			print_rich("[color=red]  FAIL: deux terrains s'appellent %s[/color]" % key)
+		if _MD.type_label(terrain).is_empty():
+			ok = false
+			print_rich("[color=red]  FAIL: %s n'a pas de nom français[/color]" % key)
+		if _MD.label_for_key(key) != _MD.type_label(terrain):
+			ok = false
+			print_rich("[color=red]  FAIL: %s ne se retrouve pas par sa clé[/color]" % key)
+		codes[code] = key
+		keys[key] = true
+	if _MD.legend().size() != _MD.all_types().size():
+		ok = false
+		print_rich("[color=red]  FAIL: la légende ne couvre pas tous les terrains[/color]")
+	if ok:
+		print_rich("  OK: %d terrains, codes et noms uniques, légende complète"
+			% _MD.all_types().size())
+
+	# Un entier venu d'une carte plus récente ne transforme pas la case en mur.
+	if not _MD.is_walkable(999) or _MD.get_defense_bonus(999) != 0:
+		ok = false
+		print_rich("[color=red]  FAIL: un terrain inconnu devrait se traverser sans bonus[/color]")
+
 	return ok
 
 
 func _test_terrain_materials() -> bool:
 	print_rich("[color=cyan]--- Test: Terrain Materials ---[/color]")
-	
+
 	var ok := true
 	var count := 0
-	
-	for t in range(7):
+	var expected: int = _MD.all_types().size()
+
+	for t in _MD.all_types():
 		var mat = _TC.terrain_material.get(t)
 		if mat:
 			count += 1
 		else:
-			print_rich("[color=red]  FAIL: No material for %s[/color]" % TERRAIN_NAMES[t])
+			print_rich("[color=red]  FAIL: No material for %s[/color]" % _MD.type_key(t))
 			ok = false
-	
-	print_rich("  Materials: %d/7" % count)
-	if count != 7: ok = false
-	
+
+	print_rich("  Materials: %d/%d" % [count, expected])
+	if count != expected: ok = false
+
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
 	return ok
 
@@ -128,8 +202,7 @@ func _test_scene_loading() -> bool:
 	else:
 		var parts = []
 		for t in counts:
-			if t < TERRAIN_NAMES.size():
-				parts.append("%s:%d" % [TERRAIN_NAMES[t], counts[t]])
+			parts.append("%s:%d" % [_MD.type_key(t).to_upper(), counts[t]])
 		print_rich("  Terrain mix: %s" % ", ".join(parts))
 	
 	# Check heights
@@ -225,9 +298,11 @@ func _test_props() -> bool:
 	var ok := true
 	var tile_size := 1.0
 
+	# Une case de chaque terrain, toutes sur une même rangée. Les voisines sont
+	# donc d'un autre terrain : porte et pont s'orientent sur ce qu'ils trouvent,
+	# et ce qu'ils trouvent ici ne les aide pas — c'est le cas isolé, exprès.
 	var cells: Array = []
-	var terrains := [TERRAIN.FOREST, TERRAIN.MOUNTAIN, TERRAIN.WALL,
-		TERRAIN.GRASS, TERRAIN.WATER, TERRAIN.PATH, TERRAIN.PIT]
+	var terrains: Array = _MD.all_types()
 	for i in terrains.size():
 		cells.append({
 			"cell": Vector2i(i, 0),
@@ -237,17 +312,35 @@ func _test_props() -> bool:
 
 	var batches: Dictionary = TacticsProps.placements(cells, tile_size)
 
-	# Chaque terrain reçoit sa garniture — et les autres n'en reçoivent aucune.
+	# Chaque terrain bâti reçoit sa garniture, et les nus restent nus.
 	var counts := {}
 	for kind: String in batches:
 		counts[kind] = batches[kind].size()
-	var expected := {"trunk": 1, "canopy": 1, "rock": 2, "merlon": 1}
+	var expected := {
+		"trunk": 1, "canopy": 1, "rock": 2, "merlon": 1,
+		"house_wall": 1, "house_roof": 1, "keep": 1,
+		"pier": 2, "column": 2, "rubble": 1,
+		"tower_shaft": 1, "tower_roof": 1,
+		"deck": 1, "railing": 2,
+		"reed": 3,
+	}
+	# Herbe, sable et bannières ne se posent qu'une case sur deux ou trois : la
+	# case unique de ce test tombe d'un côté ou de l'autre du tirage, on ne fixe
+	# donc pas leur compte. Une hampe sans fanion, en revanche, serait un bug.
+	for optional: String in ["tuft", "pebble", "pole", "banner"]:
+		counts.erase(optional)
+	if batches.get("pole", []).size() != batches.get("banner", []).size():
+		print_rich("[color=red]  FAIL: %d hampe(s) pour %d bannière(s)[/color]" % [
+			batches.get("pole", []).size(), batches.get("banner", []).size()])
+		ok = false
 	if counts != expected:
-		print_rich("[color=red]  FAIL: garniture %s (attendu %s)[/color]" % [str(counts), str(expected)])
+		print_rich("[color=red]  FAIL: garniture %s\n           attendu %s[/color]" % [
+			str(counts), str(expected)])
 		ok = false
 	else:
-		print_rich("  OK: forêt → arbre, montagne → 2 rochers, mur → créneau")
-		print_rich("  OK: herbe, eau, chemin et fosse restent nus")
+		print_rich("  OK: seize terrains, chacun sa garniture (village → maison, "
+			+ "fortin → donjon et bannière, tour → fût et toit, pont → platelage…)")
+		print_rich("  OK: eau, chemin, fosse et neige restent nus")
 
 	# Rien ne dépasse la hauteur d'un pion. Tous les maillages font une unité de
 	# haut : la composante verticale de l'échelle est donc la hauteur réelle.
@@ -265,27 +358,10 @@ func _test_props() -> bool:
 		print_rich("  OK: le plus haut décor tient sous le plafond (%.2f ≤ %.2f)" % [
 			tallest, TacticsProps.MAX_HEIGHT])
 
-	# Le centre d'une case praticable reste dégagé : la forêt se traverse.
-	#
-	# Tronc et frondaison sont des solides de révolution : leur emprise au sol est
-	# un disque, dont le rayon ne dépend pas de l'orientation — l'encadrer par une
-	# boîte tournée le surestimerait de 40 % et condamnerait un décor correct.
-	var covered := false
-	var margin := 1.0
-	var radii := {"trunk": 0.06, "canopy": 0.22}
-	for kind: String in radii:
-		for xf: Transform3D in batches.get(kind, []):
-			var radius: float = float(radii[kind]) * tile_size * xf.basis.x.length()
-			var offset: float = Vector2(xf.origin.x, xf.origin.z).length()
-			if offset <= radius:
-				covered = true
-			else:
-				margin = minf(margin, 1.0 - radius / offset)
-	if covered:
-		print_rich("[color=red]  FAIL: le décor recouvre le centre d'une case praticable[/color]")
-		ok = false
-	else:
-		print_rich("  OK: le centre d'une case de forêt reste libre (marge : %.0f %%)" % [margin * 100.0])
+	ok = _check_centres_clear(cells, batches, tile_size) and ok
+
+	# Une porte s'aligne sur son rempart, un pont sur sa travée.
+	ok = _check_orientation() and ok
 
 	# Deux calculs successifs donnent exactement le même bois.
 	var again: Dictionary = TacticsProps.placements(cells, tile_size)
@@ -310,5 +386,164 @@ func _test_props() -> bool:
 		print_rich("  OK: reposer le décor remplace l'ancien au lieu de l'empiler")
 	host.free()
 
+	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
+## Aucun décor ne s'assied sur le centre d'une case praticable.
+##
+## Le test d'avant ne savait mesurer que des troncs et des frondaisons — deux
+## disques, dont le rayon ne dépend pas de l'orientation. Maisons, piliers et
+## garde-corps sont des boîtes, parfois très allongées : un garde-corps de pont
+## fait presque toute la largeur de sa case, et un cercle circonscrit le
+## déclarerait fautif alors qu'il longe le bord.
+##
+## On ramène donc le centre de la case dans le repère du décor : s'il tombe hors
+## de la boîte unitaire, la case est libre. C'est exact pour une boîte, et
+## prudent pour un cylindre ou un cône, inscrits dedans.
+##
+## Seul ce qui dépasse `TacticsProps.FLAT_HEIGHT` est jugé : plus bas, on lui
+## marche dessus — c'est tout le propos d'un platelage de pont.
+func _check_centres_clear(cells: Array, batches: Dictionary, tile_size: float) -> bool:
+	# Tronc et frondaison cuisent leur rayon dans le maillage ; tout le reste
+	# suit la convention « maillage unitaire, mis à l'échelle par l'instance ».
+	var local_half := {"trunk": 0.06, "canopy": 0.22}
+
+	var terrain_by_index := {}
+	for entry in cells:
+		terrain_by_index[int(round(entry["top"].x / tile_size))] = int(entry["terrain"])
+
+	var offenders: Array[String] = []
+	var margin := 99.0
+	for kind: String in batches:
+		var half: float = float(local_half.get(kind, 0.5))
+		for xf: Transform3D in batches[kind]:
+			var index: int = int(round(xf.origin.x / tile_size))
+			if not _MD.is_walkable(int(terrain_by_index.get(index, 0))):
+				continue
+
+			var b: Basis = xf.basis
+			var half_y: float = 0.5 * (absf(b.x.y) + absf(b.y.y) + absf(b.z.y))
+			if xf.origin.y + half_y <= TacticsProps.FLAT_HEIGHT + 0.001:
+				continue
+
+			var centre := Vector3(float(index) * tile_size, xf.origin.y, 0.0)
+			var local: Vector3 = xf.affine_inverse() * centre
+			var clearance: float = maxf(absf(local.x), absf(local.z)) / half
+			if clearance <= 1.0:
+				offenders.append("%s (%.2f)" % [kind, clearance])
+			else:
+				margin = minf(margin, clearance)
+
+	if not offenders.is_empty():
+		print_rich("[color=red]  FAIL: décor sur le centre d'une case praticable : %s[/color]"
+			% ", ".join(offenders))
+		return false
+	print_rich("  OK: le centre des cases praticables reste libre "
+		+ "(le plus proche tient à %.2f fois sa demi-largeur du centre)" % margin)
+	return true
+
+
+## Un ouvrage lit ses voisines : porte alignée sur le rempart, pont sur sa travée.
+func _check_orientation() -> bool:
+	var ok := true
+
+	# Un rempart est-ouest : la porte pose ses piliers à l'est et à l'ouest,
+	# donc le passage s'ouvre du nord au sud.
+	var gate_cells: Array = [
+		{"cell": Vector2i(0, 1), "terrain": _MD.TerrainType.WALL, "top": Vector3(-1, 0, 0)},
+		{"cell": Vector2i(1, 1), "terrain": _MD.TerrainType.GATE, "top": Vector3(0, 0, 0)},
+		{"cell": Vector2i(2, 1), "terrain": _MD.TerrainType.WALL, "top": Vector3(1, 0, 0)},
+	]
+	var piers: Array = TacticsProps.placements(gate_cells, 1.0).get("pier", [])
+	var along_x: bool = piers.size() == 2 \
+		and absf(piers[0].origin.x) > 0.2 and absf(piers[0].origin.z) < 0.01
+	if not along_x:
+		print_rich("[color=red]  FAIL: la porte n'est pas alignée sur son rempart[/color]")
+		ok = false
+	else:
+		print_rich("  OK: la porte pose ses piliers dans l'alignement du rempart")
+
+	# Un pont nord-sud : les garde-corps courent à l'est et à l'ouest.
+	var bridge_cells: Array = [
+		{"cell": Vector2i(1, 0), "terrain": _MD.TerrainType.PATH, "top": Vector3(0, 0, -1)},
+		{"cell": Vector2i(1, 1), "terrain": _MD.TerrainType.BRIDGE, "top": Vector3(0, 0, 0)},
+		{"cell": Vector2i(1, 2), "terrain": _MD.TerrainType.PATH, "top": Vector3(0, 0, 1)},
+	]
+	var railings: Array = TacticsProps.placements(bridge_cells, 1.0).get("railing", [])
+	var sides_x: bool = railings.size() == 2 \
+		and absf(railings[0].origin.x) > 0.2 and absf(railings[0].origin.z) < 0.01
+	if not sides_x:
+		print_rich("[color=red]  FAIL: les garde-corps ne suivent pas la travée[/color]")
+		ok = false
+	else:
+		print_rich("  OK: le pont pose ses garde-corps le long de sa travée")
+
+	return ok
+
+
+## Une arène qui porte déjà des tuiles posées à la main, et un MapData.
+##
+## Cas qui n'existe dans aucune scène livrée, mais que produirait la conversion
+## de `map_level.tscn` — le prochain chantier des chapitres 1 et 3 à 6. La
+## génération cédait alors la main pendant une frame, et `_ready` enchaînait sur
+## `serv.setup()` avec une arène vide ; et le nœud remplacé gardait son nom
+## jusqu'à la fin de la frame, si bien que le nouveau naissait « @Tiles@2 ».
+func _test_arena_regeneration() -> bool:
+	print_rich("[color=cyan]--- Test: Arène engendrée par-dessus des tuiles existantes ---[/color]")
+	var ok := true
+
+	var md = _MD.new()
+	md.grid_size = Vector2i(5, 4)
+	md.tile_size = 1.0
+	md.init_default()
+	md.set_terrain(2, 2, _MD.TerrainType.FORT)
+
+	var arena := TacticsArena.new()
+	arena.res = load("res://data/models/world/combat/arena/arena.tres").duplicate()
+	arena.res.map_data = md
+
+	# Des tuiles d'avant, comme en poserait une carte sculptée à la main.
+	var stale := Node3D.new()
+	stale.name = "Tiles"
+	for i in 3:
+		var old_tile := MeshInstance3D.new()
+		old_tile.mesh = BoxMesh.new()  # Sans maillage, le pilote factice proteste.
+		stale.add_child(old_tile)
+	arena.add_child(stale)
+
+	arena._generate_from_map_data()
+
+	var tiles: Node = arena.get_node_or_null("Tiles")
+	if not tiles:
+		print_rich("[color=red]  FAIL: plus de nœud « Tiles » après génération[/color]")
+		ok = false
+	elif tiles == stale:
+		print_rich("[color=red]  FAIL: les tuiles d'avant sont restées[/color]")
+		ok = false
+	elif tiles.get_child_count() != md.grid_size.x * md.grid_size.y:
+		print_rich("[color=red]  FAIL: %d tuiles pour %d cases[/color]" % [
+			tiles.get_child_count(), md.grid_size.x * md.grid_size.y])
+		ok = false
+	else:
+		print_rich("  OK: les tuiles d'avant cèdent la place, et leur nom avec (%d tuiles)"
+			% tiles.get_child_count())
+
+	# Le terrain déclaré arrive bien jusqu'à la tuile — y compris les nouveaux.
+	#
+	# Par l'index, comme le fait la génération : la conversion en corps physiques
+	# rebaptise les tuiles (« Tile_2_2 » devient « Tile_2_2_col »), c'est leur
+	# rang qui dit leur case.
+	if tiles:
+		var rank: int = 2 * md.grid_size.x + 2
+		var tile: Node = tiles.get_child(rank) if tiles.get_child_count() > rank else null
+		var terrain: Variant = tile.get("terrain_type") if tile else null
+		if terrain == null or int(terrain) != _MD.TerrainType.FORT:
+			print_rich("[color=red]  FAIL: la case (2,2) annonce %s[/color]" % str(terrain))
+			ok = false
+		else:
+			print_rich("  OK: le fortin déclaré par la carte arrive jusqu'à sa tuile")
+
+	arena.free()
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
 	return ok

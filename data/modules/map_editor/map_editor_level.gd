@@ -37,6 +37,28 @@ var _unit_paths: Dictionary = {"player": "", "opponent": ""}
 ## Niveau donné aux prochaines unités posées — un réglage du pinceau.
 var _unit_level: int = 1
 
+
+## Côté du pinceau de terrain, en cases.
+var _brush: int = 1
+
+
+## Le clic peint-il toute la zone d'un seul tenant ?
+var _fill: bool = false
+
+# Un trait de pinceau : tout ce qu'un bouton enfoncé peint sans le relâcher.
+#
+# Peindre au clic-à-clic était le vrai coût de l'éditeur — une rivière de vingt
+# cases valait vingt clics. Un trait ne compte que pour **un** coup d'annulation,
+# et ne redessine le décor qu'une fois relâché : sans quoi une carte de 32 × 24
+# recalculerait ses huit cents cases à chaque pixel parcouru par la souris.
+var _stroke_active: bool = false
+
+
+var _stroke_changed: bool = false
+
+
+var _stroke_cells: Dictionary = {}
+
 # Caméra orbitale
 var _cam_yaw: float = -30.0
 var _cam_pitch: float = -50.0
@@ -50,15 +72,30 @@ var _mouse_prev: Vector2 = Vector2.ZERO
 func _ready() -> void:
 	if not doc:
 		doc = MapDocument.create_empty("Ma carte", Vector2i(16, 10))
-	_unit_paths["player"] = str(UI.roster_of("player")[0]["path"])
-	_unit_paths["opponent"] = str(UI.roster_of("opponent")[0]["path"])
+	_unit_paths["player"] = _first_unit_of(MapDocument.TEAM_PLAYER)
+	_unit_paths["opponent"] = _first_unit_of(MapDocument.TEAM_OPPONENT)
 	_history = MapHistory.started_on(doc.to_dict())
 
 	_build_environment()
 	_build_camera()
 	_build_ui()
+	_ui.show_brush(_brush)
 	_rebuild_all()
-	_refresh_feedback("Carte « %s » — choisis un outil et clique sur la grille." % doc.name)
+	_refresh_feedback("Carte « %s » — choisis un outil et dessine sur la grille "
+		% doc.name + "(le bouton reste enfoncé : le pinceau suit la souris).")
+
+
+## Unité proposée d'emblée pour un camp, ou "" si ce camp n'en a aucune.
+##
+## Le roster se lit sur le disque, et rien ne garantit qu'il rende quelque chose :
+## un dossier de fiches introuvable dans une build installée suffirait. La
+## première entrée était prise sans regarder, ce qui faisait tomber l'éditeur à
+## l'ouverture — jamais en développement, où les fiches sont là. Le reste du code
+## sait déjà quoi faire d'un chemin vide : [method MapDocument.place_unit] refuse
+## poliment, et le sélecteur d'unité annonce un camp sans unité.
+func _first_unit_of(team: String) -> String:
+	var roster: Array = UI.roster_of(team)
+	return str(roster[0]["path"]) if not roster.is_empty() else ""
 
 
 #region Construction de la scène
@@ -86,6 +123,8 @@ func _build_ui() -> void:
 	add_child(_ui)
 
 	_ui.tool_selected.connect(_on_tool_selected)
+	_ui.brush_size_changed.connect(_on_brush_size)
+	_ui.fill_mode_changed.connect(_on_fill_mode)
 	_ui.unit_picked.connect(_on_unit_picked)
 	_ui.unit_level_changed.connect(func(level: int) -> void: _unit_level = level)
 	_ui.export_requested.connect(_on_export)
@@ -278,6 +317,18 @@ func _on_tool_selected(tool_id: int) -> void:
 	_refresh_feedback()
 
 
+func _on_brush_size(size: int) -> void:
+	_brush = clampi(size, 1, MapDocument.BRUSH_SIZES[-1])
+	_ui.show_brush(_brush)
+	_refresh_feedback("Pinceau : %d×%d case(s)." % [_brush, _brush])
+
+
+func _on_fill_mode(on: bool) -> void:
+	_fill = on
+	_refresh_feedback("🪣 Remplissage %s." % ("activé — un clic peint toute la zone"
+		if on else "désactivé"))
+
+
 func _on_unit_picked(path: String) -> void:
 	var team: String = MapDocument.TEAM_PLAYER if _tool == UI.Tool.UNIT_PLAYER \
 		else MapDocument.TEAM_OPPONENT
@@ -299,12 +350,12 @@ func _use_tool(pos: Vector2i) -> void:
 ## Le geste de l'outil courant. [returns] le message à afficher ("" = état par défaut).
 func _apply_tool(pos: Vector2i) -> String:
 	match _tool:
-		UI.Tool.RAISE:
-			doc.set_height_at(pos, doc.height_at(pos) + HEIGHT_STEP)
-			_refresh_tile(pos)
-		UI.Tool.LOWER:
-			doc.set_height_at(pos, doc.height_at(pos) - HEIGHT_STEP)
-			_refresh_tile(pos)
+		UI.Tool.RAISE, UI.Tool.LOWER:
+			var step: float = HEIGHT_STEP if _tool == UI.Tool.RAISE else -HEIGHT_STEP
+			var raised: Array[Vector2i] = doc.brush_cells(pos, _brush)
+			for cell: Vector2i in raised:
+				doc.set_height_at(cell, doc.height_at(cell) + step)
+			_refresh_cells(raised)
 
 		UI.Tool.UNIT_PLAYER, UI.Tool.UNIT_OPPONENT:
 			var team: String = MapDocument.TEAM_PLAYER if _tool == UI.Tool.UNIT_PLAYER \
@@ -337,13 +388,29 @@ func _apply_tool(pos: Vector2i) -> String:
 			return "Objectif : prendre la case (%d, %d)." % [pos.x, pos.y]
 
 		_:
-			doc.set_terrain_at(pos, _tool)
-			_refresh_tile(pos)
-			# Un terrain devenu infranchissable ne peut plus porter ce qui s'y trouve.
-			if not MapDataClass.is_walkable(_tool):
-				return _clear_blocked(pos)
+			return _paint_terrain(pos)
 
 	return ""
+
+
+## Peint le terrain courant : quelques cases sous le pinceau, ou toute la zone.
+func _paint_terrain(pos: Vector2i) -> String:
+	var cells: Array[Vector2i] = doc.region_of(pos) if _fill \
+		else doc.brush_cells(pos, _brush)
+
+	var message: String = ""
+	for cell: Vector2i in cells:
+		doc.set_terrain_at(cell, _tool)
+		# Un terrain devenu infranchissable ne peut plus porter ce qui s'y trouve.
+		if not MapDataClass.is_walkable(_tool):
+			var loss: String = _clear_blocked(cell)
+			if not loss.is_empty():
+				message = loss
+	_refresh_cells(cells)
+
+	if _fill and message.is_empty():
+		return "🪣 %d case(s) en %s." % [cells.size(), MapDataClass.type_label(_tool)]
+	return message
 
 
 ## Retire ce qu'une case infranchissable ne peut plus accueillir.
@@ -362,11 +429,19 @@ func _clear_blocked(pos: Vector2i) -> String:
 	return message
 
 
-func _refresh_tile(pos: Vector2i) -> void:
-	var body: Node = _tiles.get(_key(pos), null)
-	if body:
-		_apply_tile(body as StaticBody3D, pos)
-	# Repères et décor suivent le terrain et la hauteur de leur case.
+## Redessine les cases touchées par un geste.
+##
+## Décor et repères se recalculent pour toute la carte, pas case par case : la
+## garniture d'une case dépend de ses voisines (une porte s'aligne sur son
+## rempart). Pendant un trait de pinceau, on s'en dispense — [method _end_stroke]
+## le fait une fois, au relâchement.
+func _refresh_cells(cells: Array[Vector2i]) -> void:
+	for pos: Vector2i in cells:
+		var body: Node = _tiles.get(_key(pos), null)
+		if body:
+			_apply_tile(body as StaticBody3D, pos)
+	if _stroke_active:
+		return
 	_rebuild_props()
 	_rebuild_markers()
 
@@ -388,9 +463,11 @@ func _refresh_feedback(message: String = "") -> void:
 	if not message.is_empty():
 		_ui.show_status(message)
 	else:
-		_ui.show_status("%s — %dx%d · %d unité(s) · %s" % [
+		_ui.show_status("%s — %dx%d · %d unité(s) · %s%s" % [
 			doc.name, doc.grid_size.x, doc.grid_size.y, doc.units.size(),
 			MapDocument.OBJ.describe(doc.objective),
+			"  ·  🪣 remplissage" if _fill else ("  ·  ▦ %d×%d" % [_brush, _brush] \
+				if _brush > 1 else ""),
 		])
 #endregion
 
@@ -634,6 +711,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT:
 				if event.pressed:
 					_click(event.position)
+				else:
+					_end_stroke()
 			MOUSE_BUTTON_WHEEL_UP:
 				_cam_dist = maxf(4.0, _cam_dist - 1.0)
 				_refresh_camera()
@@ -645,7 +724,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var delta: Vector2 = event.position - _mouse_prev
 		_mouse_prev = event.position
-		if _orbiting:
+		# Un bouton relâché au-dessus d'un panneau ne redescend jamais jusqu'ici :
+		# le trait resterait ouvert, et la souris peindrait sans qu'on lui demande.
+		# C'est l'état réel du bouton qui tranche, pas le seul événement reçu.
+		if _stroke_active and not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+			_end_stroke()
+		if _stroke_active:
+			_click(event.position)
+		elif _orbiting:
 			_cam_yaw -= delta.x * 0.3
 			_cam_pitch = clampf(_cam_pitch - delta.y * 0.3, -89.0, -5.0)
 			_refresh_camera()
@@ -677,8 +763,55 @@ func _click(screen_pos: Vector2) -> void:
 	if not body is Node:
 		return
 	var pos: Vector2i = _pos_of_body(body as Node)
-	if pos.x >= 0:
+	if pos.x < 0:
+		return
+
+	# Poser une unité, ouvrir une case de départ, planter le point de
+	# commandement : des gestes uniques, retenus tout de suite. Peindre, non —
+	# ça se traîne, et ça ne compte que pour un coup d'annulation.
+	if not _is_stroke_tool():
 		_use_tool(pos)
+		return
+
+	if not _stroke_active:
+		_stroke_active = true
+		_stroke_changed = false
+		_stroke_cells.clear()
+	_paint_stroke_cell(pos)
+
+
+## Un outil qui se traîne sur la carte, par opposition à un geste unique.
+##
+## Le remplissage n'en est pas : il repeint toute une zone d'un coup, le
+## promener n'ajouterait rien qu'une carte unie et un historique illisible. Il
+## ne concerne en revanche **que** le terrain — élever le sol se traîne toujours,
+## que la case à remplir soit cochée ou non.
+func _is_stroke_tool() -> bool:
+	if _tool == UI.Tool.RAISE or _tool == UI.Tool.LOWER:
+		return true
+	return UI.is_terrain_tool(_tool) and not _fill
+
+
+## Une case de plus dans le trait en cours, si le trait ne l'a pas déjà couverte.
+func _paint_stroke_cell(pos: Vector2i) -> void:
+	if _stroke_cells.has(pos):
+		return
+	_stroke_cells[pos] = true
+	_stroke_changed = true
+	_refresh_feedback(_apply_tool(pos))
+
+
+## Fin du trait : le décor se repose, et l'historique retient un seul coup.
+func _end_stroke() -> void:
+	if not _stroke_active:
+		return
+	_stroke_active = false
+	if not _stroke_changed:
+		return
+	_rebuild_props()
+	_rebuild_markers()
+	_remember()
+	_refresh_feedback()
 
 
 ## Retrouve la case d'une tuile depuis son nom de nœud (Tile_col_row).

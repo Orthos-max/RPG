@@ -1415,6 +1415,22 @@ func _test_chapter_map() -> void:
 	_check(kinds.has(MAP_DATA.TerrainType.FOREST) and kinds.has(MAP_DATA.TerrainType.WALL),
 		"chapitre 2 : un bois où s'abriter, un rempart à contourner")
 
+	# Le poste avancé se voit : sa porte, ses tours, sa brèche jonchée de pierres,
+	# et les hameaux que Garrick est venu piller. Sans quoi « ruines du poste
+	# avancé » ne serait qu'un sous-titre.
+	var outpost_kinds: Array[int] = [
+		MAP_DATA.TerrainType.GATE, MAP_DATA.TerrainType.TOWER,
+		MAP_DATA.TerrainType.RUINS, MAP_DATA.TerrainType.VILLAGE,
+		MAP_DATA.TerrainType.FORT, MAP_DATA.TerrainType.SWAMP,
+	]
+	var missing: Array[String] = []
+	for kind: int in outpost_kinds:
+		if not kinds.has(kind):
+			missing.append(MAP_DATA.type_label(kind))
+	_check(missing.is_empty(),
+		"chapitre 2 : porte, tours, brèche, hameaux, redoute et roselière sont là",
+		"manque : %s" % ", ".join(missing))
+
 	# Les pions de la carte doivent tenir debout là où la scène les pose : sur du
 	# praticable, et de plain-pied — un pion posé à zéro sur une case surélevée
 	# tomberait à travers son plateau.
@@ -2101,6 +2117,48 @@ func _test_map_editor() -> void:
 	_check(doc.height_at(Vector2i(3, 3)) <= 3.0, "hauteur bornée (%.2f)" % doc.height_at(Vector2i(3, 3)))
 	_check(doc.terrain_at(Vector2i(99, 99)) == MapData.TerrainType.GRASS,
 		"une case hors carte ne fait pas planter la lecture")
+
+	# --- Pinceau large et remplissage ---
+	_check(doc.brush_cells(Vector2i(5, 5), 1).size() == 1, "pinceau 1×1 : une case")
+	_check(doc.brush_cells(Vector2i(5, 5), 3).size() == 9, "pinceau 3×3 : neuf cases")
+	_check(doc.brush_cells(Vector2i(5, 5), 5).size() == 25, "pinceau 5×5 : vingt-cinq cases")
+	_check(doc.brush_cells(Vector2i(0, 0), 5).size() == 9,
+		"au coin, le pinceau peint moins large au lieu de déborder (%d cases)"
+			% doc.brush_cells(Vector2i(0, 0), 5).size())
+	_check(doc.brush_cells(Vector2i(5, 5), 99).size() == 25,
+		"un pinceau démesuré est ramené au plus large proposé")
+	var brush_inside: bool = true
+	for cell: Vector2i in doc.brush_cells(Vector2i(0, 7), 5):
+		brush_inside = brush_inside and doc.in_bounds(cell)
+	_check(brush_inside, "toutes les cases d'un pinceau tiennent dans la grille")
+
+	# Une carte vierge est d'un seul tenant : le remplissage la prend entière.
+	var blank := MapDocument.create_empty("Plaine", Vector2i(8, 6))
+	_check(blank.region_of(Vector2i(0, 0)).size() == 48,
+		"remplissage : toute la plaine d'un coup (%d cases)"
+			% blank.region_of(Vector2i(0, 0)).size())
+
+	# Une barrière la coupe en deux, et le remplissage s'arrête au bord.
+	for row: int in 6:
+		blank.set_terrain_at(Vector2i(4, row), MapData.TerrainType.WALL)
+	_check(blank.region_of(Vector2i(0, 0)).size() == 24,
+		"un mur arrête le remplissage (%d cases à l'ouest)"
+			% blank.region_of(Vector2i(0, 0)).size())
+	_check(blank.region_of(Vector2i(7, 0)).size() == 18,
+		"et l'autre côté est une zone à part (%d cases à l'est)"
+			% blank.region_of(Vector2i(7, 0)).size())
+	_check(blank.region_of(Vector2i(4, 2)).size() == 6,
+		"le mur lui-même est une zone d'un seul tenant")
+
+	# Voisinage à quatre : deux étendues qui ne se touchent que par un coin
+	# restent deux étendues — c'est aussi ce que dit le déplacement.
+	var diagonal := MapDocument.create_empty("Sablier", Vector2i(6, 6))
+	for cell: Vector2i in [Vector2i(0, 0), Vector2i(1, 1)]:
+		diagonal.set_terrain_at(cell, MapData.TerrainType.SNOW)
+	_check(diagonal.region_of(Vector2i(0, 0)).size() == 1,
+		"deux cases en diagonale ne forment pas une zone")
+	_check(diagonal.region_of(Vector2i(99, 99)).is_empty(),
+		"remplir hors de la carte ne rend rien")
 
 	# --- Unités ---
 	_check(bool(doc.place_unit(LORD, Vector2i(1, 1), MapDocument.TEAM_PLAYER)["ok"]),

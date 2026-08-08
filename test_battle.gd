@@ -333,6 +333,46 @@ func _run_custom_map(main: Node, campaign: Node) -> void:
 	_check(editor._history.undo_steps() == steps_before,
 		"un clic sans effet n'entre pas dans l'historique")
 
+	# --- Pinceau large, remplissage, et le trait qui ne compte que pour un coup ---
+	editor._tool = MapEditorUI.Tool.SNOW
+	editor._on_brush_size(3)
+	editor._use_tool(Vector2i(6, 5))
+	var snowed: int = 0
+	for cell: Vector2i in editor.doc.brush_cells(Vector2i(6, 5), 3):
+		if editor.doc.terrain_at(cell) == MapData.TerrainType.SNOW:
+			snowed += 1
+	_check(snowed == 9, "un pinceau 3×3 peint neuf cases d'un clic (%d)" % snowed)
+	editor._on_brush_size(1)
+
+	# Un trait de pinceau — bouton enfoncé, la souris passe sur trois cases —
+	# ne vaut qu'un seul coup d'annulation, et il les rend toutes les trois.
+	var before_stroke: int = editor._history.undo_steps()
+	editor._tool = MapEditorUI.Tool.SAND
+	editor._stroke_active = true
+	editor._stroke_changed = false
+	editor._stroke_cells.clear()
+	for col: int in [1, 2, 3]:
+		editor._paint_stroke_cell(Vector2i(col, 7))
+	editor._end_stroke()
+	_check(editor._history.undo_steps() == before_stroke + 1,
+		"un trait de pinceau ne compte que pour un coup d'annulation")
+	editor._on_undo()
+	var sand_left: int = 0
+	for col: int in [1, 2, 3]:
+		if editor.doc.terrain_at(Vector2i(col, 7)) == MapData.TerrainType.SAND:
+			sand_left += 1
+	_check(sand_left == 0, "annuler défait tout le trait, pas sa dernière case")
+
+	# Le remplissage prend la zone d'un seul tenant, terrain par terrain.
+	editor._tool = MapEditorUI.Tool.VILLAGE
+	editor._on_fill_mode(true)
+	var region: int = editor.doc.region_of(Vector2i(0, 0)).size()
+	editor._use_tool(Vector2i(0, 0))
+	_check(region > 1 and editor.doc.terrain_at(Vector2i(0, 0)) == MapData.TerrainType.VILLAGE,
+		"le remplissage repeint toute la zone (%d cases)" % region)
+	editor._on_fill_mode(false)
+	editor._on_undo()
+
 	# --- Redimensionner depuis les réglages ---
 	editor._tool = MapEditorUI.Tool.UNIT_PLAYER
 	editor._use_tool(Vector2i(14, 8))

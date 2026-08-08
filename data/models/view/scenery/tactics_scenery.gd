@@ -21,6 +21,10 @@ extends RefCounted
 const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 
 ## Teinte de base de chaque terrain
+##
+## Les terrains bâtis disent le **sol** de leur case, pas le bâtiment : la terre
+## battue d'un hameau, la cour pavée d'un fortin, les dalles d'une ruine. Ce qui
+## se dresse dessus est du décor ([TacticsProps]), avec ses propres teintes.
 const TERRAIN_COLORS: Dictionary = {
 	MapDataClass.TerrainType.GRASS: "#4a8c3f",
 	MapDataClass.TerrainType.FOREST: "#2d5a1e",
@@ -29,6 +33,15 @@ const TERRAIN_COLORS: Dictionary = {
 	MapDataClass.TerrainType.PATH: "#c4a97d",
 	MapDataClass.TerrainType.WALL: "#5a5a5a",
 	MapDataClass.TerrainType.PIT: "#1a1a1a",
+	MapDataClass.TerrainType.VILLAGE: "#9c7b4f",
+	MapDataClass.TerrainType.FORT: "#7a746a",
+	MapDataClass.TerrainType.GATE: "#6b6660",
+	MapDataClass.TerrainType.RUINS: "#7f8069",
+	MapDataClass.TerrainType.TOWER: "#63605c",
+	MapDataClass.TerrainType.BRIDGE: "#8a6a44",
+	MapDataClass.TerrainType.SAND: "#d6c087",
+	MapDataClass.TerrainType.SNOW: "#e4ebf2",
+	MapDataClass.TerrainType.SWAMP: "#4b5a3c",
 }
 
 ## Grain de chaque terrain : {frequency, contrast, roughness, metallic}
@@ -44,6 +57,18 @@ const TERRAIN_GRAIN: Dictionary = {
 	MapDataClass.TerrainType.PATH: {"frequency": 0.055, "contrast": 0.26, "roughness": 0.92, "metallic": 0.0},
 	MapDataClass.TerrainType.WALL: {"frequency": 0.040, "contrast": 0.28, "roughness": 0.85, "metallic": 0.0},
 	MapDataClass.TerrainType.PIT: {"frequency": 0.050, "contrast": 0.45, "roughness": 1.0, "metallic": 0.0},
+	MapDataClass.TerrainType.VILLAGE: {"frequency": 0.050, "contrast": 0.28, "roughness": 0.94, "metallic": 0.0},
+	MapDataClass.TerrainType.FORT: {"frequency": 0.045, "contrast": 0.30, "roughness": 0.88, "metallic": 0.0},
+	MapDataClass.TerrainType.GATE: {"frequency": 0.040, "contrast": 0.26, "roughness": 0.85, "metallic": 0.0},
+	MapDataClass.TerrainType.RUINS: {"frequency": 0.050, "contrast": 0.34, "roughness": 0.92, "metallic": 0.0},
+	MapDataClass.TerrainType.TOWER: {"frequency": 0.040, "contrast": 0.30, "roughness": 0.86, "metallic": 0.0},
+	# Le bois d'un pont : un grain serré, dans le sens des planches.
+	MapDataClass.TerrainType.BRIDGE: {"frequency": 0.075, "contrast": 0.30, "roughness": 0.90, "metallic": 0.0},
+	MapDataClass.TerrainType.SAND: {"frequency": 0.065, "contrast": 0.20, "roughness": 0.95, "metallic": 0.0},
+	# La neige accroche un peu la lumière, et ses plaques sont larges.
+	MapDataClass.TerrainType.SNOW: {"frequency": 0.025, "contrast": 0.12, "roughness": 0.72, "metallic": 0.06},
+	# La vase luit : c'est ce qui la distingue d'une forêt sombre vue de haut.
+	MapDataClass.TerrainType.SWAMP: {"frequency": 0.038, "contrast": 0.40, "roughness": 0.60, "metallic": 0.10},
 }
 
 ## Échelle du bruit en unités monde : le motif se répète tous les 4 tuiles
@@ -224,7 +249,8 @@ static var _highlight_cache: Dictionary = {}
 ## projection en coordonnées monde et sa réponse à la lumière sont conservés.
 ##
 ## Les matériaux sont mis en cache par couple (terrain, état) : sept états pour
-## sept terrains font au pire 49 matériaux, construits une seule fois.
+## seize terrains font au pire 112 matériaux, construits une seule fois — et en
+## pratique bien moins, une carte n'employant jamais toute la palette.
 static func highlight_material(terrain_type: int, state: String) -> StandardMaterial3D:
 	var key: String = "%d:%s" % [terrain_type, state]
 	var cached: Variant = _highlight_cache.get(key)

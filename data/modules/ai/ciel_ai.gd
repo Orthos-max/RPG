@@ -20,6 +20,9 @@ const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const LOG = preload("res://data/services/combat/battle_log.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
 
+
+const MapDataRef = preload("res://data/models/world/map/map_data.gd")
+
 ## Émis à chaque nouvel état exporté (le réseau s'en sert pour diffuser).
 signal state_exported(state: Dictionary)
 
@@ -906,6 +909,11 @@ func _pawn_dict(arena: TacticsArena, p: TacticsPawn, team: String, current: Tact
 
 
 ## Carte des terrains : une ligne de codes par rangée + la légende des bonus.
+##
+## Le code d'une case vient de [MapData], pas de la première lettre de son nom :
+## celle-ci confondait `water` avec `wall` et `path` avec `pit`, si bien que la
+## légende annonçait des lettres que la carte n'employait pas. Ciel lisait donc
+## des murs comme de l'eau.
 func _terrain_map(arena: TacticsArena) -> Dictionary:
 	var gs: Vector2i = TacticsGrid.grid_size(arena)
 	var rows: Array = []
@@ -920,16 +928,12 @@ func _terrain_map(arena: TacticsArena) -> Dictionary:
 		var g: Vector2i = TacticsGrid.tile_to_grid(arena, tile)
 		if g.x < 0 or g.y < 0 or g.y >= grid.size() or g.x >= gs.x:
 			continue
-		grid[g.y][g.x] = TacticsGrid.terrain_name(tile).substr(0, 1)
+		grid[g.y][g.x] = TacticsGrid.terrain_code(tile)
 
 	for row: Array in grid:
 		rows.append("".join(row))
 
-	return {
-		"legend": {"g": "grass", "f": "forest (+1 DEF)", "m": "mountain (bloqué)",
-			"w": "water (bloqué)", "p": "path", "a": "wall (bloqué)", "i": "pit (bloqué)"},
-		"rows": rows,
-	}
+	return {"legend": MapDataRef.legend(), "rows": rows}
 
 
 # ---------------------------------------------------------------------------

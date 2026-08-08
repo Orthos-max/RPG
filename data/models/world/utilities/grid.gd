@@ -105,17 +105,22 @@ static func terrain_name(tile: Node) -> String:
 	return terrain_type_name(int(terrain))
 
 
+## Lettre du terrain d'une tuile sur la carte ASCII envoyée à Ciel.
+##
+## Passe par les mêmes gardes que [method terrain_name] : une tuile libérée ou
+## sans terrain déclaré rend « ? », elle ne fait pas tomber l'export.
+static func terrain_code(tile: Node) -> String:
+	if not tile or not is_instance_valid(tile):
+		return "?"
+	var terrain: Variant = tile.get("terrain_type")
+	if terrain == null:
+		return "?"
+	return MapDataRef.type_code(int(terrain))
+
+
 ## Nom lisible d'un type de terrain.
 static func terrain_type_name(terrain: int) -> String:
-	match terrain:
-		MapDataRef.TerrainType.GRASS: return "grass"
-		MapDataRef.TerrainType.FOREST: return "forest"
-		MapDataRef.TerrainType.MOUNTAIN: return "mountain"
-		MapDataRef.TerrainType.WATER: return "water"
-		MapDataRef.TerrainType.PATH: return "path"
-		MapDataRef.TerrainType.WALL: return "wall"
-		MapDataRef.TerrainType.PIT: return "pit"
-		_: return "unknown"
+	return MapDataRef.type_key(terrain)
 
 
 ## Tuiles actuellement marquées atteignables, en coordonnées de grille.
@@ -153,17 +158,6 @@ static func tiles_in_range(arena: Node, center: Vector2i, reach: int, min_reach:
 			if col < 0 or row < 0 or col >= gs.x or row >= gs.y:
 				continue
 			out.append({"col": col, "row": row})
-	return out
-
-
-## Tuiles actuellement marquées attaquables, en coordonnées de grille.
-static func attackable_tiles(arena: Node) -> Array:
-	var out: Array = []
-	for tile in tiles(arena):
-		if not tile.get("attackable"):
-			continue
-		var g: Vector2i = tile_to_grid(arena, tile)
-		out.append({"col": g.x, "row": g.y})
 	return out
 
 

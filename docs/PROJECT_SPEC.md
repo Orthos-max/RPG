@@ -665,6 +665,8 @@ depuis l'arrivée de cet outil. Plus facile après le point 1 ; plus prudent ava
 | ✅ **Décors posés sur les cases** — arbres, rochers, créneaux (2026-08-05) | Fait : [`props.gd`](../data/models/view/scenery/props.gd), en bataille **et** dans l'éditeur |
 | ✅ **Surlignage de portée** — teinté, plus posé d'un bloc (2026-08-06) | Fait : [`tactics_scenery.gd`](../data/models/view/scenery/tactics_scenery.gd) `highlight_material()`. Le grain, la trame des cases et le terrain restent lisibles sous la teinte |
 | ✅ **La carte du chapitre 2 rendue présentable** (2026-08-07) | Fait : [`outpost_map.tres`](../data/models/world/map/outpost_map.tres). Elle était plate et entièrement « en herbe » — 200 tuiles posées à la main, sans terrain déclaré, donc sans un seul décor. Devenue un `MapData` de 10 × 20 : ruines du poste avancé, rempart percé d'une brèche, montagne à l'ouest, mare, bois, chemin, et du relief |
+| ✅ **Neuf terrains de plus, dont cinq bâtis** (2026-08-08) | Fait : village, fortin, porte, ruines, tour, pont, sable, neige, marais — table unique dans [`map_data.gd`](../data/models/world/map/map_data.gd), volumes dans [`props.gd`](../data/models/view/scenery/props.gd). Voir le journal du 2026-08-08 (2) |
+| ⬜ **Les cartes des chapitres 1, 3, 4, 5 et 6** | Elles pointent encore sur `map_level.tscn`. C'est maintenant dessinable par Aurèle lui-même dans l'éditeur — pont court : `MapDocument.to_map_data()` |
 
 ### ✅ 4. Supprimer `fe_2d/` — fait le 2026-08-06
 
@@ -1820,4 +1822,195 @@ gagnent encore sur le thème là où elles se recouvrent, et les emoji-icônes.
 
 ```
 bash scripts/test_all.sh --window   # 58 / 588 / 77 OK + test_map + 18 + 14 OK
+```
+
+---
+
+### Passe du 2026-08-08 (2) — neuf terrains, dont cinq se bâtissent
+
+Demande d'Aurèle, dans la foulée de la charte : « améliorer les graphiques des
+cartes et les possibilités de création dans l'éditeur de map. C'est un univers
+d'héroïc fantasy donc tu peux rajouter des options pour des bâtiments ? »
+
+**Neuf terrains ajoutés**, portant la palette de 7 à 16 :
+
+| Bâti | Franchissable | DÉF | Ce qu'on y voit |
+|---|---|---|---|
+| Village | oui | +1 | Une chaumière : corps de torchis, toit à deux pans |
+| Fortin | oui | +2 | Une tourelle de pierre, bannière d'or deux cases sur cinq |
+| Porte | oui | +1 | Deux piliers **alignés sur le rempart**, passage libre au milieu |
+| Ruines | oui | +1 | Deux colonnes brisées et un bloc effondré |
+| Tour | **non** | — | Fût de pierre et toit conique d'ardoise, pleine case |
+| Pont | oui | 0 | Platelage de bois, garde-corps **le long de la travée** |
+| Sable, Neige, Marais | oui | 0 | Roseaux dans la vase ; cailloux épars sur le sable |
+
+Et la plaine reçoit une touffe d'herbe une case sur trois : une carte de 300
+cases n'est plus un tapis uni.
+
+**Une table, plus cinq.** Un terrain était décrit à cinq endroits —
+franchissabilité dans `MapData`, teinte dans `TacticsScenery`, nom technique
+dans `TacticsGrid`, nom français dans `UnitSheet`, légende dans `CielAI`. En
+ajouter un demandait de visiter les cinq. Tout vit maintenant dans
+`MapData.TERRAINS` ; les quatre autres endroits y renvoient.
+
+**Deux bugs trouvés en chemin**, aucun des deux visible sans y aller voir :
+
+- **La carte ASCII envoyée à Ciel mentait.** Elle tirait la première lettre du
+  nom du terrain : `water` et `wall` étaient tous deux `w`, `path` et `pit` tous
+  deux `p` — pendant que la légende, écrite à la main, annonçait des lettres
+  distinctes (`a` pour wall, `i` pour pit) que le code n'employait pas. Ciel
+  lisait des murs comme des lacs. Les codes sont désormais dans la table, uniques
+  et vérifiés par un test ; la légende est engendrée depuis eux.
+- **Un arbre sur quatre dépassait le plafond du décor.** `MAX_HEIGHT` est censé
+  garantir qu'aucun décor ne cache un pion ; le facteur d'échelle des arbres
+  montait à 1,2 et multipliait *aussi* la hauteur. Le test ne l'avait jamais vu
+  parce qu'il ne dessinait qu'une seule case de forêt, dont le hachage tombait
+  juste. Il en dessine seize maintenant, une par terrain.
+
+**Éditeur — trois gestes qui manquaient** (`map_editor_level.gd`) :
+
+- **le pinceau suit la souris** bouton enfoncé. Un trait ne compte que pour *un*
+  coup d'annulation, et ne redessine le décor qu'au relâchement — sinon une carte
+  de 32 × 24 recalculerait ses 768 cases à chaque pixel parcouru ;
+- **pinceau 1×1, 3×3 ou 5×5**, borné à la grille ;
+- **remplissage** d'une zone d'un seul tenant (voisinage à quatre, comme le
+  déplacement).
+
+La palette passe à trois rangées — nature, constructions, outils — les seize
+boutons ne tenaient plus sur une ligne. Chaque bouton porte la teinte réelle de
+son terrain et dit en infobulle ce qu'il coûte et ce qu'il donne.
+
+**Ce que le test tient maintenant** : le centre d'une case praticable reste
+libre pour tout décor plus haut que `FLAT_HEIGHT` — la mesure d'avant ne savait
+juger que des disques (troncs, frondaisons) ; maisons, piliers et garde-corps
+sont des boîtes, dont un garde-corps qui longe presque tout un bord de case et
+qu'un cercle circonscrit aurait condamné à tort. On ramène le centre de la case
+dans le repère du décor.
+
+Regarder le résultat : `godot --path . --resolution 1600x900 --script shot.gd --
+editor sortie.png terrains` charge une carte de démonstration qui montre les
+seize terrains à la fois.
+
+```
+bash scripts/test_all.sh   # 58 / 600 / 81 OK + test_map
+```
+
+---
+
+### Passe du 2026-08-08 (3) — la carte du chapitre 2, et trois défauts
+
+**La carte du chapitre 2 emploie les nouveaux terrains.** 22 cases changées dans
+[`outpost_map.tres`](../data/models/world/map/outpost_map.tres), sous une règle
+stricte : **aucune franchissabilité modifiée**. Un mur devient une tour (les deux
+bloquent), une herbe devient un marais, une forêt devient un village (+1 DÉF dans
+les deux cas). Le chapitre se joue donc exactement comme avant en matière de
+déplacement et de portée, et aucun pion n'a bougé.
+
+- Le rempart a maintenant **deux tours** encadrant la trouée, une **porte** là où
+  le chemin le traverse, et sa **brèche est jonchée de pierres** (ruines).
+- Un **hameau au nord**, au bord de la route — ce que le poste protégeait — et le
+  **hameau pillé à l'ouest**, derrière le rempart.
+- Un **corps de logis effondré** au milieu de la cour, une **redoute** à l'écart
+  du chemin, une **roselière** au bord de la mare.
+
+**Deux cases changent d'intérêt tactique, délibérément** : la brèche et la porte
+donnent +1 DÉF, la redoute +2. Se battre dans une brèche doit valoir mieux que
+se battre en plaine. L'IA locale suit sans rien apprendre — elle raisonne sur le
+`def_bonus` d'une case, jamais sur son type. À surveiller à l'essai : le chapitre
+est un cran plus dur pour qui attaque un défenseur bien posté.
+
+Un pont manque à l'appel : la mare du chapitre n'offre aucune traversée qui mène
+quelque part. En forcer une aurait fait une case praticable isolée.
+
+#### Chasse aux bugs
+
+**1. L'éditeur tombait à l'ouverture si le roster était vide.**
+`map_editor_level.gd` prenait `roster_of("player")[0]` sans regarder. Un dossier
+de fiches introuvable dans une build installée suffisait — jamais en
+développement, où les fiches sont là. Le reste du code savait déjà quoi faire
+d'un chemin vide : `place_unit` refuse poliment, le sélecteur annonce un camp
+sans unité. C'est le seul endroit qui ne le savait pas.
+
+**2. Une arène engendrée par-dessus des tuiles existantes se montait vide.**
+`TacticsArena._generate_from_map_data()` cédait la main une frame après avoir
+libéré l'ancien nœud `Tiles`, alors que `_ready` l'appelle **sans l'attendre** :
+`serv.setup()` passait sur une arène sans tuiles. Et le nœud seulement
+`queue_free` gardait son nom jusqu'à la fin de la frame, donc le nouveau naissait
+« @Tiles@2 », introuvable pour qui le cherche par son nom. Aucune arène livrée
+n'a à la fois des tuiles à la main et un `MapData` — mais **c'est exactement ce
+qu'on obtient en convertissant `map_level.tscn`**, ce qui reste à faire pour cinq
+chapitres. La fonction est devenue synchrone (`remove_child` puis `queue_free`,
+comme l'éditeur de cartes le fait déjà pour la même raison), et un test monte le
+cas de figure.
+
+**3. L'export vers Ciel lisait un terrain sans garde.** Corrigé en passant par
+`TacticsGrid.terrain_code()`, qui applique les mêmes vérifications que
+`terrain_name()` — une tuile libérée rend « ? » au lieu de faire tomber l'export.
+Même famille que le piège de 2026-08-06 : les références aux nœuds libérés ne se
+manifestent que dans la build exportée.
+
+Corrigé au passage : activer le remplissage désactivait aussi le glisser de
+l'outil d'élévation, qui n'a rien à voir avec lui.
+
+#### Ce qui a été cherché sans rien trouver
+
+Une sonde jetable a passé 300 documents de carte tirés au hasard (tailles
+extrêmes, terrains inconnus, unités hors grille, niveaux hors bornes), 120
+partitions de zones de remplissage, 400 échanges de combat et les six cartes de
+chapitre au crible d'une vingtaine d'invariants : grille toujours accordée à sa
+taille, aller-retour JSON fidèle, redimensionnement ne laissant jamais rien
+dehors, zones partitionnant exactement la grille, dégâts jamais négatifs,
+précision dans [0, 100], nul ne perdant plus de PV qu'il n'en a. **Rien n'a
+cédé.** La sonde n'est pas conservée : ces invariants sont déjà tenus par des
+tests nommés.
+
+Également passé en revue sans trouver de défaut : aucune mutation d'un matériau
+partagé (`TacticsConfig.terrain_material` et le cache de surlignage sont lus,
+jamais écrits), prévision de combat et combat réel bâtis sur les mêmes options,
+aucune erreur du moteur dans les journaux des six suites.
+
+**Relevé, non corrigé** : `map_generator.gd` (245 lignes) n'est référencé nulle
+part et porte sa **propre table de terrains**, figée à sept. Du code mort qui
+duplique une source de vérité — même motif que `fe_2d/`, supprimé le 2026-08-06.
+À supprimer ou à brancher sur `MapData.TERRAINS`, au choix d'Aurèle.
+
+```
+bash scripts/test_all.sh --window   # 58 / 601 / 81 OK + test_map + 18 + 14 OK
+```
+
+---
+
+### Passe du 2026-08-08 (4) — le code mort
+
+Balayage complet du dépôt : pour chaque script, scène, ressource, fonction,
+constante et signal, comptage des références réelles dans **tous** les fichiers
+suivis — code, scènes, ressources, configuration d'export, documentation. Ce qui
+n'était nommé nulle part est parti. **1 052 lignes**, et la suite reste au vert.
+
+**Neuf fichiers entiers**, dont deux cascades — un script que seule sa propre
+scène référençait, et cette scène que rien ne référençait :
+
+| Fichier | Lignes | Pourquoi il ne servait plus |
+|---|---|---|
+| `data/modules/menu/main_menu.gd` + `assets/scene/main_menu.tscn` | 391 | Menu d'avant, remplacé par `title_screen.gd`. Il portait encore l'ancienne palette (`#1a1a2e`), donc d'avant la charte |
+| `data/models/world/map/map_generator.gd` | 245 | Générateur procédural jamais appelé, avec **sa propre table de terrains** figée à sept. Le relevé de la passe précédente |
+| `data/modules/map_editor/map_editor.gd` + `.tscn` | 249 | Peintre de terrain `@tool` de l'éditeur Godot, remplacé par l'éditeur en jeu (`MapEditorLevel`), qui fait tout ce qu'il faisait et le reste |
+| `probe_suite.gd` | 146 | Sonde jetable d'une session de débogage passée |
+| `test_map.tscn` | 6 | Nœud enveloppant `test_map.gd` — **cassé de toute façon** : ce script étend `SceneTree`, il ne peut pas être attaché à un nœud |
+| `tile_converter.tscn` | 6 | Scène enveloppant `TacticsTileService`, dont tout le monde se sert par ses fonctions statiques |
+| `pawn.tres` | 6 | Ressource vide ; `pawn.gd` construit la sienne en code |
+
+**Vingt-sept fonctions** que personne n'appelait — ni le code, ni les scènes, ni
+les tests, ni la documentation. Vérifiées une par une, et contrôle fait sur les
+appels dynamiques (`callv`, `has_method`) : aucune n'y figurait. Réparties sur
+20 fichiers, des accesseurs oubliés pour l'essentiel (`has_next`,
+`get_chapter_by_id`, `promotion_options`, `can_pawn_move`, `attackable_tiles`,
+`preview_combat`…).
+
+**Aucune constante ni aucun signal mort** : les seuls qui l'étaient — les deux
+tables de glyphes de terrain de `prep_screen.gd` — avaient déjà été retirés
+pendant la passe des terrains, plutôt que d'être étendus à seize entrées.
+
+```
+bash scripts/test_all.sh --window   # 58 / 601 / 81 OK + test_map + 18 + 14 OK
 ```
