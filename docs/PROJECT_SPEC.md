@@ -2014,3 +2014,50 @@ pendant la passe des terrains, plutôt que d'être étendus à seize entrées.
 ```
 bash scripts/test_all.sh --window   # 58 / 601 / 81 OK + test_map + 18 + 14 OK
 ```
+
+---
+
+### Passe du 2026-08-08 (5) — les morts qui ressuscitaient, et le terrain au survol
+
+**Le bug, remonté par Aurèle** : « J'ai échoué à la première mission, Lissa,
+Virion et Chrom sont morts, sauf que lorsque je veux recommencer il y a
+seulement Lissa de mort. »
+
+Deux causes, la même famille — **`queue_free` laisse le nœud enfant jusqu'à la
+fin de la frame, mais pas au-delà** :
+
+1. Un pion tombé est rendu invisible, privé de ses collisions, puis **libéré une
+   demi-seconde plus tard**. Le report au roster
+   (`ChapterRunner.player_unit_snapshots()`) ne lisait que les pions **encore en
+   scène**, et il n'a lieu qu'à la **fin du chapitre**. Tout ce qui était mort
+   depuis plus d'une demi-seconde n'était donc jamais reporté : seule la
+   dernière chute de la bataille comptait. Chrom et Virion se relevaient
+   intacts, Lissa restait morte parce qu'elle était tombée en dernier.
+2. `_apply_roster()` écartait les unités non déployées par un simple
+   `queue_free()` : pendant une frame, elles étaient encore enfants de
+   `level.player`. Tout ce qui parcourt ce nœud les comptait — l'objectif,
+   l'export vers Ciel, et la mémoire des morts, qui inscrivait au roster des
+   unités jamais entrées en lice.
+
+**Correction** : le runner retient l'état de chaque unité du joueur **à chaque
+frame** (`_last_seen`), et le report rend l'union des unités en scène et des
+disparues. À chaque frame et non toutes les demi-secondes : l'objectif s'évalue
+à cette période-là, exactement le délai de libération d'un mort — retenir au
+même rythme, c'est jouer à pile ou face sur chaque mort. Et les non-déployés
+quittent l'arbre (`remove_child`) avant d'être libérés.
+
+Un test monte le cas exact : un pion tombe, quitte la scène, quarante frames
+passent, et il doit toujours être reporté au roster avec zéro PV.
+
+**Demandé aussi** : voir le terrain d'une case au survol, et ce qu'il donne. Un
+encart s'allume au-dessus de la fiche d'unité — « Forêt · 🛡 +1 DÉF », « Montagne
+· infranchissable · 🛡 +3 DÉF ». Avec seize terrains dont quatre défensifs,
+reconnaître un fortin d'une ruine à la couleur du sol était devenu un pari.
+
+La phrase est écrite par `MapData.type_summary()` et **sert aussi d'infobulle
+dans l'éditeur** : celui qui dessine une carte et celui qui la joue lisent la
+même chose de la même case. Un test le tient.
+
+```
+bash scripts/test_all.sh --window   # 58 / 601 / 84 OK + test_map + 18 + 14 OK
+```

@@ -141,6 +141,21 @@ static func type_code(terrain: int) -> String:
 	return str(traits_of(terrain).get("code", "?"))
 
 
+## Ce qu'une case vaut, en une ligne : son nom, ce qu'elle donne, ce qu'elle interdit.
+##
+## « Forêt · 🛡 +1 DÉF », « Montagne · infranchissable · 🛡 +3 DÉF », « Plaine ».
+## Un seul endroit pour le dire, que la question vienne du survol en bataille ou
+## d'une infobulle de l'éditeur : le joueur doit lire la même chose des deux côtés.
+static func type_summary(terrain: int) -> String:
+	var parts: Array[String] = [type_label(terrain)]
+	if not is_walkable(terrain):
+		parts.append("infranchissable")
+	var bonus: int = get_defense_bonus(terrain)
+	if bonus > 0:
+		parts.append("🛡 +%d DÉF" % bonus)
+	return " · ".join(parts)
+
+
 ## Nom français depuis le nom technique (`forest` → « Forêt »). "" si inconnu.
 static func label_for_key(key: String) -> String:
 	for terrain: int in TERRAINS:

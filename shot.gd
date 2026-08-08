@@ -207,6 +207,21 @@ func _show_range(main: Node) -> void:
 	for _i in 30:
 		await physics_frame
 
+	# L'encart de terrain ne s'allume qu'au survol, et il n'y a pas de souris ici :
+	# on lui désigne une case défensive à la main, comme le ferait un curseur.
+	var arena: Node = level.arena
+	for terrain: int in [MapData.TerrainType.FOREST, MapData.TerrainType.MOUNTAIN,
+			MapData.TerrainType.RUINS, MapData.TerrainType.GRASS]:
+		var found: Node = null
+		for tile in TacticsGrid.tiles(arena):
+			if int(tile.get("terrain_type")) == terrain:
+				found = tile
+				break
+		if found:
+			controls.set_terrain(terrain)
+			break
+	await physics_frame
+
 
 ## Premier nœud portant un script donné.
 func _find_by_script(node: Node, suffix: String) -> Node:

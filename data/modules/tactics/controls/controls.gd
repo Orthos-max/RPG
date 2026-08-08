@@ -121,6 +121,7 @@ func reset_for_level() -> void:
 	curr_pawn = null
 	set_battle_forecast({})
 	set_unit_sheet({})
+	set_terrain(-1)
 
 
 ## Fait pointer les contrôles vers l'arène réellement montée en scène.
@@ -203,4 +204,12 @@ func set_unit_sheet(sheet: Dictionary) -> void:
 		panel.clear_sheet()
 	else:
 		panel.show_sheet(sheet)
+
+
+## Met à jour l'encart de terrain de la case survolée (négatif = masqué)
+func set_terrain(terrain: int) -> void:
+	var panel: Node = get_node_or_null("%TerrainPanel")
+	if not panel or not panel.has_method("show_terrain"):
+		return
+	panel.show_terrain(terrain)
 #endregion

@@ -52,7 +52,7 @@ func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 func _select_hovered_pawn(ctrl: TacticsControls) -> PhysicsBody3D:
 	var pawn: TacticsPawn = input_service.get_3d_canvas_mouse_position(2, ctrl)
 	var tile: TacticsTile = input_service.get_3d_canvas_mouse_position(1, ctrl) if not pawn else pawn.get_tile()
-	arena.mark_hover_tile(tile)
+	_hover(tile)
 	return pawn if pawn else tile.get_tile_occupier() if tile else null
 
 
@@ -92,18 +92,32 @@ func reselect_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	participant.stage = participant.STAGE_SHOW_ACTIONS
 
 
+## Marque la case survolée, et annonce son terrain.
+##
+## Les deux vont ensemble : le surlignage dit *où* est la souris, l'encart dit
+## *ce que vaut* la case. Le second manquait — avec seize terrains dont quatre
+## donnent de la défense, décider où poser une unité demandait de reconnaître un
+## fortin d'une ruine à la seule couleur du sol.
+func _hover(tile: TacticsTile) -> void:
+	arena.mark_hover_tile(tile)
+	if tile and is_instance_valid(tile):
+		controls.set_terrain(int(tile.terrain_type))
+	else:
+		controls.set_terrain(-1)
+
+
 ## Selects the tile currently hovered by the mouse.
 func _select_hovered_tile(ctrl: TacticsControls) -> TacticsTile:
 	var pawn: TacticsPawn = input_service.get_3d_canvas_mouse_position(2, ctrl)
 	var tile: TacticsTile = input_service.get_3d_canvas_mouse_position(1, ctrl) if not pawn else pawn.get_tile()
-	arena.mark_hover_tile(tile)
+	_hover(tile)
 	return tile
 
 
 ## Handles the selection of a new location for the current pawn.
 func select_new_location(ctrl: TacticsControls) -> void:
 	var tile: TacticsTile = input_service.get_3d_canvas_mouse_position(1, ctrl)
-	arena.mark_hover_tile(tile)
+	_hover(tile)
 	if Input.is_action_just_pressed("ui_accept") and tile and tile.reachable:
 		# Retenu avant le départ : c'est là qu'on reviendra si le joueur annule.
 		ctrl.curr_pawn.res.move_memory.record(ctrl.curr_pawn.global_position)

@@ -216,14 +216,11 @@ static func terrain_label(terrain: int) -> String:
 
 
 ## Ce que dit un terrain de plus que sa couleur : ce qu'il coûte, ce qu'il donne.
+##
+## Le même résumé qu'au survol d'une case en bataille — c'est [MapData] qui
+## l'écrit, pour que le joueur lise la même chose en dessinant et en jouant.
 static func terrain_tooltip(terrain: int) -> String:
-	var lines: Array[String] = [MapData.type_label(terrain)]
-	if not MapData.is_walkable(terrain):
-		lines.append("Infranchissable.")
-	var bonus: int = MapData.get_defense_bonus(terrain)
-	if bonus > 0:
-		lines.append("+%d DÉF pour qui s'y tient." % bonus)
-	return "\n".join(lines)
+	return MapData.type_summary(terrain)
 
 
 #endregion

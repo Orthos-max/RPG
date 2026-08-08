@@ -1,0 +1,48 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/modules/ui/terrain/terrain_panel.gd" id="1_terrain"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_terrain"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.0705882, 0.0784314, 0.109804, 0.870588)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.960784, 0.784314, 0.258824, 0.941176)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="TerrainPanel" type="PanelContainer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -244.0
+offset_right = 252.0
+offset_bottom = -204.0
+grow_vertical = 0
+custom_minimum_size = Vector2(236, 0)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_terrain")
+script = ExtResource("1_terrain")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 4
+
+[node name="Label" type="Label" parent="Margin"]
+layout_mode = 2
+text = "Plaine"
+horizontal_alignment = 1
+vertical_alignment = 1

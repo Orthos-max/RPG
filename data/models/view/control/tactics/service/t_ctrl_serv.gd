@@ -49,6 +49,7 @@ func setup(ctrl: TacticsControls) -> void:
 		controls.connect("called_select_new_location", ctrl.select_new_location)
 		controls.connect("called_set_battle_forecast", ctrl.set_battle_forecast)
 		controls.connect("called_set_unit_sheet", ctrl.set_unit_sheet)
+		controls.connect("called_set_terrain", ctrl.set_terrain)
 	if not t_cam:
 		push_error("TacticsCamera needs a CameraResource (T Cam) from /data/models/view/camera/tactics/")
 	if not arena:

@@ -197,6 +197,37 @@ func _run() -> void:
 		await physics_frame
 	_check(not session.is_ciel_controlled(), "toggle off → camp adverse à l'IA locale")
 
+	# --- Une morte reste morte, même partie de la scène ---
+	#
+	# Remonté par Aurèle : Lissa, Virion et Chrom tombent au chapitre 1, on
+	# recommence, et seule Lissa est morte. Un pion tombé est libéré une
+	# demi-seconde après sa chute, et le report au roster ne lit que les pions
+	# encore en scène — or il n'a lieu qu'à la fin du chapitre. Tout ce qui était
+	# mort depuis plus d'une demi-seconde repartait entier.
+	if runner and any_pawn:
+		var fallen_name: String = any_pawn.display_name()
+		var fallen_id: String = fallen_name.to_lower().replace(" ", "_")
+
+		any_pawn.stats.hp = 0
+		await physics_frame  # le runner retient l'état de la frame
+		level.player.remove_child(any_pawn)
+		any_pawn.queue_free()
+		for _i in 40:  # bien au-delà de la demi-seconde du délai de libération
+			await physics_frame
+
+		var reported: Dictionary = {}
+		for s: Dictionary in runner.player_unit_snapshots():
+			if str(s["id"]) == fallen_id:
+				reported = s
+		_check(not reported.is_empty(),
+			"%s est reportée au roster alors qu'elle a quitté la scène" % fallen_name,
+			"instantanés : %d" % runner.player_unit_snapshots().size())
+		_check(not reported.is_empty() and int(reported["hp"]) == 0,
+			"et elle y est reportée morte (PV %s)" % str(reported.get("hp", "absente")))
+		_check(runner.player_unit_snapshots().size() == player_pawns,
+			"les deux unités du chapitre sont reportées, la vivante et la morte",
+			"%d" % runner.player_unit_snapshots().size())
+
 	# --- Sauvegarde ---
 	_check(campaign.save_game(99) and campaign.has_save(99), "sauvegarde de campagne écrite")
 	campaign.delete_save(99)

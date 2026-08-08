@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://bky8ul2628kxw"]
+[gd_scene load_steps=10 format=3 uid="uid://bky8ul2628kxw"]
 
 [ext_resource type="Script" path="res://data/modules/tactics/controls/controls.gd" id="1_w0r3x"]
 [ext_resource type="Texture2D" uid="uid://crwcj7eegnn36" path="res://assets/textures/ui/labels/controls-ui-xbox.png" id="2_f67pw"]
@@ -9,6 +9,7 @@
 [ext_resource type="Resource" uid="uid://c2mvnq00bfcw5" path="res://data/models/view/camera/tactics/camera.tres" id="5_xo7di"]
 [ext_resource type="PackedScene" path="res://data/modules/ui/forecast/battle_forecast_panel.tscn" id="6_frcst"]
 [ext_resource type="PackedScene" path="res://data/modules/ui/sheet/unit_sheet_panel.tscn" id="7_sheet"]
+[ext_resource type="PackedScene" path="res://data/modules/ui/terrain/terrain_panel.tscn" id="8_terrn"]
 
 [node name="TacticsControls" type="Control"]
 layout_mode = 3
@@ -47,6 +48,9 @@ stretch_mode = 5
 unique_name_in_owner = true
 
 [node name="UnitSheet" parent="." instance=ExtResource("7_sheet")]
+unique_name_in_owner = true
+
+[node name="TerrainPanel" parent="." instance=ExtResource("8_terrn")]
 unique_name_in_owner = true
 
 [node name="HBox" type="HBoxContainer" parent="."]

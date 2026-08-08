@@ -23,6 +23,9 @@ signal called_set_battle_forecast
 ## Émis quand la fiche de l'unité survolée doit être mise à jour.
 signal called_set_unit_sheet
 
+## Terrain de la case survolée (un entier négatif masque l'encart)
+signal called_set_terrain
+
 ## Indicates whether the current input device is a joystick.
 @export var is_joystick: bool
 ## Indicates whether the input hints are folded.
@@ -111,3 +114,8 @@ func set_battle_forecast(forecast: Dictionary) -> void:
 ## Met à jour la fiche de l'unité survolée ; un dictionnaire vide la masque.
 func set_unit_sheet(sheet: Dictionary) -> void:
 	called_set_unit_sheet.emit(sheet)
+
+
+## Met à jour l'encart de terrain ; un entier négatif le masque.
+func set_terrain(terrain: int) -> void:
+	called_set_terrain.emit(terrain)

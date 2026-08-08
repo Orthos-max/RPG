@@ -29,6 +29,20 @@ var _seize_tile: TacticsTile = null
 ## Placement des unités en cours : l'objectif ne s'évalue pas avant le tour 1
 var _deploying: bool = false
 
+## Dernier état connu de chaque unité du joueur, `id` → instantané.
+##
+## **C'est la mémoire des morts.** Un pion tombé est rendu invisible, privé de
+## ses collisions, puis **libéré une demi-seconde plus tard** ; or le report au
+## roster ne lit que les pions encore dans l'arbre, et il n'a lieu qu'à la fin du
+## chapitre. Tout ce qui était mort depuis plus d'une demi-seconde n'était donc
+## jamais reporté : Lissa, Virion et Chrom tombent, on recommence, et seule
+## Lissa est morte — celle qui a chuté en dernier, la seule encore là quand
+## l'instantané a été pris. Les deux autres se relevaient intacts.
+##
+## On retient donc chaque unité **à chaque frame**, tant qu'elle existe. Une
+## unité qui disparaît laisse son dernier état, PV à zéro compris.
+var _last_seen: Dictionary = {}
+
 
 ## Branche le runner sur un niveau chargé.
 func setup(target_level: TacticsLevel, target_chapter: ChapterData) -> void:
@@ -49,6 +63,11 @@ func _process(delta: float) -> void:
 	if _finished or _deploying or not chapter or not level or not is_instance_valid(level):
 		return
 
+	# À chaque frame, pas toutes les demi-secondes comme l'objectif : un pion
+	# n'existe qu'une demi-seconde après sa mort, exactement la période
+	# d'évaluation. Retenir au même rythme que ce délai, c'est jouer à pile ou
+	# face sur chaque mort.
+	_remember_player_units()
 	_count_turns()
 
 	_accum += delta
@@ -99,25 +118,58 @@ func seize_target() -> Vector2i:
 
 
 ## État des unités du joueur, pour reporter XP/PV dans le roster persistant.
+##
+## Les unités encore en scène donnent leur état du moment ; celles qui n'y sont
+## plus — les mortes, libérées une demi-seconde après leur chute — donnent le
+## dernier état retenu par [member _last_seen]. Sans elles, une défaite ne
+## coûtait que la dernière mort de la bataille.
 func player_unit_snapshots() -> Array:
+	_remember_player_units()
+
 	var out: Array = []
-	if not level or not level.player or not is_instance_valid(level.player):
-		return out
-	for p in level.player.get_children():
-		if not p is TacticsPawn or not is_instance_valid(p):
-			continue
-		var s = p.stats
-		var unit_name: String = EXECUTOR.display_name(p)
-		out.append({
-			"id": unit_name.to_lower().replace(" ", "_"),
-			"name": unit_name,
-			"hp": s.hp, "max_hp": s.max_hp,
-			"exp": s.exp, "level": s.level,
-			"class_id": s.character_class, "is_promoted": s.is_promoted,
-			"str": s.str, "mag": s.mag, "skl": s.skl, "spd": s.spd,
-			"lck": s.lck, "def": s.def, "res": s.res, "movement": s.movement,
-		})
+	var seen: Dictionary = {}
+	if level and level.player and is_instance_valid(level.player):
+		for p in level.player.get_children():
+			if not p is TacticsPawn or not is_instance_valid(p):
+				continue
+			var snapshot: Dictionary = _snapshot_of(p)
+			seen[str(snapshot["id"])] = true
+			out.append(snapshot)
+
+	for id: String in _last_seen:
+		if not seen.has(id):
+			out.append(_last_seen[id])
 	return out
+
+
+## Retient l'état de chaque unité du joueur encore en scène.
+func _remember_player_units() -> void:
+	if not level or not level.player or not is_instance_valid(level.player):
+		return
+	for p in level.player.get_children():
+		if not p is TacticsPawn or not is_instance_valid(p) or not p.stats:
+			continue
+		# Un pion déjà promis à la libération ne dit plus rien d'utile : soit il
+		# est mort, et son dernier état est retenu depuis une demi-seconde, soit
+		# il quitte la scène sans avoir combattu.
+		if p.is_queued_for_deletion():
+			continue
+		var snapshot: Dictionary = _snapshot_of(p)
+		_last_seen[str(snapshot["id"])] = snapshot
+
+
+func _snapshot_of(p: TacticsPawn) -> Dictionary:
+	var s = p.stats
+	var unit_name: String = EXECUTOR.display_name(p)
+	return {
+		"id": unit_name.to_lower().replace(" ", "_"),
+		"name": unit_name,
+		"hp": s.hp, "max_hp": s.max_hp,
+		"exp": s.exp, "level": s.level,
+		"class_id": s.character_class, "is_promoted": s.is_promoted,
+		"str": s.str, "mag": s.mag, "skl": s.skl, "spd": s.spd,
+		"lck": s.lck, "def": s.def, "res": s.res, "movement": s.movement,
+	}
 
 
 #region Internes
@@ -189,7 +241,14 @@ func _apply_roster() -> void:
 			continue  # Pion propre au niveau (PNJ, invité) : on n'y touche pas.
 
 		if not bool(unit.get("alive", true)) or not id in campaign.deployment:
-			p.queue_free()  # Non déployé (ou tombé) : il ne participe pas.
+			# Non déployé (ou tombé) : il ne participe pas. On le sort de l'arbre
+			# **avant** de le libérer — un nœud seulement `queue_free` reste
+			# enfant jusqu'à la fin de la frame, et tout ce qui parcourt
+			# `level.player` le compte encore : l'objectif, l'export vers Ciel, et
+			# la mémoire des morts, qui inscrivait ainsi au roster des unités
+			# jamais entrées en lice.
+			level.player.remove_child(p)
+			p.queue_free()
 			continue
 
 		_deployed_names.append(unit_name)
@@ -281,7 +340,12 @@ func _start_deployment() -> void:
 	phase.name = "DeploymentPhase"
 	phase.level = level
 	phase.declared_tiles = chapter.deploy_tiles
-	phase.finished.connect(func() -> void: _deploying = false)
+	phase.finished.connect(func() -> void:
+		_deploying = false
+		# La bataille commence ici. Ce que la scène portait avant — les pions que
+		# le roster n'a pas retenus, ceux d'avant le déploiement — n'a rien à
+		# faire dans la mémoire des morts : ils n'ont pas combattu.
+		_last_seen.clear())
 	_deploying = true
 	add_child(phase)
 

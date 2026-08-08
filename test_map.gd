@@ -152,6 +152,43 @@ func _test_terrain_table() -> bool:
 		ok = false
 		print_rich("[color=red]  FAIL: un terrain inconnu devrait se traverser sans bonus[/color]")
 
+	ok = _test_terrain_summary() and ok
+	return ok
+
+
+## Le résumé lu au survol d'une case, et en infobulle dans l'éditeur.
+##
+## Une seule phrase pour les deux : le joueur qui dessine une carte et celui qui
+## la joue doivent lire la même chose de la même case.
+func _test_terrain_summary() -> bool:
+	var ok := true
+	var cases := {
+		_MD.TerrainType.GRASS: "Plaine",
+		_MD.TerrainType.FOREST: "Forêt · 🛡 +1 DÉF",
+		_MD.TerrainType.FORT: "Fortin · 🛡 +2 DÉF",
+		_MD.TerrainType.MOUNTAIN: "Montagne · infranchissable · 🛡 +3 DÉF",
+		_MD.TerrainType.WATER: "Eau · infranchissable",
+	}
+	for terrain: int in cases:
+		var got: String = _MD.type_summary(terrain)
+		if got != str(cases[terrain]):
+			ok = false
+			print_rich("[color=red]  FAIL: résumé « %s » (attendu « %s »)[/color]"
+				% [got, str(cases[terrain])])
+
+	# Tout terrain a un résumé, et l'éditeur dit exactement le même.
+	for terrain: int in _MD.all_types():
+		if _MD.type_summary(terrain).is_empty():
+			ok = false
+			print_rich("[color=red]  FAIL: %s n'a pas de résumé[/color]" % _MD.type_key(terrain))
+		if MapEditorUI.terrain_tooltip(terrain) != _MD.type_summary(terrain):
+			ok = false
+			print_rich("[color=red]  FAIL: l'éditeur et la bataille ne disent pas la même chose de %s[/color]"
+				% _MD.type_key(terrain))
+
+	if ok:
+		print_rich("  OK: chaque terrain se résume en une ligne, la même en bataille "
+			+ "et dans l'éditeur")
 	return ok
 
 
