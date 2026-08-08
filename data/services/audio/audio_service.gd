@@ -168,9 +168,6 @@ func missing_cues() -> Array[String]:
 	return out
 
 
-## Le jeu dispose-t-il d'au moins un son ?
-func has_any_audio() -> bool:
-	return missing_cues().size() < SoundDB.keys().size()
 #endregion
 
 

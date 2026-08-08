@@ -146,19 +146,6 @@ func set_ciel_enabled(enabled: bool) -> void:
 	mode = Mode.CIEL if enabled else Mode.SOLO
 
 
-## Profil heuristique courant de l'IA locale.
-func ai_profile() -> Dictionary:
-	return DIFF.get_profile(difficulty)
-
-
-## Handicap de stats à appliquer au camp adverse pour le chapitre courant.
-func opponent_handicap() -> Dictionary:
-	return {
-		"stat_bonus": DIFF.stat_handicap(difficulty, chapter_index),
-		"hp_bonus": DIFF.hp_handicap(difficulty, chapter_index),
-	}
-
-
 ## Génère un code d'invitation court (M3/M4) : 6 caractères sans ambiguïté visuelle.
 static func generate_join_code(length: int = 6) -> String:
 	const ALPHABET: String = "ACDEFGHJKLMNPQRSTUVWXYZ2345679"

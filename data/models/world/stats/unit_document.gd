@@ -284,10 +284,4 @@ func to_roster_unit() -> Dictionary:
 	return unit
 
 
-## Croissances effectives : les personnalisées, complétées par celles de la classe.
-func effective_growths() -> Dictionary:
-	var out: Dictionary = CDB.get_growths(class_id).duplicate()
-	for key in growths:
-		out[str(key)] = int(growths[key])
-	return out
 #endregion

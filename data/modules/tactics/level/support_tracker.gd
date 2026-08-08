@@ -52,17 +52,6 @@ func award_adjacent(name_a: String, name_b: String) -> void:
 		_announce_rank_up(pair)
 
 
-## Award support points for fighting the same enemy (both attacked the same target)
-func award_dual_combat(name_a: String, name_b: String) -> void:
-	var pair := get_pair(name_a, name_b)
-	if not pair:
-		return
-	
-	var new_rank := pair.add_points(SupportDB.PTS_DUAL_COMBAT)
-	if new_rank >= 0:
-		_announce_rank_up(pair)
-
-
 ## Award support points for being within support range during combat
 func award_nearby_combat(name_a: String, name_b: String) -> void:
 	var pair := get_pair(name_a, name_b)
@@ -115,14 +104,6 @@ func get_nearby_support_allies(pawn: TacticsPawn, all_allies: Array) -> Array[St
 			var ally_name: String = ally.stats.override_name if ally.stats.override_name else ally.stats.expertise
 			result.append(ally_name)
 	
-	return result
-
-
-## Get all pairs for display
-func get_all_pairs() -> Array:
-	var result: Array = []
-	for key in pairs:
-		result.append(pairs[key])
 	return result
 
 

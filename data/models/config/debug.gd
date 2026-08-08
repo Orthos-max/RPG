@@ -95,13 +95,6 @@ static var debug_dict: Dictionary = {
 }
 
 
-## Enables or disables debug logging.
-##
-## @param enabled: Boolean value to enable (true) or disable (false) debug logging.
-static func set_debug_enabled(enabled: bool) -> void:
-	debug_enabled = enabled
-
-
 ## Logs debug messages without spamming the console.
 ##
 ## This function checks if the debug state has changed before logging,

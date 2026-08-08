@@ -283,12 +283,6 @@ func add_weapon(weapon_id: String) -> bool:
 	return true
 
 
-## L'unité porte-t-elle cette arme ?
-func has_weapon(weapon_id: String) -> bool:
-	var key: String = WEAPONS.canonical_id(weapon_id)
-	return not key.is_empty() and key in weapons
-
-
 ## Retire une arme du fourreau. Si c'était celle en main, l'unité empoigne la
 ## suivante — ou revient à mains nues, ce que la prévision de combat dira.
 func drop_weapon(weapon_id: String) -> bool:
@@ -561,14 +555,6 @@ func can_promote_now() -> bool:
 	return not is_promoted \
 		and ClassDataDB.can_promote(character_class) \
 		and level >= ClassDataDB.get_promo_level(character_class)
-
-
-## Branches de promotion disponibles : [{id, name}]
-func promotion_options() -> Array:
-	var options: Array = []
-	for id in ClassDataDB.get_promotions(character_class):
-		options.append({"id": id, "name": ClassDataDB.get_class_name(id)})
-	return options
 
 
 ## Promeut l'unité vers une classe avancée.

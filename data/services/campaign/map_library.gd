@@ -96,11 +96,6 @@ static func delete(path: String) -> bool:
 	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK
 
 
-## Y a-t-il au moins une carte enregistrée ?
-static func has_maps() -> bool:
-	return not list_maps().is_empty()
-
-
 #region Échange
 ## Le texte d'échange d'une carte : son JSON, mis en forme pour être lu.
 ##

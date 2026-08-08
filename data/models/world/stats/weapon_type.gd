@@ -128,11 +128,6 @@ static func is_magical(type: Type) -> bool:
 	return type in MAGICAL_WEAPONS
 
 
-## Check if a weapon type is physical (uses STR stat for damage, targets DEF)
-static func is_physical(type: Type) -> bool:
-	return type in PHYSICAL_WEAPONS
-
-
 ## Nom français d'un type d'arme — ce que lit un joueur.
 ##
 ## [method get_weapon_name] reste en anglais : ce nom-là part dans `ai_state.json`

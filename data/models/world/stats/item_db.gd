@@ -56,13 +56,6 @@ static func get_item(item_name: String) -> Dictionary:
 	return DATA[key] if not key.is_empty() else {}
 
 
-## Liste des objets connus
-static func all_items() -> Array:
-	var names: Array = DATA.keys()
-	names.sort()
-	return names
-
-
 ## Prix d'achat (0 si l'objet est inconnu)
 static func price(item_name: String) -> int:
 	return int(get_item(item_name).get("price", 0))

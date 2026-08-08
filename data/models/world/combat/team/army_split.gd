@@ -44,8 +44,3 @@ static func guest_indices(count: int, share: float = DEFAULT_SHARE) -> Array[int
 		i += 2
 	picked.sort()
 	return picked
-
-
-## Le partage est-il possible sur une armée de `count` pions ?
-static func can_split(count: int, share: float = DEFAULT_SHARE) -> bool:
-	return not guest_indices(count, share).is_empty()

@@ -272,11 +272,6 @@ func deployment_tile(unit_id: String) -> Vector2i:
 	return deployment_tiles.get(unit_id, Vector2i(-1, -1))
 
 
-## Oublie toutes les cases choisies (changement de carte, ou remise à plat).
-func clear_deployment_tiles() -> void:
-	deployment_tiles.clear()
-
-
 ## Reporte l'état d'une unité après une bataille (PV, XP, niveau, mort).
 ## [param snapshot] {id|name, hp, exp, level, is_promoted, class_id, stats…}
 func apply_battle_result(snapshot: Dictionary) -> void:

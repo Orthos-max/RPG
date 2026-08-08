@@ -41,17 +41,6 @@ func add_points(amount: int) -> int:
 	return -1
 
 
-## Check if this pair has a conversation available at the current rank
-func has_unread_conversation() -> bool:
-	return rank > SupportDB.Rank.NONE and not rank_reached[rank]
-
-
-## Mark the current rank conversation as read
-func mark_conversation_read() -> void:
-	if rank <= SupportDB.Rank.S:
-		rank_reached[rank] = true
-
-
 ## Get the pair key (used for dictionary lookup)
 func get_key() -> String:
 	return char_a + "|" + char_b
@@ -60,8 +49,3 @@ func get_key() -> String:
 ## Get the combined combat bonuses for this pair's rank
 func get_bonuses() -> Dictionary:
 	return SupportDB.get_bonuses(rank)
-
-
-## Get display string
-func to_display_string() -> String:
-	return "%s ♡ %s | Rank %s (%d pts)" % [char_a, char_b, SupportDB.rank_name(rank), points]

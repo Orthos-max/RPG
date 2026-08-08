@@ -467,16 +467,6 @@ func _get_name(p: TacticsPawn) -> String:
 	return p.display_name()
 
 
-## Get a combat preview (before committing to attack) for UI display
-##
-## @param attacker: The attacking pawn's Stats
-## @param defender: The defending pawn's Stats
-## @param support_bonuses: Optional support bonuses
-## @return: FECombatCalculator.CombatResult with hit/dmg/crit/double info
-static func preview_combat(attacker: Stats, defender: Stats, support_bonuses: Dictionary = {}, terrain_defense: int = 0) -> CombatCalc.CombatResult:
-	return CombatCalc.calculate(attacker, defender, support_bonuses, terrain_defense)
-
-
 ## Prévision affichable de l'action de `attacker` sur `target`, telle qu'elle
 ## sera réellement résolue : mêmes bonus de soutien, même terrain, même
 ## distinction soin/attaque que `_resolve_combat`.

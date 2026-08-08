@@ -54,11 +54,6 @@ static func exp_for_damage(attacker_level: int, defender_level: int) -> int:
 	return max(MIN_EXP, BASE_DAMAGE_EXP + int((defender_level - attacker_level) * LEVEL_DIFF_FACTOR))
 
 
-## Calculate EXP gained for healing
-static func exp_for_heal(healer_level: int) -> int:
-	return max(MIN_EXP, BASE_HEAL_EXP - healer_level)
-
-
 ## Get EXP required to reach the next level
 static func exp_for_next_level(current_level: int) -> int:
 	if current_level < 1:

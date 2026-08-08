@@ -112,20 +112,6 @@ func is_alive() -> bool:
 	return stats.curr_health > 0
 
 
-## Checks if the pawn can move
-##
-## @return: Whether the pawn can move and is alive
-func can_pawn_move() -> bool:
-	return res.can_move and is_alive()
-
-
-## Checks if the pawn can attack
-##
-## @return: Whether the pawn can attack and is alive
-func can_pawn_attack() -> bool:
-	return res.can_attack and is_alive()
-
-
 ## Checks if the pawn can perform any action
 ##
 ## @return: Whether the pawn can move or attack, and is alive

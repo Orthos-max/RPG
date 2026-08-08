@@ -195,22 +195,9 @@ static func get_chapter(index: int) -> ChapterData:
 	return ChapterDataClass.from_dict(CHAPTERS[index])
 
 
-## Chapitre par identifiant (null si inconnu)
-static func get_chapter_by_id(id: String) -> ChapterData:
-	for c: Dictionary in CHAPTERS:
-		if str(c.get("id", "")) == id:
-			return ChapterDataClass.from_dict(c)
-	return null
-
-
 ## Index d'un chapitre depuis son identifiant (-1 si inconnu)
 static func index_of(id: String) -> int:
 	for i in CHAPTERS.size():
 		if str(CHAPTERS[i].get("id", "")) == id:
 			return i
 	return -1
-
-
-## Existe-t-il un chapitre après celui-ci ?
-static func has_next(index: int) -> bool:
-	return index + 1 < CHAPTERS.size()

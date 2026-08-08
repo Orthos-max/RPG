@@ -62,19 +62,9 @@ static var view: Dictionary = {
 static var ui_elem: Array[String] = [
 	"%Actions", "%Hints",
 ]
+
+
 #endregion
-
-
-## Creates a terrain material (opaque, unshaded for flat look).
-static func create_terrain_material(color_hex: String) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-	mat.albedo_color = Color(color_hex)
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	mat.roughness = 0.9
-	return mat
-
-
 ## Creates a StandardMaterial3D with specified color, texture, and shading mode.
 ##
 ## @param color_hex: The color of the material in hexadecimal format.
