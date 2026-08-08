@@ -16,6 +16,7 @@ extends RefCounted
 const CDB = preload("res://data/models/world/stats/class_data.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 
 ## Bornes des statistiques, pour qu'une fiche reste jouable.
 const MIN_STAT: int = 0
@@ -43,6 +44,14 @@ var growths: Dictionary = {}
 var weapons: Array[String] = []
 ## Consommables de départ (noms connus d'[ItemDB]).
 var items: Array[String] = []
+
+## Compétences de la fiche — la liste **définitive**, pas un supplément.
+##
+## L'éditeur y met ce que le personnage doit savoir faire, compétences de classe
+## comprises : c'est ce qui permet d'en retirer une que la classe donnait.
+## [method Stats.set_skills] retraduit cette liste en acquis et en retraits au
+## moment d'entrer en jeu.
+var skills: Array[String] = []
 ## Figurine portée sur le plateau. Vide : celle de la classe fait foi.
 ##
 ## Une fiche écrite à la main n'avait aucune apparence : elle empruntait celle du
@@ -125,6 +134,25 @@ func apply_class_bases() -> void:
 			weapons.append(id)
 			break
 
+	reset_skills_to_class()
+
+
+## Compétences que la classe accorde à ce niveau.
+func class_skills() -> Array[String]:
+	var out: Array[String] = []
+	for id in CDB.unlocked_skills(class_id, level):
+		out.append(str(id))
+	return out
+
+
+## Remet la liste des compétences sur celle de la classe.
+##
+## Changer de classe rebat les compétences comme il rebat les bases : garder les
+## compétences d'un chevalier sur une fiche devenue mage relèverait plus de
+## l'accident que du choix.
+func reset_skills_to_class() -> void:
+	skills = class_skills()
+
 
 ## Ce qui empêche cette fiche d'entrer en jeu. Tableau vide : elle est bonne.
 ##
@@ -168,6 +196,10 @@ func validate() -> Array[String]:
 			errors.append("%s ne sait pas manier %s" % [
 				CDB.get_class_name(class_id), WEAPONS.label(id)])
 
+	for skill_id: String in skills:
+		if not SKILLS.exists(skill_id):
+			errors.append("compétence inconnue : %s" % skill_id)
+
 	if items.size() > ITEMS.MAX_ITEMS:
 		errors.append("pas plus de %d objets" % ITEMS.MAX_ITEMS)
 	for item: String in items:
@@ -201,6 +233,7 @@ func to_dict() -> Dictionary:
 		"growths": growths.duplicate(),
 		"weapons": weapons.duplicate(),
 		"items": items.duplicate(),
+		"skills": skills.duplicate(),
 		"sprite": sprite,
 	}
 
@@ -240,6 +273,18 @@ static func from_dict(data: Dictionary) -> UnitDocument:
 		if not item.is_empty():
 			doc.items.append(item)
 
+	# Une fiche écrite avant que les compétences soient réglables n'a pas la clé :
+	# elle avait donc celles de sa classe, et c'est ce qu'on lui rend. Une liste
+	# vide, elle, est un choix — un personnage sans aucune compétence.
+	if data.has("skills"):
+		doc.skills = []
+		for s in data.get("skills", []):
+			var skill_id: String = str(s)
+			if SKILLS.exists(skill_id) and not skill_id in doc.skills:
+				doc.skills.append(skill_id)
+	else:
+		doc.reset_skills_to_class()
+
 	return doc
 #endregion
 
@@ -267,6 +312,7 @@ func to_roster_unit() -> Dictionary:
 		"alive": true,
 		"items": items.duplicate(),
 		"weapons": weapons.duplicate(),
+		"skills": skills.duplicate(),
 		"weapon": weapons[0] if not weapons.is_empty() else "",
 		"uses_arsenal": not weapons.is_empty(),
 		"sprite": effective_sprite(),

@@ -64,6 +64,11 @@ var curr_health: int: ## Alias for hp
 #region Compétences
 ## Compétences acquises hors classe (récompense, objet, scénario)
 var extra_skills: Array = []
+## Compétences de classe retirées à la main, dans l'éditeur de personnages.
+##
+## Sans cette liste, une compétence de classe serait indéracinable : elle se
+## déduit de la classe et du niveau, et rien ne saurait dire « pas celle-là ».
+var removed_skills: Array = []
 #endregion
 
 #region Inventaire & états temporaires
@@ -243,15 +248,62 @@ func get_skills() -> Array:
 	for id in extra_skills:
 		if not id in ids:
 			ids.append(id)
-	return ids
+	var kept: Array = []
+	for id in ids:
+		if not id in removed_skills:
+			kept.append(id)
+	return kept
 
 
 ## Accorde une compétence hors classe. Refusée si inconnue ou déjà présente.
+##
+## Rendre une compétence retirée à la main la réactive : c'est la même intention,
+## et laisser la suppression gagner sur l'acquisition serait un piège.
 func learn_skill(skill_id: String) -> bool:
-	if not SkillDB.exists(skill_id) or skill_id in get_skills():
+	if not SkillDB.exists(skill_id):
 		return false
+	var was_removed: bool = skill_id in removed_skills
+	removed_skills.erase(skill_id)
+	if skill_id in get_skills():
+		return was_removed
 	extra_skills.append(skill_id)
 	return true
+
+
+## Retire une compétence, qu'elle vienne de la classe ou d'un acquis.
+##
+## [returns] false si l'unité ne l'avait pas.
+func forget_skill(skill_id: String) -> bool:
+	if not skill_id in get_skills():
+		return false
+	extra_skills.erase(skill_id)
+	if not skill_id in removed_skills:
+		removed_skills.append(skill_id)
+	return true
+
+
+## Impose la liste exacte des compétences de l'unité.
+##
+## Ce que l'éditeur de personnages écrit sur une fiche est une liste définitive,
+## pas une addition : on la traduit ici en acquis et en retraits par rapport à ce
+## que la classe donne déjà. Écrire les deux listes à la main depuis l'appelant
+## ferait fatalement diverger les deux moitiés du calcul.
+func set_skills(ids: Array) -> void:
+	var wanted: Array = []
+	for id in ids:
+		var skill_id: String = str(id)
+		if SkillDB.exists(skill_id) and not skill_id in wanted:
+			wanted.append(skill_id)
+
+	extra_skills = []
+	removed_skills = []
+	var from_class: Array = ClassDataDB.unlocked_skills(character_class, level)
+	for id in wanted:
+		if not id in from_class:
+			extra_skills.append(id)
+	for id in from_class:
+		if not id in wanted:
+			removed_skills.append(id)
 
 
 ## Contexte de combat de cette unité, pour l'évaluation des compétences.

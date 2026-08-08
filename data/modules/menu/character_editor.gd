@@ -19,6 +19,8 @@ const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
+const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 
 const C_BG := Color("#141026")
 const C_PANEL := Color("#16213e")
@@ -34,8 +36,10 @@ var _class_picker: OptionButton
 var _sprite_picker: OptionButton
 var _rows: VBoxContainer
 var _preview: Label
+var _derived: VBoxContainer
 var _status: Label
 var _library: VBoxContainer
+var _skills_box: VBoxContainer
 ## Fiche dont la suppression attend confirmation
 var _pending_delete: String = ""
 
@@ -109,6 +113,13 @@ func _build() -> void:
 	_preview.add_theme_color_override("font_color", C_TEXT)
 	side.add_child(_preview)
 
+	# Les valeurs dérivées à part : ce sont elles qui décident d'un combat, et
+	# chacune porte l'explication de sa propre formule. Les compétences vont sur
+	# leur propre ligne — mêlées aux chiffres, elles se lisaient comme l'un d'eux.
+	_derived = VBoxContainer.new()
+	_derived.add_theme_constant_override("separation", 4)
+	side.add_child(_derived)
+
 	var lib_title := Label.new()
 	lib_title.text = "📚  Personnages enregistrés"
 	lib_title.add_theme_font_size_override("font_size", 15)
@@ -175,22 +186,23 @@ func _rebuild_form() -> void:
 
 	_rows.add_child(_labelled("Figurine", _build_sprite_picker()))
 
+	# Le niveau décide des compétences que la classe accorde : le changer refait
+	# la section des compétences, pas seulement l'aperçu.
 	_rows.add_child(_number("Niveau", doc.level, UnitDocument.MIN_LEVEL, UnitDocument.MAX_LEVEL,
-		func(v: int) -> void: doc.level = v))
+		_on_level_changed,
+		"Niveau\n\nDe 1 à 20. Il décide des compétences que la classe débloque,"
+			+ " et de l'expérience que valent les adversaires."))
 	_rows.add_child(_number("PV max", doc.max_hp, UnitDocument.MIN_HP, UnitDocument.MAX_HP,
-		func(v: int) -> void: doc.max_hp = v))
+		func(v: int) -> void: doc.max_hp = v, GLOSSARY.tooltip("hp")))
 	_rows.add_child(_number("Mouvement", doc.movement, 1, UnitDocument.MAX_MOVEMENT,
-		func(v: int) -> void: doc.movement = v))
+		func(v: int) -> void: doc.movement = v, GLOSSARY.tooltip("movement")))
 
-	var stat_labels: Dictionary = {
-		"str": "Force", "mag": "Magie", "skl": "Adresse", "spd": "Vitesse",
-		"lck": "Chance", "def": "Défense", "res": "Résistance",
-	}
 	for key: String in UnitDocument.STATS:
 		var stat_key: String = key
-		_rows.add_child(_number(str(stat_labels[key]), int(doc.stats.get(key, 0)),
+		_rows.add_child(_number(GLOSSARY.label(key), int(doc.stats.get(key, 0)),
 			UnitDocument.MIN_STAT, UnitDocument.MAX_STAT,
-			func(v: int) -> void: doc.stats[stat_key] = v))
+			func(v: int) -> void: doc.stats[stat_key] = v,
+			GLOSSARY.tooltip(key)))
 
 	# --- Armes autorisées par la classe ---
 	var weapon_title := Label.new()
@@ -231,7 +243,70 @@ func _rebuild_form() -> void:
 		check.toggled.connect(func(on: bool) -> void: _on_item_toggled(key, on))
 		_rows.add_child(check)
 
+	# --- Compétences ---
+	_skills_box = VBoxContainer.new()
+	_skills_box.add_theme_constant_override("separation", 4)
+	_rows.add_child(_skills_box)
+	_refresh_skills()
+
 	_refresh_preview()
+
+
+## Section des compétences, refaite à chaque fois que la classe ou le niveau
+## change : c'est ce qui décide de la mention « (classe) ».
+##
+## Toutes les compétences du catalogue sont proposées, y compris celles d'une
+## autre classe : cet écran sert à écrire des personnages, pas à respecter les
+## règles de progression — il laisse déjà monter une stat à 60.
+func _refresh_skills() -> void:
+	if not _skills_box:
+		return
+	for child in _skills_box.get_children():
+		_skills_box.remove_child(child)
+		child.queue_free()
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	var title := Label.new()
+	title.text = "Compétences  (%d cochée(s))" % doc.skills.size()
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", C_GOLD)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.mouse_filter = Control.MOUSE_FILTER_STOP
+	title.tooltip_text = ("Compétences\n\nElles agissent pendant le combat : les passives modifient"
+		+ " précision, critique, esquive, dégâts et défense selon la situation ; celles à"
+		+ " déclenchement tentent leur chance à chaque coup porté.\n\nSurvole une compétence"
+		+ " pour lire son effet exact.")
+	header.add_child(title)
+
+	var reset := _make_button("↺  Celles de la classe", false)
+	reset.custom_minimum_size = Vector2(180, 30)
+	reset.add_theme_font_size_override("font_size", 12)
+	reset.tooltip_text = "Remet exactement les compétences que %s débloque au niveau %d." % [
+		CDB.get_class_name(doc.class_id), doc.level]
+	reset.pressed.connect(func() -> void:
+		doc.reset_skills_to_class()
+		_status.text = "Compétences remises sur celles de la classe."
+		_refresh_skills()
+		_refresh_preview())
+	header.add_child(reset)
+	_skills_box.add_child(header)
+
+	var from_class: Array[String] = doc.class_skills()
+	for skill_id: String in SKILLS.all_ids():
+		var id: String = skill_id
+		var check := CheckBox.new()
+		check.text = "%s%s — %s" % [
+			SKILLS.get_skill_name(id),
+			"  (classe)" if id in from_class else "",
+			SKILLS.describe(id),
+		]
+		check.button_pressed = id in doc.skills
+		check.tooltip_text = SKILLS.tooltip(id)
+		check.add_theme_font_size_override("font_size", 13)
+		check.add_theme_color_override("font_color", C_GOLD if id in from_class else C_TEXT)
+		check.toggled.connect(func(on: bool) -> void: _on_skill_toggled(id, on))
+		_skills_box.add_child(check)
 
 
 ## Une ligne « intitulé + champ ».
@@ -289,7 +364,13 @@ func _build_sprite_picker() -> Control:
 	return row
 
 
-func _labelled(text: String, field: Control) -> Control:
+## Une ligne « intitulé + champ », avec son explication au survol.
+##
+## L'info-bulle est posée sur l'intitulé **et** sur le champ : un Label ne reçoit
+## pas la souris par défaut (`MOUSE_FILTER_IGNORE`), et sans ce réglage la bulle
+## n'apparaîtrait qu'au-dessus du chiffre, jamais au-dessus de son nom — c'est-à-dire
+## nulle part là où l'œil se pose pour comprendre.
+func _labelled(text: String, field: Control, tooltip: String = "") -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var label := Label.new()
@@ -297,6 +378,10 @@ func _labelled(text: String, field: Control) -> Control:
 	label.custom_minimum_size = Vector2(130, 0)
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", C_TEXT)
+	if not tooltip.is_empty():
+		label.mouse_filter = Control.MOUSE_FILTER_STOP
+		label.tooltip_text = tooltip
+		field.tooltip_text = tooltip
 	row.add_child(label)
 	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(field)
@@ -305,7 +390,8 @@ func _labelled(text: String, field: Control) -> Control:
 
 ## Une ligne numérique bornée. La borne est posée par le champ lui-même : on ne
 ## peut pas taper 300 en force, donc la validation n'a jamais à le reprocher.
-func _number(text: String, value: int, low: int, high: int, apply: Callable) -> Control:
+func _number(text: String, value: int, low: int, high: int, apply: Callable,
+		tooltip: String = "") -> Control:
 	var spin := SpinBox.new()
 	spin.min_value = low
 	spin.max_value = high
@@ -314,7 +400,7 @@ func _number(text: String, value: int, low: int, high: int, apply: Callable) -> 
 	spin.value_changed.connect(func(v: float) -> void:
 		apply.call(int(v))
 		_refresh_preview())
-	return _labelled(text, spin)
+	return _labelled(text, spin, tooltip)
 #endregion
 
 
@@ -339,6 +425,49 @@ func _on_weapon_toggled(weapon_id: String, on: bool) -> void:
 	else:
 		doc.weapons.erase(weapon_id)
 	_refresh_preview()
+
+
+## Cocher ajoute la compétence, décocher la retire — y compris une compétence de
+## classe, qui devient alors un retrait explicite pour [method Stats.set_skills].
+func _on_skill_toggled(skill_id: String, on: bool) -> void:
+	if on:
+		if not skill_id in doc.skills:
+			doc.skills.append(skill_id)
+	else:
+		doc.skills.erase(skill_id)
+	_refresh_skills()
+	_refresh_preview()
+
+
+## Le niveau change ce que la classe accorde — mais pas ce que l'auteur a décidé.
+##
+## On reporte donc les deux écarts sur la nouvelle liste : les compétences prises
+## hors classe restent prises, celles de classe explicitement décochées restent
+## décochées, et celles que le nouveau niveau débloque arrivent d'elles-mêmes.
+## Sans ce report, monter une recrue au niveau 10 ne lui donnerait jamais la
+## compétence que sa classe y débloque.
+func _on_level_changed(new_level: int) -> void:
+	var before: Array[String] = doc.class_skills()
+	var picked_outside: Array[String] = []
+	for id: String in doc.skills:
+		if not id in before:
+			picked_outside.append(id)
+	var refused: Array[String] = []
+	for id: String in before:
+		if not id in doc.skills:
+			refused.append(id)
+
+	doc.level = new_level
+
+	var updated: Array[String] = []
+	for id: String in doc.class_skills():
+		if not id in refused:
+			updated.append(id)
+	for id: String in picked_outside:
+		if not id in updated:
+			updated.append(id)
+	doc.skills = updated
+	_refresh_skills()
 
 
 func _on_item_toggled(item_name: String, on: bool) -> void:
@@ -412,22 +541,15 @@ func _refresh_preview() -> void:
 	res.equipped_weapon = doc.weapons[0] if not doc.weapons.is_empty() else ""
 	live.import_stats(res)
 
-	var skills: Array = []
-	for id in live.get_skills():
-		skills.append(SkillDB.get_skill_name(str(id)))
+	# La fiche fait loi sur les compétences, classe comprise : l'aperçu doit
+	# montrer celles qu'on vient de cocher, pas celles de la classe seule.
+	live.set_skills(doc.skills)
 
 	var lines: Array[String] = [
 		"[ %s ]  %s  Niv. %d" % [doc.name, CDB.get_class_name(doc.class_id), doc.level],
 		"PV %d   MOV %d" % [live.max_hp, live.movement],
 		"",
 		"Arme : %s" % (WEAPONS.label(doc.weapons[0]) if not doc.weapons.is_empty() else "mains nues"),
-		"Attaque %d   Précision %d   Critique %d" % [
-			live.get_total_attack(), live.get_base_hit(), live.get_crit()],
-		"Esquive %d   Vitesse d'attaque %d%s" % [
-			live.get_avoid(), live.get_attack_speed(),
-			("  (poids −%d)" % live.speed_penalty()) if live.speed_penalty() > 0 else ""],
-		"",
-		"Compétences : %s" % (", ".join(skills) if not skills.is_empty() else "aucune"),
 	]
 
 	var errors: Array[String] = doc.validate()
@@ -436,7 +558,64 @@ func _refresh_preview() -> void:
 		lines.append("⛔ %s" % errors[0])
 	_preview.text = "\n".join(lines)
 	_preview.add_theme_color_override("font_color", C_ACCENT if not errors.is_empty() else C_TEXT)
+
+	_refresh_derived(live)
 	live.free()
+
+
+## Les valeurs dérivées, une par étiquette, chacune avec sa formule au survol.
+func _refresh_derived(live: CharStats) -> void:
+	if not _derived:
+		return
+	for child in _derived.get_children():
+		_derived.remove_child(child)
+		child.queue_free()
+
+	var chips := HFlowContainer.new()
+	chips.add_theme_constant_override("h_separation", 12)
+	chips.add_theme_constant_override("v_separation", 2)
+	_derived.add_child(chips)
+
+	var penalty: int = live.speed_penalty()
+	for entry: Array in [
+		["att", live.get_total_attack(), ""],
+		["hit", live.get_base_hit(), ""],
+		["avoid", live.get_avoid(), ""],
+		["crit", live.get_crit(), ""],
+		["as", live.get_attack_speed(), ("  (poids −%d)" % penalty) if penalty > 0 else ""],
+	]:
+		var chip := Label.new()
+		chip.text = "%s %d%s" % [GLOSSARY.label(str(entry[0])), int(entry[1]), str(entry[2])]
+		chip.add_theme_font_size_override("font_size", 14)
+		chip.add_theme_color_override("font_color", C_TEXT)
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.tooltip_text = GLOSSARY.tooltip(str(entry[0]))
+		chips.add_child(chip)
+
+	var skills_row := HFlowContainer.new()
+	skills_row.add_theme_constant_override("h_separation", 8)
+	var caption := Label.new()
+	caption.text = "Compétences :"
+	caption.add_theme_font_size_override("font_size", 14)
+	caption.add_theme_color_override("font_color", C_TEXT)
+	skills_row.add_child(caption)
+
+	var active: Array = live.get_skills()
+	if active.is_empty():
+		var none := Label.new()
+		none.text = "aucune"
+		none.add_theme_font_size_override("font_size", 14)
+		none.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+		skills_row.add_child(none)
+	for id in active:
+		var chip := Label.new()
+		chip.text = "✨ %s" % SKILLS.get_skill_name(str(id))
+		chip.add_theme_font_size_override("font_size", 14)
+		chip.add_theme_color_override("font_color", C_GOLD)
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.tooltip_text = SKILLS.tooltip(str(id))
+		skills_row.add_child(chip)
+	_derived.add_child(skills_row)
 
 
 func _refresh_library() -> void:

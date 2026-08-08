@@ -372,6 +372,10 @@ static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	stats.movement = int(unit.get("movement", stats.movement))
 	stats.apply_class_growths(stats.character_class)
 	_apply_arsenal(stats, unit)
+	# Les compétences ne sont imposées que si le roster en porte une liste : une
+	# unité de campagne ordinaire n'en a pas, et garde donc celles de sa classe.
+	if unit.get("skills") is Array:
+		stats.set_skills(unit["skills"])
 	stats.attack_power = stats.get_total_attack()
 
 	# L'apparence, et le nom qui va avec. Le pion a déjà monté sa figurine à son

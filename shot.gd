@@ -63,6 +63,15 @@ func _init() -> void:
 			main.show_character_editor()
 			for _i in 10:
 				await physics_frame
+			# `bas` déroule le formulaire : armes, objets et compétences vivent
+			# sous la ligne de flottaison, et une capture du haut ne les montre
+			# jamais.
+			if args.size() > 2 and args[2] == "bas":
+				var form: ScrollContainer = _first_scroll(main)
+				if form:
+					form.scroll_vertical = 100000
+				for _i in 10:
+					await physics_frame
 		"prep":
 			await _open_prep(main, args[2] if args.size() > 2 else "")
 		"saves":
@@ -99,6 +108,17 @@ func _init() -> void:
 ## à l'autre. Celle-ci met un hameau, un rempart percé d'une porte, une tour, des
 ## ruines, une rivière franchie par un pont, un marais, du sable et de la neige
 ## dans le même cadre — de quoi juger l'ensemble d'un coup d'œil.
+## Premier ScrollContainer de l'arbre (null s'il n'y en a aucun).
+func _first_scroll(node: Node) -> ScrollContainer:
+	if node is ScrollContainer:
+		return node
+	for child in node.get_children():
+		var found: ScrollContainer = _first_scroll(child)
+		if found:
+			return found
+	return null
+
+
 func _show_terrains(main: Node) -> void:
 	var editor: Node = main._level
 	if not editor or not editor.get("doc"):

@@ -21,6 +21,7 @@ const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
+const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 
 var _selected: Array = []
 var _slots_label: Label
@@ -208,13 +209,30 @@ func _make_unit_row(unit: Dictionary, campaign: Node) -> Control:
 	row.toggle_mode = true
 	row.button_pressed = id in _selected or required
 	row.disabled = required
-	if required:
-		row.tooltip_text = "Cette unité est imposée par le chapitre."
 	row.custom_minimum_size = Vector2(0, 42)
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+	# Les compétences que l'unité aura vraiment : une recrue écrite à la main a
+	# les siennes, pas celles que sa classe donnerait.
+	var skill_ids: Array = campaign.unit_skills(unit)
 	var skills: Array = []
-	for skill_id in CDB.unlocked_skills(int(unit.get("class_id", 0)), int(unit.get("level", 1))):
+	var explained: Array[String] = []
+	for skill_id in skill_ids:
 		skills.append(SKILLS.get_skill_name(str(skill_id)))
+		explained.append("✨ %s — %s\n   ⟶ %s" % [
+			SKILLS.get_skill_name(str(skill_id)),
+			SKILLS.describe(str(skill_id)),
+			SKILLS.trigger_label(str(skill_id)),
+		])
+
+	# L'info-bulle de la ligne dit ce que les compétences font : le nom seul
+	# n'apprend rien, et c'est ici qu'on décide qui part au combat.
+	var hints: Array[String] = []
+	if required:
+		hints.append("Cette unité est imposée par le chapitre.")
+	if not explained.is_empty():
+		hints.append("\n".join(explained))
+	row.tooltip_text = "\n\n".join(hints)
 
 	# L'arme en main se lit sur la ligne : c'est elle qui décide de la moitié d'un
 	# échange, et on la choisit juste à côté, au menu d'équipement.
@@ -596,31 +614,45 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 		host.add_child(_note("☠ Tombée au combat — elle ne repartira pas."))
 
 	# --- Statistiques ---
-	const LABELS: Dictionary = {
-		"str": "Force", "mag": "Magie", "skl": "Adresse", "spd": "Vitesse",
-		"lck": "Chance", "def": "Défense", "res": "Résistance",
-	}
-	var stats_line: Array = []
-	for key: String in ["str", "mag", "skl", "spd", "lck", "def", "res"]:
-		stats_line.append("%s %d" % [str(LABELS[key]), int(unit.get(key, 0))])
-	host.add_child(_detail_line("Statistiques", "   ".join(stats_line)))
+	# Chaque chiffre porte l'explication de ce qu'il fait : c'est ici qu'on
+	# compare deux unités avant de choisir qui part, et « Adresse 12 » ne dit
+	# rien tant qu'on ignore ce que l'Adresse décide.
+	var stat_chips: Array = []
+	for key: String in GLOSSARY.ORDER:
+		stat_chips.append({
+			"text": "%s %d" % [GLOSSARY.label(key), int(unit.get(key, 0))],
+			"tooltip": GLOSSARY.tooltip(key),
+		})
+	host.add_child(_detail_chips("Statistiques", stat_chips))
 
 	# --- Croissances : ce que l'unité gagnera en montant, et qui décide de sa
 	# valeur à long terme bien plus que ses chiffres actuels.
 	var growths: Dictionary = CDB.get_growths(int(unit.get("class_id", 0)))
-	var growth_line: Array = []
-	for key: String in ["str", "mag", "skl", "spd", "lck", "def", "res"]:
-		growth_line.append("%s %d%%" % [str(LABELS[key]), int(growths.get(key, 0))])
-	host.add_child(_detail_line("Croissances", "   ".join(growth_line)))
+	var growth_chips: Array = []
+	for key: String in GLOSSARY.ORDER:
+		growth_chips.append({
+			"text": "%s %d%%" % [GLOSSARY.label(key), int(growths.get(key, 0))],
+			"tooltip": "%s\n\nChance, à chaque niveau gagné, de prendre un point.\n\n%s" % [
+				GLOSSARY.label(key), GLOSSARY.describe(key)],
+		})
+	host.add_child(_detail_chips("Croissances", growth_chips))
 
-	# --- Compétences débloquées ---
-	var skills: Array = CDB.unlocked_skills(
+	# --- Compétences ---
+	# Celles qu'elle aura vraiment : la campagne sait lire une fiche écrite à la
+	# main aussi bien qu'une unité ordinaire.
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var owned: Array = campaign.unit_skills(unit) if campaign else CDB.unlocked_skills(
 		int(unit.get("class_id", 0)), int(unit.get("level", 1)))
-	var skill_names: Array = []
-	for sk: Variant in skills:
-		skill_names.append(SKILLS.get_skill_name(str(sk)))
-	host.add_child(_detail_line("Compétences",
-		"   ".join(skill_names) if not skill_names.is_empty() else "aucune pour l'instant"))
+	var skill_chips: Array = []
+	for sk: Variant in owned:
+		skill_chips.append({
+			"text": "✨ %s" % SKILLS.get_skill_name(str(sk)),
+			"tooltip": SKILLS.tooltip(str(sk)),
+		})
+	if skill_chips.is_empty():
+		host.add_child(_detail_line("Compétences", "aucune pour l'instant"))
+	else:
+		host.add_child(_detail_chips("Compétences", skill_chips))
 
 	# --- Arsenal ---
 	var held: String = str(unit.get("weapon", ""))
@@ -639,6 +671,35 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 
 
 ## Une ligne « intitulé : contenu » de la fiche.
+## Une ligne de détail découpée en étiquettes survolables.
+##
+## [param entries] [{text, tooltip}] — une étiquette par élément.
+##
+## Un Label ne reçoit pas la souris par défaut (`MOUSE_FILTER_IGNORE`) : sans le
+## réglage explicite, aucune de ces bulles n'apparaîtrait jamais.
+func _detail_chips(label_text: String, entries: Array) -> Control:
+	var row := VBoxContainer.new()
+	var head := Label.new()
+	head.text = label_text
+	head.add_theme_font_size_override("font_size", 12)
+	head.add_theme_color_override("font_color", C_ACCENT)
+	row.add_child(head)
+
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 14)
+	flow.add_theme_constant_override("v_separation", 2)
+	for entry: Dictionary in entries:
+		var chip := Label.new()
+		chip.text = str(entry.get("text", ""))
+		chip.add_theme_font_size_override("font_size", 14)
+		chip.add_theme_color_override("font_color", C_TEXT)
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.tooltip_text = str(entry.get("tooltip", ""))
+		flow.add_child(chip)
+	row.add_child(flow)
+	return row
+
+
 func _detail_line(label_text: String, content: String) -> Control:
 	var row := VBoxContainer.new()
 	var head := Label.new()

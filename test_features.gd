@@ -17,6 +17,7 @@ const CMAP = preload("res://data/models/campaign/chapter_map.gd")
 const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
+const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
@@ -45,7 +46,7 @@ func _init() -> void:
 	_test_campaign_save()
 	_test_difficulty()
 	_test_session()
-	_test_skills()
+	await _test_skills()
 	_test_economy()
 	_test_network_codes()
 	_test_three_way()
@@ -777,6 +778,138 @@ func _test_skills() -> void:
 		"compétence hors classe apprise")
 	_check(not learner.learn_skill("wrath"), "pas de doublon")
 	_check(not learner.learn_skill("inexistante"), "compétence inconnue refusée")
+
+	# Retrait d'une compétence de classe : sans lui, une compétence donnée par la
+	# classe serait indéracinable depuis l'éditeur de personnages.
+	var forgetful: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	forgetful.character_class = CDB.Id.LORD
+	forgetful.level = 5
+	_check("duelist" in forgetful.get_skills() and "focus" in forgetful.get_skills(),
+		"Lord Lv.5 part avec duelliste et concentration", str(forgetful.get_skills()))
+	_check(forgetful.forget_skill("duelist") and not "duelist" in forgetful.get_skills(),
+		"compétence de classe retirée", str(forgetful.get_skills()))
+	_check(not forgetful.forget_skill("duelist"), "retirer deux fois ne rend rien")
+	_check(forgetful.learn_skill("duelist") and "duelist" in forgetful.get_skills(),
+		"la rendre après l'avoir retirée la réactive")
+
+	# Le combat suit vraiment le retrait : c'est le seul test qui prouve que la
+	# liste sert à autre chose qu'à s'afficher.
+	var stripped_lord: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	stripped_lord.character_class = CDB.Id.LORD
+	var before_strip = Calc.calculate(stripped_lord, mob)
+	stripped_lord.forget_skill("duelist")
+	var after_strip = Calc.calculate(stripped_lord, mob)
+	_check(before_strip.skill_hit == 10 and after_strip.skill_hit == 0,
+		"duelliste retiré ne compte plus en combat (%d → %d)" % [
+			before_strip.skill_hit, after_strip.skill_hit])
+
+	# Liste imposée : ce que l'éditeur écrit sur une fiche
+	var imposed: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	imposed.character_class = CDB.Id.LORD
+	imposed.level = 5
+	imposed.set_skills(["focus", "luna"])
+	_check(imposed.get_skills() == ["focus", "luna"],
+		"liste imposée respectée à la lettre", str(imposed.get_skills()))
+	_check("duelist" in imposed.removed_skills and "luna" in imposed.extra_skills,
+		"traduite en retraits et en acquis",
+		"retirés %s / acquis %s" % [str(imposed.removed_skills), str(imposed.extra_skills)])
+	imposed.set_skills(["focus", "inexistante"])
+	_check(imposed.get_skills() == ["focus"], "compétence inconnue écartée de la liste",
+		str(imposed.get_skills()))
+	imposed.set_skills([])
+	_check(imposed.get_skills().is_empty(), "liste vide : plus aucune compétence",
+		str(imposed.get_skills()))
+
+	# La fiche de personnage porte ses compétences
+	var doc: UnitDocument = UnitDocument.from_class(CDB.Id.LORD)
+	_check(doc.skills == ["duelist"],
+		"fiche neuve : les compétences de la classe", str(doc.skills))
+	doc.skills = ["luna"]
+	var round_trip: UnitDocument = UnitDocument.from_dict(doc.to_dict())
+	_check(round_trip.skills == ["luna"],
+		"compétences conservées à l'écriture et à la relecture", str(round_trip.skills))
+	_check(round_trip.to_roster_unit().get("skills") == ["luna"],
+		"compétences versées dans le roster", str(round_trip.to_roster_unit().get("skills")))
+	doc.skills = ["inexistante"]
+	_check(not doc.validate().is_empty(), "fiche à compétence inconnue refusée")
+
+	# Une fiche écrite avant que les compétences soient réglables n'a pas la clé :
+	# elle doit retrouver celles de sa classe, pas se retrouver sans rien.
+	var old_file: Dictionary = doc.to_dict()
+	old_file.erase("skills")
+	var legacy: UnitDocument = UnitDocument.from_dict(old_file)
+	_check(legacy.skills == ["duelist"],
+		"fiche d'avant : compétences de classe rendues", str(legacy.skills))
+
+	# Le glossaire des statistiques : toutes les stats réglables y sont
+	var missing: Array[String] = []
+	for key: String in UnitDocument.STATS:
+		if GLOSSARY.tooltip(key).is_empty():
+			missing.append(key)
+	_check(missing.is_empty(), "chaque statistique a son explication", str(missing))
+	_check(not GLOSSARY.tooltip("hit").is_empty(), "les valeurs dérivées aussi")
+	_check(GLOSSARY.tooltip("inexistante").is_empty(),
+		"clé inconnue : pas d'info-bulle vide et muette")
+	_check(not SKILLS.tooltip("luna").is_empty() and SKILLS.tooltip("inexistante").is_empty(),
+		"info-bulle de compétence, et rien pour une inconnue")
+	_check(SKILLS.all_ids().size() == SKILLS.DATA.size(),
+		"le catalogue de compétences s'énumère en entier")
+
+	await _test_editor_tooltips()
+#endregion
+
+
+## L'éditeur monté pour de vrai, et ses info-bulles interrogées.
+##
+## Aucune autre suite ne charge cet écran : une faute de frappe y passait donc
+## inaperçue jusqu'à ce qu'on l'ouvre à la main. C'est arrivé le 2026-08-09 —
+## un champ déclaré `HFlowContainer` recevait un `VBoxContainer`, 620 tests
+## restaient verts, et l'écran ne s'ouvrait plus du tout.
+##
+## On vérifie aussi `mouse_filter` : un Label l'a à `IGNORE` par défaut, et une
+## info-bulle posée dessus ne s'afficherait jamais — le texte serait juste, et
+## invisible.
+func _test_editor_tooltips() -> void:
+	print("\n🖱  Test 11bis: info-bulles de l'éditeur de personnages")
+
+	var editor: Control = load("res://data/modules/menu/character_editor.gd").new()
+	root.add_child(editor)
+	await process_frame
+	await process_frame
+
+	var explained: int = 0
+	var mute: Array[String] = []
+	for node: Node in _walk(editor):
+		if not node is Control:
+			continue
+		var control: Control = node
+		if control.tooltip_text.is_empty():
+			continue
+		explained += 1
+		if control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+			mute.append("%s (%s)" % [control.name, control.get_class()])
+
+	_check(explained >= 15, "l'éditeur explique au moins 15 champs (%d)" % explained)
+	_check(mute.is_empty(), "aucune info-bulle rendue muette par mouse_filter", str(mute))
+
+	# Les compétences sont bien proposées à cocher, toutes, avec leur explication.
+	var boxes: Array[CheckBox] = []
+	for node: Node in _walk(editor):
+		if node is CheckBox and str((node as CheckBox).tooltip_text).begins_with("✨"):
+			boxes.append(node)
+	_check(boxes.size() == SKILLS.DATA.size(),
+		"une case par compétence du catalogue (%d)" % boxes.size())
+
+	editor.queue_free()
+	await process_frame
+
+
+## Tous les nœuds sous `node`, lui compris.
+func _walk(node: Node) -> Array[Node]:
+	var out: Array[Node] = [node]
+	for child in node.get_children():
+		out.append_array(_walk(child))
+	return out
 #endregion
 
 

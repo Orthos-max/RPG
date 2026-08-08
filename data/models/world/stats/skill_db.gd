@@ -92,7 +92,7 @@ static var DATA: Dictionary = {
 	},
 	"luna": {
 		"name": "Lune",
-		"desc": "Peut ignorer la moitié de la défense adverse (chance = Skl%).",
+		"desc": "Peut ignorer la moitié de la défense adverse (chance = Adresse %).",
 		"kind": Kind.ACTIVE,
 		"trigger": Trigger.WHEN_ATTACKING,
 		"proc": "pierce",
@@ -101,7 +101,7 @@ static var DATA: Dictionary = {
 	},
 	"astra": {
 		"name": "Astre",
-		"desc": "Peut enchaîner une frappe supplémentaire (chance = Skl/2%).",
+		"desc": "Peut enchaîner une frappe supplémentaire (chance = Adresse / 2 %).",
 		"kind": Kind.ACTIVE,
 		"trigger": Trigger.WHEN_ATTACKING,
 		"proc": "extra_hit",
@@ -129,6 +129,56 @@ static func get_skill_name(skill_id: String) -> String:
 ## Description affichable
 static func describe(skill_id: String) -> String:
 	return str(DATA.get(skill_id, {}).get("desc", ""))
+
+
+## Toutes les compétences du catalogue, dans l'ordre de déclaration.
+static func all_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id in DATA:
+		ids.append(str(id))
+	return ids
+
+
+## Quand la compétence s'applique, en une phrase.
+##
+## Le déclencheur est la moitié de ce qu'il faut savoir : « +2 de défense » ne
+## dit pas si l'unité en profite quand elle charge ou quand elle encaisse.
+static func trigger_label(skill_id: String) -> String:
+	match int(get_skill(skill_id).get("trigger", Trigger.ALWAYS)):
+		Trigger.ALWAYS:
+			return "En permanence"
+		Trigger.WHEN_ATTACKING:
+			return "Quand l'unité engage le combat"
+		Trigger.WHEN_DEFENDING:
+			return "Quand l'unité est attaquée"
+		Trigger.WHEN_HP_LOW:
+			var threshold: float = float(get_skill(skill_id).get("threshold", 0.5))
+			return "Sous %d%% de PV" % int(round(threshold * 100.0))
+		Trigger.WHEN_HP_FULL:
+			return "À pleins PV"
+		Trigger.ON_TERRAIN:
+			return "Sur une case qui donne un bonus de défense"
+		Trigger.VS_FLYING:
+			return "Contre une unité volante"
+	return ""
+
+
+## Info-bulle complète : le nom, l'effet, et la condition qui le déclenche.
+## Rend "" pour une compétence inconnue — un Control n'affiche alors aucune bulle.
+static func tooltip(skill_id: String) -> String:
+	var skill: Dictionary = get_skill(skill_id)
+	if skill.is_empty():
+		return ""
+	var lines: Array[String] = [
+		"✨ %s" % str(skill.get("name", skill_id)),
+		"",
+		str(skill.get("desc", "")),
+		"",
+		"⟶ %s" % trigger_label(skill_id),
+	]
+	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
+		lines.append("⟶ Déclenchement aléatoire, une chance par coup porté.")
+	return "\n".join(lines)
 
 
 ## La compétence s'applique-t-elle dans ce contexte ?

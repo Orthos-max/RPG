@@ -2061,3 +2061,62 @@ même chose de la même case. Un test le tient.
 ```
 bash scripts/test_all.sh --window   # 58 / 601 / 84 OK + test_map + 18 + 14 OK
 ```
+
+### Passe du 2026-08-09 — expliquer les stats, et régler les compétences à la main
+
+**Demandé par Aurèle** : une info-bulle au survol d'une statistique et d'une
+compétence, la réponse à « est-ce que les compétences agissent vraiment en
+combat ? », et de quoi ajouter et retirer des compétences à la création.
+
+**Réponse à la question, mesurée avant de toucher au code** : oui. `fe_combat.gd`
+appelle `SKILLS.aggregate()` et `SKILLS.active_procs()` à chaque calcul
+(§`calculate`), les modificateurs entrent dans les dégâts, la précision, le
+critique et la défense employée, et `roll_strike()` tire les procs coup par coup
+— Lune retire la moitié de la défense, Astre rejoue les dégâts. Un test le tenait
+déjà ; deux de plus le tiennent depuis.
+
+| Livré | Où |
+|---|---|
+| Glossaire des statistiques — la formule réellement appliquée, pas une paraphrase | `data/models/world/stats/stat_glossary.gd` |
+| Info-bulles des compétences : effet **et** condition de déclenchement | `skill_db.gd` (`tooltip`, `trigger_label`, `all_ids`) |
+| Éditeur : chaque champ et chaque valeur dérivée s'explique au survol | `character_editor.gd` |
+| Éditeur : section « Compétences », 11 cases à cocher, retour aux compétences de classe | `character_editor.gd` |
+| Retrait d'une compétence **de classe** | `stats.gd` (`removed_skills`, `forget_skill`, `set_skills`) |
+| La fiche porte ses compétences, de l'écriture au champ de bataille | `unit_document.gd`, `campaign_state.gd`, `chapter_runner.gd` |
+| Préparation : statistiques, croissances et compétences survolables une par une | `prep_screen.gd` |
+
+**La liste est définitive, pas un supplément.** Une fiche écrite à la main porte
+l'ensemble exact de ce que le personnage sait faire ; `Stats.set_skills()` le
+retraduit en acquis (`extra_skills`) et en retraits (`removed_skills`) par
+rapport à ce que la classe donne. Sans cette seconde liste, une compétence de
+classe était indéracinable : elle se déduit de la classe et du niveau, et rien ne
+savait dire « pas celle-là ».
+
+Changer le **niveau** ne piétine plus les choix : les compétences prises hors
+classe restent prises, celles décochées restent décochées, et ce que le nouveau
+niveau débloque arrive tout seul. Changer la **classe**, en revanche, remet tout
+à plat — comme pour les bases et l'arme.
+
+Une fiche enregistrée avant cette passe n'a pas la clé `skills` : elle retrouve
+les compétences de sa classe. Une liste vide, elle, est un choix — un personnage
+sans aucune compétence.
+
+**Ce que les 620 tests verts ne voyaient pas.** Aucune suite ne chargeait
+`character_editor.gd` : un champ déclaré `HFlowContainer` recevant un
+`VBoxContainer` a laissé les compteurs au vert pendant que l'écran refusait de
+s'ouvrir. C'est la capture d'écran qui l'a attrapé. Deux garde-fous depuis :
+`shot.gd -- chars <png> bas` déroule le formulaire jusqu'aux compétences, et
+`_test_editor_tooltips()` monte l'écran pour de vrai, compte les champs expliqués
+(39) et refuse toute info-bulle posée sur un Control en `MOUSE_FILTER_IGNORE` —
+un Label l'a par défaut, et le texte serait juste **et invisible**.
+
+**Non fait, et c'est un choix à trancher** : la fiche d'unité affichée en
+bataille (`unit_sheet_panel.tscn`) est en `mouse_filter = 2` sur tous ses nœuds,
+délibérément — elle recouvre le coin bas-gauche du plateau et laisse les clics
+passer au travers. Lui donner des info-bulles par statistique lui ferait prendre
+la souris, donc bloquer la sélection des cases dessous. Les explications vivent
+pour l'instant dans les menus, là où la souris se pose vraiment.
+
+```
+bash scripts/test_all.sh   # 58 / 623 / 84 OK + test_map
+```

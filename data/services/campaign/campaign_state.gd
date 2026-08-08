@@ -11,6 +11,7 @@ const DIFF = preload("res://data/models/world/ai/difficulty.gd")
 const ClassDataDBClass = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 
 signal roster_changed()
 signal chapter_completed(chapter_id: String, bonuses: Array)
@@ -304,6 +305,20 @@ func apply_battle_result(snapshot: Dictionary) -> void:
 ## Classe lisible d'une unité du roster.
 func unit_class_name(unit: Dictionary) -> String:
 	return ClassDataDBClass.get_class_name(int(unit.get("class_id", 0)))
+
+
+## Compétences d'une entrée de roster, telles qu'elle les aura au combat.
+##
+## Une fiche écrite à la main porte sa propre liste — compétences de classe
+## retirées comprises. Les autres se déduisent de leur classe et de leur niveau,
+## exactement comme [method Stats.get_skills] le fera en entrant en scène. Sans
+## ce partage, l'écran de préparation annonçait des compétences que l'unité
+## n'avait pas et taisait celles qu'on venait de lui donner.
+func unit_skills(unit: Dictionary) -> Array:
+	if unit.get("skills") is Array:
+		return (unit["skills"] as Array).duplicate()
+	return ClassDataDBClass.unlocked_skills(
+		int(unit.get("class_id", 0)), int(unit.get("level", 1)))
 #endregion
 
 
@@ -795,6 +810,17 @@ func _normalize_unit(raw: Dictionary) -> Dictionary:
 	u["weapon"] = equipped if equipped in arsenal else ""
 	# Absent des sauvegardes d'avant le catalogue : elles gardent leurs valeurs brutes.
 	u["uses_arsenal"] = bool(u.get("uses_arsenal", false))
+
+	# Compétences d'une fiche écrite à la main. Même règle que l'arsenal : une
+	# compétence retirée du catalogue ne doit pas ressusciter par le JSON, et la
+	# clé absente veut dire « celles de la classe », pas « aucune ».
+	if u.has("skills"):
+		var learnt: Array = []
+		for s in u.get("skills", []):
+			var skill_id: String = str(s)
+			if SKILLS.exists(skill_id) and not skill_id in learnt:
+				learnt.append(skill_id)
+		u["skills"] = learnt
 	return u
 
 
