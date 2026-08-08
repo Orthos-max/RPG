@@ -58,6 +58,7 @@ func _init() -> void:
 	_test_battle_grid()
 	_test_path_field()
 	_test_traversal_rules()
+	_test_charter()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -2687,4 +2688,53 @@ func _test_traversal_rules() -> void:
 		tile.free()
 	for tile: TacticsTile in ledges:
 		tile.free()
+#endregion
+
+
+#region 24. La charte graphique
+func _test_charter() -> void:
+	print("🎨 Test 24: la charte graphique")
+
+	var theme: Theme = CielTheme.build()
+	_check(theme != null and CielTheme.build() == theme,
+		"le thème n'est bâti qu'une fois")
+
+	# Ce qui manquait : le jeu n'habillait que ses boutons. Un type oublié ici
+	# retombe sur le thème de Godot, et se voit immédiatement à l'écran.
+	for type: String in ["Button", "OptionButton", "LineEdit", "PopupMenu",
+			"Panel", "PanelContainer", "VScrollBar"]:
+		_check(theme.get_stylebox_list(type).size() > 0,
+			"« %s » est habillé par la charte" % type)
+	for icon: Array in [["updown", "SpinBox"], ["arrow", "OptionButton"],
+			["checked", "CheckBox"]]:
+		_check(theme.get_icon(icon[0], icon[1]) != null,
+			"l'icône « %s » de %s est dessinée, pas empruntée" % [icon[0], icon[1]])
+
+	# Le piège des polices variables : `variation_opentype` n'accepte que le tag
+	# entier de l'axe. Avec la clé texte, Godot n'échoue pas — il ignore, et le
+	# titre reste en Regular sans que rien ne le signale. Seule une mesure le
+	# dit, donc on mesure : du 700 doit être plus large que du 400.
+	var title_font: Font = theme.get_font("font", "TitreEmbleme")
+	var light := FontVariation.new()
+	light.base_font = Palette.FONT_TITLE
+	var axis: int = TextServerManager.get_primary_interface().name_to_tag("weight")
+	light.variation_opentype = {axis: 400}
+	_check(title_font.get_string_size("CIEL EMBLEM", 0, -1, 48).x
+			> light.get_string_size("CIEL EMBLEM", 0, -1, 48).x,
+		"le titre est réellement en gras (la graisse variable a pris)")
+
+	# Même piège en miroir : les chiffres elzéviriens d'Alegreya Sans sont
+	# illisibles dans un tableau de statistiques. `lnum`/`tnum` les redressent,
+	# et là c'est bien la clé texte qui marche.
+	var plain := FontVariation.new()
+	plain.base_font = Palette.FONT_BODY
+	_check(theme.default_font.get_string_size("11 16 3", 0, -1, 17).x
+			!= plain.get_string_size("11 16 3", 0, -1, 17).x,
+		"les chiffres du corps de texte sont redressés et tabulaires")
+
+	# La charte ne sert à rien si un écran peut encore inventer sa couleur :
+	# l'or de la palette doit être celui que les écrans utilisaient en dur.
+	_check(Palette.GOLD == Color("#f5c842"), "l'or de la charte est celui du jeu")
+	_check(Palette.shade(Palette.GOLD, -0.2).v < Palette.GOLD.v,
+		"assombrir une couleur de la charte l'assombrit")
 #endregion

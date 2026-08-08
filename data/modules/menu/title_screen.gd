@@ -107,7 +107,7 @@ func _build() -> void:
 	_title = Label.new()
 	_title.text = "CIEL EMBLEM"
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.add_theme_color_override("font_color", C_GOLD)
+	_title.theme_type_variation = &"TitreEmbleme"
 	column.add_child(_title)
 
 	_subtitle = Label.new()

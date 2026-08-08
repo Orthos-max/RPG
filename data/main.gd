@@ -35,6 +35,9 @@ var _custom_map: MapDocument = null
 
 
 func _ready() -> void:
+	# Avant tout écran, sinon le premier serait le seul à ne pas l'avoir.
+	CielTheme.apply_to_tree(get_tree())
+	get_tree().node_added.connect(CielTheme.adopt)
 	var network: Node = get_node_or_null("/root/Network")
 	if network:
 		network.battle_started.connect(_on_net_battle_started)

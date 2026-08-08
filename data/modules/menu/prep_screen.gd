@@ -79,8 +79,8 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = chapter.title if chapter else "Chapitre"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.theme_type_variation = &"TitreEmbleme"
 	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", C_GOLD)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 30
 	title.offset_bottom = 70

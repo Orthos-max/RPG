@@ -331,9 +331,12 @@ Tous en `SceneTree`, sortie `X OK / Y ÉCHECS`, code de sortie 0/1.
       le `.exe` sur un runner Windows (Godot 4.3 + modèles en cache + Inno Setup) et
       publie l'artefact `Ciel-Emblem-Windows`. Premier livrable : run `31029824017`.
       *Reste à faire : exécuter l'installeur sur une vraie machine Windows.*
-- [ ] **Signature & notarisation macOS** : sans elles, le premier lancement impose
-      le détour « clic droit → Ouvrir » (documenté dans `INSTALL.md`). Demande un
-      certificat Développeur Apple, puis `codesign/codesign=1` dans `export_presets.cfg`.
+- [x] ~~**Signature & notarisation macOS**~~ — **abandonné le 2026-08-08, décision
+      d'Aurèle** : le certificat Développeur Apple coûte 200-600 €/an et il ne le
+      prendra pas. Conséquence assumée : sur macOS, le premier lancement impose le
+      détour « clic droit → Ouvrir », déjà documenté dans `INSTALL.md`. Ne plus le
+      remonter comme une dette — c'en est le prix, pas un oubli. Windows, la
+      plateforme sur laquelle Aurèle joue, n'est pas concerné.
 - [x] **Portabilité du pont CielAI** : `scripts/ciel_game/_paths.sh` résout le dossier
       `user://` selon l'OS, honore `CIEL_USERDATA`/`GODOT_BIN`, crée le dossier au besoin
       et retombe sur l'ancien nom de projet. Les scripts sont copiés à côté du binaire.
@@ -550,11 +553,27 @@ La passe du 2026-08-07 a livré les quatre derniers chantiers codables : la
 **carte du chapitre 2 rendue présentable**, le **placement et le tour adverse
 prouvés à la souris**, la **grille en données achevée**, et le **confort de
 l'éditeur de cartes**.
-**Backlog : 47 items faits, 3 restants** (partie en ligne sur deux machines,
-signature macOS, fichiers audio + animations de duel) — tous **bloqués hors du
-code** : ils demandent du matériel, de l'argent ou des fichiers son. Ordre
-conseillé pour la reprise — classé par ce que ça rapporte au projet, pas par
-facilité :
+La passe du 2026-08-08 a posé la **charte graphique** (§6bis) : le jeu n'avait
+aucun thème et tombait donc sur celui de Godot pour tout ce qui n'était pas un
+bouton.
+
+**Backlog : 47 items faits, 1 abandonné, 2 restants.** La signature macOS est
+**abandonnée** (décision d'Aurèle du 2026-08-08 : il ne paiera pas le certificat
+Apple). Restent la partie en ligne sur deux machines et les fichiers audio +
+animations de duel — **bloqués hors du code** : ils demandent du matériel ou des
+fichiers son.
+
+**Deux chantiers sont en attente par choix d'Aurèle, pas par blocage :**
+- **Les cartes des chapitres 1, 3, 4, 5, 6.** Cinq chapitres sur six pointent
+  encore sur `map_level.tscn` (`campaign_db.gd`) ; seul le chapitre 2 a la
+  sienne. Codable — la recette est prouvée (`outpost_map.tres` →
+  `outpost_arena.tres` → `outpost_level.tscn`) — mais reporté le 2026-08-08.
+- **Les noms du lore.** `docs/LORE.md` nomme les protagonistes (Ciel, Luna,
+  Patriot, Aldric) mais son §10 laisse le roster jouable « à définir ». Seule la
+  machinerie de migration des sauvegardes est préparable d'avance.
+
+Ordre conseillé pour la reprise — classé par ce que ça rapporte au projet, pas
+par facilité :
 
 ### ✅ 1. La grille en données — première moitié faite (2026-08-05)
 
@@ -698,7 +717,8 @@ sauvegardes à migrer. La table de correspondance et le chemin de migration peuv
 🔊 **Fichiers audio** — tout est branché et attend :
 [`assets/audio/README.md`](../assets/audio/README.md) donne la liste, le format et
 l'intention de chaque son ; `Audio.missing_cues()` dit lesquels manquent. Ensuite
-seulement, les **animations de duel**. Puis la **signature macOS** (certificat Apple).
+seulement, les **animations de duel**. (La signature macOS, elle, ne viendra
+jamais : voir §4, elle est abandonnée.)
 
 > **Si l'on ne devait en faire que trois** : le refactor de la grille (1), le tour
 > complet prouvé fenêtre ouverte (2), et la caméra du jeu (3, première ligne). Les
@@ -706,6 +726,73 @@ seulement, les **animations de duel**. Puis la **signature macOS** (certificat A
 > lancement.
 
 ---
+
+## 6bis. La charte graphique — « Velmar : nuit et or »
+
+> Posée le 2026-08-08. Direction choisie par Aurèle sur trois propositions ;
+> les deux autres (Célestria marbre et cyan, parchemin et bleu roi) sont
+> écartées, pas en attente.
+
+### L'état des lieux, mesuré
+
+Aurèle : « on utilise la charte de Godot ? » — à moitié vrai, et la moitié
+fausse valait d'être mesurée avant de repeindre quoi que ce soit :
+
+| | Origine | Constat |
+|---|---|---|
+| **Interface** | Godot | **Aucun fichier `.theme`**, aucun `gui/theme/custom` dans `project.godot`. Tout `Control` tombait sur le thème d'usine. Par-dessus, **60 couleurs hex en dur dans 12 fichiers** et **17 `StyleBoxFlat` fabriqués à la main** dans 8 écrans |
+| **Décor du plateau** | À nous | `tactics_scenery.gd` est déjà une direction assumée : ciel #3a4a72 → #24213a, sept terrains, soleil #fff1d6, brume, grain procédural |
+| **Figurines** | Projet amont | 7 planches, dont 4 de héros pour 6 classes (`assets/textures/actor/README.md`) |
+
+Ce n'était donc pas « l'interface de Godot » mais **des boutons repeints écran
+par écran posés sur des widgets d'usine**. Les boutons étaient à nous ; les
+champs de saisie, listes déroulantes, compteurs, cases à cocher et barres de
+défilement étaient gris, et c'est ce mélange qui se voyait — plus encore que les
+couleurs, la **police** de Godot signait l'origine sur chaque écran.
+
+### Ce qui la définit
+
+- [`palette.gd`](../data/models/view/theme/palette.gd) — **la source unique**.
+  Fonds, reliefs, bordures, accents, texte, cinq tailles de police, géométrie.
+  Règle : *l'or est un accent, jamais un fond* ; le pourpre ne sert qu'à ce qui
+  blesse ou ne se défait pas.
+- [`ciel_theme.gd`](../data/models/view/theme/ciel_theme.gd) — le `Theme`, bâti
+  en code comme le décor du plateau : aucune ressource à ouvrir dans l'éditeur,
+  un seul fichier à relire. Les icônes qui trahissaient Godot le plus vite
+  (flèches d'un compteur, chevron d'une liste, case à cocher) y sont **dessinées
+  pixel par pixel** plutôt qu'empruntées.
+- **Polices** — Cinzel (titres, capitales gravées) et Alegreya Sans (corps),
+  toutes deux sous licence OFL, donc redistribuables avec le jeu
+  (`assets/fonts/`, licences incluses).
+- **Cinq variations nommées** : `TitreEmbleme`, `TitreSection`, `TexteDiscret`,
+  `BoutonPrincipal`, `BoutonDanger`. Un écran demande un rôle au lieu d'empiler
+  trois `add_theme_*_override`.
+
+### Deux pièges payés, et verrouillés par un test
+
+1. **Un thème ne traverse pas un `CanvasLayer`.** Posé sur la fenêtre racine, il
+   descend à ses `Control` — mais s'arrête net sur un `CanvasLayer`, qui n'est ni
+   l'un ni l'autre. Or `Main._mount_ui` pose *chaque* écran dans un `CanvasLayer` :
+   la première tentative n'a donc rien changé du tout, capture d'écran à l'appui.
+   Le raccord se fait une fois, dans `Main._ready`, sur `SceneTree.node_added`.
+2. **`variation_opentype` n'accepte que le tag entier de l'axe.** Avec la clé
+   texte `{"wght": 700}` — celle qui marche pour `opentype_features` juste à
+   côté — Godot **n'échoue pas, il ignore** : le titre restait en Regular sans
+   qu'aucun message ne le dise. Mesuré en comparant des largeurs de chaîne :
+   identiques à 400, 700 et 900. D'où `TextServerManager…name_to_tag("weight")`.
+
+Le test 24 de `test_features.gd` mesure les deux, plus la présence de la charte
+sur chaque type de widget : ces bugs-là sont muets, seule une mesure les attrape.
+
+### Ce qui reste à faire
+
+- **Le nettoyage** : les 60 couleurs en dur et les 17 `StyleBox` faits main
+  vivent toujours dans les écrans, et **gagnent** sur le thème là où ils se
+  recouvrent. Les remplacer par les variations de la charte, écran par écran.
+- **Les emoji employés comme icônes** (💾 🗺️ 👤 🎯) rendent au style du système
+  et jurent avec un médiéval-fantastique. Ils demandent des glyphes dessinés.
+- **Le décor du plateau** n'a pas été retouché : Velmar s'accorde déjà à son
+  ciel. Une bascule vers une autre direction, elle, l'exigerait.
 
 ## 7. Journal d'implémentation
 
@@ -1687,4 +1774,50 @@ part avant d'engager. Les unités tombées y figurent aussi, marquées.
 
 ```
 bash scripts/test_all.sh --window   # 58 / 573 / 77 OK + test_map + 18 + 14 OK
+```
+
+### Passe du 2026-08-08 — la charte graphique, et le certificat Apple abandonné
+
+Deux décisions d'Aurèle ouvrent la passe : **le certificat Développeur Apple ne
+sera jamais pris** (200-600 €/an, il ne veut pas payer — la signature macOS
+quitte donc le backlog, voir §4), et **les cartes des chapitres attendront**.
+Ce qu'il voulait à la place : « améliorer les graphiques. Enfin plutôt choisir
+une charte graphique, parce qu'actuellement on utilise la charte de Godot ? »
+
+**La question méritait d'être mesurée avant d'être traitée** — elle était à
+moitié vraie. L'état des lieux complet est en §6bis ; en une phrase : les
+*boutons* étaient à nous, repeints écran par écran (60 couleurs en dur dans 12
+fichiers, 17 `StyleBoxFlat` faits main dans 8 écrans), et tout le reste — champs,
+listes déroulantes, compteurs, cases à cocher, barres de défilement, **et la
+police** — était d'usine. Le décor 3D, lui, n'a jamais rien eu de Godot.
+
+**Direction retenue : « Velmar — nuit et or »**, choisie sur trois propositions.
+Elle formalise ce que les écrans faisaient déjà à tâtons et s'accorde au ciel du
+plateau sans y toucher.
+
+Livré : `palette.gd` (source unique), `ciel_theme.gd` (le thème, bâti en code,
+icônes dessinées comprises), Cinzel + Alegreya Sans sous licence OFL dans
+`assets/fonts/`, et cinq variations nommées.
+
+**Les deux pièges de la passe**, tous deux muets — aucun message d'erreur, aucun
+plantage, juste un écran inchangé :
+
+- **un thème ne traverse pas un `CanvasLayer`**, et `Main._mount_ui` en pose un
+  autour de chaque écran ; la première application n'a donc strictement rien
+  changé, ce que seule la capture d'écran a montré ;
+- **`variation_opentype` ignore les clés texte** — `{"wght": 700}` laissait
+  Cinzel en Regular, alors que la clé texte marche pour `opentype_features`
+  juste à côté. Mesuré en comparant des largeurs : identiques à 400, 700 et 900.
+
+Corrigé au passage, trouvé à l'œil sur les captures : Alegreya Sans compose par
+défaut des **chiffres elzéviriens** — hauteurs inégales, certains sous la ligne.
+Acceptable en roman, mauvais dans un jeu où l'on compare des PV et des taux de
+critique en colonne. `lnum` + `tnum` les redressent et les alignent.
+
+Test 24 (`test_features.gd`) verrouille les deux pièges et la couverture des
+widgets. Reste à faire, listé en §6bis : le nettoyage des couleurs en dur, qui
+gagnent encore sur le thème là où elles se recouvrent, et les emoji-icônes.
+
+```
+bash scripts/test_all.sh --window   # 58 / 588 / 77 OK + test_map + 18 + 14 OK
 ```
