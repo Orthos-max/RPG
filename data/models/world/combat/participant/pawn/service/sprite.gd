@@ -52,12 +52,17 @@ func rotate_sprite(_global_basis: Basis) -> void:
 	var _scalar: float = _global_basis.z.dot(_camera_forward)
 	# Determine if the sprite should be flipped horizontally
 	flip_h = _global_basis.x.dot(_camera_forward) > 0
-	# Select appropriate sprite frame based on pawn orientation relative to camera
-	if _scalar < -0.306: # Pawn is facing away from camera, use base "back" frame
+	# Choix de la rangée. Attention au signe : `look_at_direction()` ajoute un PI
+	# à l'angle, donc `basis.z` pointe dans le sens de la marche, pas à l'opposé.
+	# Un scalaire négatif veut donc dire « le pion vient vers nous », et c'est
+	# alors la rangée du HAUT — celle du visage — qu'il faut. La rangée du bas
+	# porte le dos. C'est l'inverse de ce que la lecture naïve suggère.
+	if _scalar < -0.306: # vient vers la caméra : on voit son visage
 		frame = curr_frame
-	elif _scalar > 0.306: # Facing towards camera, use "front" view
+	elif _scalar > 0.306: # s'éloigne : on voit son dos
 		frame = curr_frame + 1 * TacticsPawnResource.ANIMATION_FRAMES
-	# Note: If -0.306 <= scalar <= 0.306, the frame remains unchanged
+	# Entre les deux seuils, la frame ne change pas. Sur les quatre directions de
+	# la grille le scalaire vaut ±0,435 : la marge est mince mais jamais franchie.
 
 
 ## Adjusts the pawn's position to the center of its current tile

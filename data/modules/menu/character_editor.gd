@@ -313,28 +313,35 @@ func _refresh_skills() -> void:
 ## Choix de la figurine, avec un aperçu de ce qu'on choisit.
 ##
 ## Une liste de noms ne dirait rien : « chemist » ou « mage » ne se devinent pas.
-## L'aperçu montre la rangée du bas de la planche — l'unité **de face**, celle
-## qu'on voit le plus souvent en jeu.
+## L'aperçu montre la rangée du haut de la planche — l'unité **de face**, celle
+## qu'on veut reconnaître en choisissant.
 func _build_sprite_picker() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
 	var preview := TextureRect.new()
-	preview.custom_minimum_size = Vector2(48, 48)
+	# 64 px pour une case de planche de 128 : une réduction de moitié pile, donc
+	# une moyenne propre de 2×2 pixels plutôt qu'un rééchantillonnage bancal.
+	preview.custom_minimum_size = Vector2(64, 64)
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Ici l'image est RÉDUITE, pas agrandie : c'est l'inverse du pion en bataille.
+	# Au plus proche voisin une réduction supprime des pixels au lieu de les
+	# moyenner — un liseré sur deux disparaîtrait. Le linéaire est le bon choix
+	# quand on descend en résolution, le « nearest » quand on monte.
+	preview.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 
 	var show_look := func(path: String) -> void:
 		var sheet: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
 		if not sheet:
 			preview.texture = null
 			return
-		# La planche fait deux rangées : dos en haut, face en bas. On découpe la
-		# seconde plutôt que d'afficher les deux l'une au-dessus de l'autre.
+		# Deux rangées : le VISAGE en haut, le dos en bas (voir le README des
+		# figurines — la convention inverse a longtemps été écrite par erreur).
+		# On découpe la première, personne ne choisit une figurine de dos.
 		var half := AtlasTexture.new()
 		half.atlas = sheet
-		half.region = Rect2(0, sheet.get_height() / 2.0,
-			sheet.get_width(), sheet.get_height() / 2.0)
+		half.region = Rect2(0, 0, sheet.get_width(), sheet.get_height() / 2.0)
 		preview.texture = half
 
 	_sprite_picker = OptionButton.new()

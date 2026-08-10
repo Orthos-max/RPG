@@ -591,8 +591,12 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 	header.add_theme_constant_override("separation", 14)
 
 	var look := TextureRect.new()
-	look.custom_minimum_size = Vector2(72, 72)
+	look.custom_minimum_size = Vector2(96, 96)
 	look.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Vignette réduite (96 px pour une case de 128) : au plus proche voisin, une
+	# réduction jette des pixels au lieu de les moyenner. Le linéaire tient le
+	# rôle ici ; le « nearest » est réservé au pion, qui lui est agrandi.
+	look.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	look.texture = _front_of(str(unit.get("sprite", "")))
 	header.add_child(look)
 
@@ -717,7 +721,11 @@ func _detail_line(label_text: String, content: String) -> Control:
 	return row
 
 
-## La moitié basse d'une planche : l'unité **de face**, celle qu'on voit en jeu.
+## La moitié **haute** d'une planche : l'unité de face, celle qu'on voit venir.
+##
+## Le README des figurines a longtemps annoncé le dos en haut ; c'est faux, et
+## cet écran découpait donc la mauvaise moitié — le roster montrait toutes les
+## unités de dos.
 func _front_of(sheet_path: String) -> Texture2D:
 	if sheet_path.is_empty() or not ResourceLoader.exists(sheet_path):
 		return null
@@ -726,7 +734,7 @@ func _front_of(sheet_path: String) -> Texture2D:
 		return null
 	var half := AtlasTexture.new()
 	half.atlas = sheet
-	half.region = Rect2(0, sheet.get_height() / 2.0, sheet.get_width(), sheet.get_height() / 2.0)
+	half.region = Rect2(0, 0, sheet.get_width(), sheet.get_height() / 2.0)
 	return half
 
 
