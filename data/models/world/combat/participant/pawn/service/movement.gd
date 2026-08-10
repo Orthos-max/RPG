@@ -5,6 +5,24 @@ extends RefCounted
 
 ## Rotates the pawn to face the given direction
 ##
+## ⚠️ **Ne pas retirer le `+ PI` sans refaire toutes les planches de figurines.**
+##
+## Il a l'air d'une erreur : sans lui, le pion regarderait bien `dir`, puisqu'une
+## rotation d'angle nul laisse son axe `-Z` — l'avant, par convention Godot —
+## dans le sens de la marche. Avec lui, le pion est retourné de 180°, et c'est
+## `basis.z` qui suit la marche au lieu de l'opposer.
+##
+## Or [TacticsPawnSprite.rotate_sprite] choisit sa rangée sur le signe de
+## `basis.z · avant_caméra`. Le `+ PI` inverse donc ce signe, et c'est ce qui
+## fait que la rangée du **haut** d'une planche est le **visage** : un scalaire
+## négatif veut dire « le pion vient vers nous ». Toutes les planches de
+## `assets/textures/actor/` sont dessinées sur cette convention.
+##
+## Enlever ce `+ PI` retournerait donc les huit planches d'un coup — les unités
+## montreraient leur dos en avançant vers la caméra. Si le jour vient de le
+## nettoyer, il faut inverser en même temps les deux seuils de `rotate_sprite`
+## et la découpe `region` des vignettes de menu.
+##
 ## @param pawn: The TacticsPawn to rotate
 ## @param dir: The direction vector to face
 func look_at_direction(pawn: TacticsPawn, dir: Vector3) -> void:
