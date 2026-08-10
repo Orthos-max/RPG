@@ -1,0 +1,38 @@
+GIMP Palette
+Name: Ciel Emblem - figurines
+Columns: 8
+#
+# Couleurs du casting, les plus partagees en premier.
+179 185 209	fig b3b9d1 (8/8)
+218 224 234	fig dae0ea (8/8)
+ 34  28  26	fig 221c1a (7/8)
+ 74  84  98	fig 4a5462 (6/8)
+ 20  52 100	fig 143464 (5/8)
+ 40  92 196	fig 285cc4 (4/8)
+142  82  82	fig 8e5252 (4/8)
+ 36 159 222	fig 249fde (4/8)
+139 147 175	fig 8b93af (4/8)
+ 51  57  65	fig 333941 (3/8)
+109 117 141	fig 6d758d (3/8)
+187 117  71	fig bb7547 (3/8)
+186 117 106	fig ba756a (3/8)
+219 164  99	fig dba463 (3/8)
+233 181 163	fig e9b5a3 (3/8)
+ 59  23  37	fig 3b1725 (2/8)
+115  23  45	fig 73172d (2/8)
+ 91  49  56	fig 5b3138 (2/8)
+ 66  36  51	fig 422433 (1/8)
+ 66  57  52	fig 423934 (1/8)
+180  32  42	fig b4202a (1/8)
+113  65  59	fig 71413b (1/8)
+121 103  85	fig 796755 (1/8)
+160 134  98	fig a08662 (1/8)
+244 210 156	fig f4d29c (1/8)
+#
+# Accents de la charte « Velmar : nuit et or »
+ 20  16  38	charte INK
+245 200  66	charte GOLD
+138 112  40	charte GOLD_DIM
+233  69  96	charte CRIMSON
+ 45 106  79	charte VERDANT
+232 230 240	charte TEXT

@@ -37,9 +37,55 @@ correctement jusqu'au pion depuis le 2026-08-07. Il n'y a simplement pas d'image
 |---|---|
 | Format | **`.png`**, fond transparent |
 | Taille | **128 × 256** — une colonne, deux rangées de 128 × 128 |
-| Rangée du haut | l'unité **de dos** (vue quand elle s'éloigne de la caméra) |
-| Rangée du bas | l'unité **de face** |
-| Style | pixel art, la figurine occupe la largeur, pieds en bas de case |
+| Rangée du haut | l'unité **de face** (vue quand elle vient vers la caméra) |
+| Rangée du bas | l'unité **de dos** |
+| Style | pixel art, palette réduite, pieds posés sur la ligne `y = 120` |
+
+> ⚠️ **La rangée du haut est le visage, pas le dos.** Ce README a documenté
+> l'inverse jusqu'au 2026-08-10, alors que les planches livrées, elles, avaient
+> le visage en haut — c'est le README qui avait tort, pas l'art. La raison est
+> dans `movement.gd` : `look_at_direction()` ajoute un `PI` à l'angle, donc
+> `basis.z` suit le sens de la marche au lieu de l'opposer. Un scalaire négatif
+> signifie « vient vers nous » et sélectionne la frame 0, celle du haut.
+> Vérifié sur les quatre directions de la grille : ±0,435 pour un seuil de 0,306.
+> Dessiner en suivant l'ancienne consigne donnait des unités qui montrent leur
+> dos en avançant vers toi.
+
+### Le casting actuel ne tient pas ses 128
+
+Les planches font bien 128 × 256, mais leur **contenu** n'est qu'un
+agrandissement ×4 au plus proche voisin d'un dessin de 32 × 32 : réduites en
+32 × 64 puis ré-agrandies, elles reviennent **à l'octet près**, toutes les huit.
+Les trois quarts du fichier ne portent aucune information.
+
+Le format reste donc 128 × 256, mais **128 est la grille à remplir pour de
+bon** — une planche neuve dessinée à cette taille porte seize fois plus de
+détail que le casting actuel. Les huit planches d'origine sont à retravailler,
+pas seulement les quatre manquantes : une figurine réellement dessinée en 128
+posée à côté d'un squelette en 32 se verra immédiatement.
+
+Le format a été arrêté le 2026-08-10 sur les chiffres suivants. La figurine
+mesure 1,28 unité de monde (`pixel_size` 0.01 × 128 px), la caméra est
+orthographique et cadre entre 7 et 26 unités de haut. Rapport entre un pixel
+d'art et un pixel d'écran :
+
+| Cadrage | Figurine à l'écran (1080p) | Art 128 |
+|---|---|---|
+| Zoom max (7) | 197 px | 1,54× |
+| Ouverture serrée (9) | 154 px | 1,20× |
+| Repos (10) | 138 px | 1,08× |
+| Ouverture large (18) | 77 px | 0,60× — réduite |
+| Dézoom max (26) | 53 px | 0,42× — réduite |
+
+En 1080p le 128 passe donc sous le 1:1 à cadrage large : le détail peint y est
+moyenné par le mipmap. Ce n'est **pas** un défaut de rendu — une planche 128 n'y
+est jamais pire qu'une 64, seulement moins exploitée — c'est un coût de
+production à assumer sciemment. En 1440p le rapport tient à 0,80×, en 4K à
+1,20× : le 128 s'y justifie pleinement.
+
+Côté machine, la question ne se pose pas : 60 planches en 128 × 256 sans perte,
+mipmaps comprises, pèsent **10 Mo de VRAM**. La puissance du PC du joueur
+n'entre pas dans l'arbitrage.
 
 Le pion est un `Sprite3D` en `billboard`, `vframes = 2` : il choisit dos ou face
 selon l'orientation par rapport à la caméra. Une planche mal découpée se voit
@@ -47,6 +93,46 @@ tout de suite — l'unité change de moitié en tournant.
 
 Pour animer plus tard, il suffira de monter `TacticsPawnResource.ANIMATION_FRAMES`
 et d'ajouter des colonnes : la formule de choix de frame les prend déjà en compte.
+
+### Repères de dessin
+
+Mesurés sur les huit planches existantes, à respecter pour que le casting reste
+d'aplomb :
+
+| Repère | Position dans la case de 128 |
+|---|---|
+| Ligne de pieds | `y = 120` (dernière rangée opaque : 119) |
+| Sommet du crâne | `y = 8` |
+| Hauteur de la figurine | 108 à 116 px |
+| Axe de symétrie | `x = 64` |
+| Proportions | ~2,3 têtes de haut — du chibi franc, à tenir |
+| Palette | 25 couleurs pour tout le casting, 9 partagées |
+
+Les proportions comptent autant que la résolution : le casting actuel tient un
+canon chibi (crâne du haut du dessin jusqu'à ~`y = 56`, corps et jambes en
+dessous). En montant en résolution la tentation est de dériver vers 3 ou 4 têtes
+— ce serait changer l'identité de toutes les unités sans l'avoir décidé.
+
+Le dossier [`art/`](../../../art/) à la racine du dépôt contient de quoi
+travailler : `gabarit-reperes.png` (calque de repères à superposer),
+`palette-figurines.gpl` (lisible par Aseprite et GIMP, couleurs du casting +
+accents de la charte « Velmar : nuit et or ») et `planche-contact.png` (les huit
+figurines côte à côte en ×4, pour comparer proportions et teintes en dessinant).
+
+Un défaut connu à ne pas reproduire : `chr_pawn_skeleton_mage.png` a ses pieds
+de face à `y = 124`, quatre pixels plus bas que tout le monde. Il flotte donc très
+légèrement par rapport aux autres.
+
+### Réglages moteur — ne pas les défaire
+
+Les `.import` de ce dossier sont en `compress/mode=0` (sans perte) avec
+`mipmaps/generate=true`, et surtout `detect_3d/compress_to=0`. Ce dernier compte :
+laissé à `1`, Godot rebascule tout seul la texture en compression VRAM dès qu'il
+la voit servir en 3D — c'est ce qui était arrivé, et le block compression bave
+sur des aplats de dix couleurs. Le `Sprite3D` est en `texture_filter = 4`
+(`NEAREST_WITH_MIPMAPS_ANISOTROPIC`) : net de près, propre au dézoom. Les aperçus
+2D des menus (`character_editor.gd`, `prep_screen.gd`) sont en
+`TEXTURE_FILTER_NEAREST` pour la même raison.
 
 ---
 
