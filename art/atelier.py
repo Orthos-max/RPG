@@ -2,7 +2,7 @@
 """Régénère le matériel de dessin des figurines depuis les planches en place.
 
 À relancer après avoir ajouté ou retouché une planche. Tout se déduit des
-fichiers — taille de case, ligne de pieds, palette : rien n'est écrit en dur, de
+fichiers — taille de cellule, ligne de pieds, palette : rien n'est écrit en dur, de
 sorte qu'un changement d'échelle (32 → 64 → 128) n'oblige pas à toucher ce
 script.
 
@@ -54,19 +54,19 @@ def couleurs(img: Image.Image) -> set[tuple[int, int, int]]:
 
 
 def mesurer(fichiers: list[str]) -> dict:
-    """Déduit la géométrie commune : case, ligne de pieds, sommet du crâne.
+    """Déduit la géométrie commune : cellule, ligne de pieds, sommet du crâne.
 
     On prend le sol le plus fréquent plutôt que le plus bas : une planche qui
     déborde de deux pixels est un défaut à corriger, pas la règle à suivre.
     """
     larg, haut = Image.open(fichiers[0]).size
-    case = haut // 2
+    cellule = haut // 2
     sols: Counter = Counter()
     cranes: Counter = Counter()
     for f in fichiers:
         im = Image.open(f).convert("RGBA")
-        for rangee in (0, case):
-            pose = im.crop((0, rangee, larg, rangee + case))
+        for rangee in (0, cellule):
+            pose = im.crop((0, rangee, larg, rangee + cellule))
             bb = pose.getbbox()
             if bb:
                 cranes[bb[1]] += 1
@@ -74,7 +74,7 @@ def mesurer(fichiers: list[str]) -> dict:
     return {
         "largeur": larg,
         "hauteur": haut,
-        "case": case,
+        "cellule": cellule,
         "sol": sols.most_common(1)[0][0],
         "crane": cranes.most_common(1)[0][0],
         "axe": larg // 2,
@@ -109,14 +109,14 @@ def ecrire_gabarit(g: dict) -> None:
     img = Image.new("RGBA", (g["largeur"], g["hauteur"]), (0, 0, 0, 0))
     px = img.load()
     sol, crane, axe, coupe = (255, 0, 110, 190), (0, 200, 255, 120), (255, 255, 255, 70), (255, 180, 0, 220)
-    for rangee in (0, g["case"]):
+    for rangee in (0, g["cellule"]):
         for x in range(g["largeur"]):
             px[x, rangee + g["sol"] - 1] = sol
             px[x, rangee + g["crane"]] = crane
-        for y in range(0, g["case"], 2):  # pointillé : l'axe ne doit pas masquer le dessin
+        for y in range(0, g["cellule"], 2):  # pointillé : l'axe ne doit pas masquer le dessin
             px[g["axe"], rangee + y] = axe
     for x in range(g["largeur"]):
-        px[x, g["case"] - 1] = coupe
+        px[x, g["cellule"] - 1] = coupe
     img.save(os.path.join(ATELIER, "gabarit-reperes.png"))
 
 
@@ -145,7 +145,7 @@ def main() -> None:
     n = ecrire_palette(fichiers)
     ecrire_gabarit(g)
     taille = ecrire_contact(fichiers, g)
-    print(f"{len(fichiers)} planches lues, case de {g['largeur']}x{g['case']}")
+    print(f"{len(fichiers)} planches lues, cellule de {g['largeur']}x{g['cellule']}")
     print(f"palette-figurines.gpl : {n} couleurs + {len(CHARTE)} accents de charte")
     print(f"gabarit-reperes.png   : sol y={g['sol']}, crane y={g['crane']}, axe x={g['axe']}")
     print(f"planche-contact.png   : {taille[0]}x{taille[1]}")

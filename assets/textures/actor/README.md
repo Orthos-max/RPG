@@ -117,7 +117,7 @@ marche du pack quelque part de côté évitera de racheter ou redessiner.
 Mesurés sur les huit planches existantes, à respecter pour que le casting reste
 d'aplomb :
 
-| Repère | Position dans la case de 128 |
+| Repère | Position dans la cellule de 128 |
 |---|---|
 | Ligne de pieds | `y = 120` (dernière rangée opaque : 119) |
 | Sommet du crâne | `y = 8` |

@@ -10,6 +10,10 @@ suit ne décrit que les trois fichiers.
 Pour l'achat d'un pack tout fait : [`ACHAT-PACK.md`](ACHAT-PACK.md) — la liste de
 contrôle, éliminatoires en tête.
 
+Si un mot n'est pas clair — planche, cellule, figurine, fiche, pion — c'est dans
+[`LEXIQUE.md`](LEXIQUE.md), qui dit aussi lesquels ne veulent pas dire la même
+chose dans le code et dans la conversation.
+
 ## `gabarit-reperes.png`
 
 128 × 256 transparent, à ouvrir comme **calque du dessus** dans Aseprite par-dessus

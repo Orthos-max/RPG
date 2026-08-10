@@ -1,6 +1,6 @@
 # Acheter un pack de figurines — liste de contrôle
 
-Écrit pour Ciel Emblem, avec ses contraintes réelles : case de 128 × 128, deux
+Écrit pour Ciel Emblem, avec ses contraintes réelles : cellule de 128 × 128, deux
 poses, caméra orthographique inclinée à −52°, figurine entre 53 et 197 px à
 l'écran. Le format complet est dans
 [`assets/textures/actor/README.md`](../assets/textures/actor/README.md).
@@ -38,7 +38,7 @@ trois ans, « je crois que c'était libre » ne vaudra rien.
 
 Pas 32 ou 64 agrandis. C'est exactement le piège dans lequel les planches
 actuelles de Ciel Emblem étaient tombées : 128 × 256 sur le disque, 32 × 32 de
-contenu réel. Un vendeur sérieux annonce la taille de case ; sinon, demander une
+contenu réel. Un vendeur sérieux annonce la taille de cellule ; sinon, demander une
 image d'exemple et vérifier qu'une réduction ×4 puis un agrandissement ×4 ne
 redonnent **pas** l'original à l'identique.
 
@@ -75,7 +75,7 @@ huit planches**, et 0 % d'alpha partiel.
 ## Format technique
 
 - **PNG à alpha réel**, pas un fond magenta ou blanc à détourer.
-- **Grille régulière**, cases de taille constante, sans marge variable. Un atlas
+- **Grille régulière**, cellules de taille constante, sans marge variable. Un atlas
   aux espacements irréguliers se redécoupe à la main, planche par planche.
 - **Ligne de pieds constante** sur tout le pack. C'est le défaut le plus fréquent
   et le plus coûteux : si chaque personnage pose ses pieds à une hauteur

@@ -79,13 +79,13 @@ def analyser(chemin: str) -> None:
 
     # Si l'image a le rapport d'une planche a deux rangees, verifier l'aplomb.
     if im.height == im.width * 2:
-        case = im.height // 2
+        cellule = im.height // 2
         sols = []
-        for rangee in (0, case):
-            bb = im.crop((0, rangee, im.width, rangee + case)).getbbox()
+        for rangee in (0, cellule):
+            bb = im.crop((0, rangee, im.width, rangee + cellule)).getbbox()
             sols.append(bb[3] if bb else 0)
         verdicts.append((sols[0] == sols[1],
-                         f"pieds a y={sols[0]} et y={sols[1]} dans leur case "
+                         f"pieds a y={sols[0]} et y={sols[1]} dans leur cellule "
                          f"{'(alignes)' if sols[0] == sols[1] else '(DECALES)'}"))
 
     for ok, texte in verdicts:
