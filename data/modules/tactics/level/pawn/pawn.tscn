@@ -105,6 +105,7 @@ shape = SubResource("13")
 [node name="Character" type="Sprite3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.602, 0)
 billboard = 1
+texture_filter = 4
 alpha_cut = 2
 texture = ExtResource("2")
 vframes = 2
