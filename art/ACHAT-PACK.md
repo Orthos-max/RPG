@@ -60,9 +60,15 @@ avec des bords adoucis et des centaines de couleurs. Ils résistent à la
 quantification sur palette, bavent au filtre au plus proche voisin, et ne se
 retouchent pas au pixel.
 
-Test simple sur l'image d'exemple : compter les couleurs. Du vrai pixel art en
-tient quelques dizaines. Le casting actuel de Ciel Emblem en compte **25 pour
-huit planches**.
+Ça ne se juge pas à l'œil sur une page de vente, ça se mesure :
+
+```
+python3 art/verifier-echantillon.py echantillon.png
+```
+
+Du vrai pixel art tient en quelques dizaines de couleurs et n'a quasiment pas de
+pixels à alpha partiel. Le casting actuel de Ciel Emblem en compte **25 pour
+huit planches**, et 0 % d'alpha partiel.
 
 ---
 
@@ -166,21 +172,35 @@ Sur itch.io, chercher par **tag** (`128x128`, `sprites`, `tactical-rpg`,
 `pixel-art`) et filtrer par prix. Les termes « tactical RPG » seuls donnent
 surtout du 32 px : élargir à *top-down*, *battler*, *HD pixel art*.
 
-### ⚠️ Les packs générés par IA
+### L'origine ne juge rien, les mesures oui
 
-Ils se multiplient, et ce sont précisément ceux qui échouent au critère « vrai
-pixel art » : bords adoucis, centaines de couleurs, incohérences d'un personnage
-à l'autre. Ils posent en plus une question de droits qui n'est pas tranchée
-partout. Les vendeurs honnêtes le déclarent sur la page — chercher la mention
-avant d'acheter.
+Fait main ou assisté par IA : **ce n'est pas un critère**. Un pack dessiné à la
+main peut être mou et anticrénelé ; un pack assisté par IA peut être net,
+cohérent et parfaitement utilisable. Ce qui se voit en jeu, ce sont des
+propriétés mesurables — et elles se mesurent, sur n'importe quelle image
+d'exemple :
+
+```
+python3 art/verifier-echantillon.py echantillon.png
+```
+
+Le script dit si la résolution annoncée est réelle ou agrandie, compte les
+couleurs, mesure la part de pixels à alpha partiel (le signe de bords adoucis),
+et vérifie l'aplomb des pieds entre les deux rangées. C'est ce qui remplace
+l'impression laissée par une page de vente.
+
+Une réserve à connaître, sans qu'elle interdise quoi que ce soit : **le statut
+juridique des sorties d'IA n'est pas tranché partout**. C'est un risque à
+accepter en connaissance de cause, pas un défaut de l'image.
 
 ### Deux pistes examinées le 2026-08-10
 
 **[DaddyDarko — 500+ RPG Themed Sprites](https://dadddydarko.itch.io/500-rpg-themed-asset-pack-2d-sprites)**
 (~3 $). 200+ personnages en 128, licence commerciale avec retouche autorisée.
-**Écarté** : aucune monture, et le vendeur déclare que les assets sont
-« partiellement générés par IA puis corrigés à la main » — exactement le profil
-qui rate le test des couleurs.
+**Écarté sur les montures** — il n'y en a aucune, et c'est le besoin numéro un.
+Le vendeur déclare des assets « partiellement générés par IA puis corrigés à la
+main » : ça n'entre pas dans le verdict, mais ça vaut de passer un échantillon au
+vérificateur avant d'acheter, l'anticrénelage étant fréquent sur ce profil.
 
 **[traegis — 2D Character Sprite Pack 128x128](https://traegis.itch.io/pixel-art-2d-character-animations)**
 (~5 $ CAD). Structurellement le meilleur candidat vu : **quatre directions**
