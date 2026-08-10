@@ -7,6 +7,9 @@ La consigne complète (format, convention dos/face, repères) est dans
 [`assets/textures/actor/README.md`](../assets/textures/actor/README.md). Ce qui
 suit ne décrit que les trois fichiers.
 
+Par où produire les planches — 3D, commande, pack, IA, dessin :
+[`METHODES.md`](METHODES.md), comparées sur les contraintes du projet.
+
 Pour l'achat d'un pack tout fait : [`ACHAT-PACK.md`](ACHAT-PACK.md) — la liste de
 contrôle, éliminatoires en tête.
 
