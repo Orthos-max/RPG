@@ -144,6 +144,65 @@ pack à 12 € qui en couvre deux.
 
 ---
 
+## Où chercher — et l'état du marché en 128
+
+**Le choix du 128 rétrécit fortement l'offre.** L'écrasante majorité des packs de
+pixel art tactique travaille en 16, 32 ou 48 px. Ce qui existe en 128 est surtout
+du personnage de plateforme, du *battler* de profil façon RPG Maker, ou du
+top-down de ferme — rarement un casting de classes façon Fire Emblem. Il faut le
+savoir avant de chercher : ce n'est pas qu'on cherche mal.
+
+| Site | Pour quoi | Licence |
+|---|---|---|
+| **itch.io** | le plus gros catalogue, gros rayon gratuit et prix libre | variable **par créateur** — à lire à chaque fois |
+| **CraftPix** | licence commerciale incluse d'office, rangé par genre, section gratuite | homogène, plus simple juridiquement |
+| **OpenGameArt** | gratuit, champ de licence explicite | CC0 / CC-BY / GPL, qualité inégale |
+| **Kenney** | tout en CC0, imbattable juridiquement | CC0 |
+| **Humble Bundle** | lots d'assets périodiques, très bon rapport quantité/prix | à vérifier au cas par cas |
+| **GameDev Market** | catalogue modéré et curé | à vérifier |
+| **Unity Asset Store / Fab** | fourni, mais ⚠️ certaines licences ne couvrent que des projets Unity — vérifier avant d'acheter pour un projet Godot | à vérifier de près |
+
+Sur itch.io, chercher par **tag** (`128x128`, `sprites`, `tactical-rpg`,
+`pixel-art`) et filtrer par prix. Les termes « tactical RPG » seuls donnent
+surtout du 32 px : élargir à *top-down*, *battler*, *HD pixel art*.
+
+### ⚠️ Les packs générés par IA
+
+Ils se multiplient, et ce sont précisément ceux qui échouent au critère « vrai
+pixel art » : bords adoucis, centaines de couleurs, incohérences d'un personnage
+à l'autre. Ils posent en plus une question de droits qui n'est pas tranchée
+partout. Les vendeurs honnêtes le déclarent sur la page — chercher la mention
+avant d'acheter.
+
+### Deux pistes examinées le 2026-08-10
+
+**[DaddyDarko — 500+ RPG Themed Sprites](https://dadddydarko.itch.io/500-rpg-themed-asset-pack-2d-sprites)**
+(~3 $). 200+ personnages en 128, licence commerciale avec retouche autorisée.
+**Écarté** : aucune monture, et le vendeur déclare que les assets sont
+« partiellement générés par IA puis corrigés à la main » — exactement le profil
+qui rate le test des couleurs.
+
+**[traegis — 2D Character Sprite Pack 128x128](https://traegis.itch.io/pixel-art-2d-character-animations)**
+(~5 $ CAD). Structurellement le meilleur candidat vu : **quatre directions**
+(bas = visage, haut = dos), **un cheval avec animations montées**, **fichiers PSD
+fournis**, et un système d'équipement en calques qui permet de tirer plusieurs
+classes d'une base. **Mais** : un seul personnage de base, et un thème western /
+ferme (chapeau de cow-boy, revolver, faux) au lieu de la fantasy.
+
+Aucun des deux ne se prend tel quel. Ils servent de calibrage : c'est le niveau
+de prix et le genre de compromis à attendre.
+
+### Si rien ne convient
+
+- **Acheter un pack en 32 ou 48 comme référence de composition**, et dessiner à
+  128 par-dessus. Attention : le résultat reste une œuvre dérivée, la licence
+  s'applique toujours.
+- **Commander à un pixel artist.** À huit planches de deux poses, sans animation,
+  une commande devient compétitive face au temps passé — et donne exactement le
+  casting voulu, aux bonnes proportions, dans la bonne palette.
+
+---
+
 ## Ce qu'on ne prend pas, pour l'instant
 
 Les colonnes d'animation. Décision du 2026-08-10 : une colonne, deux images. D'un
