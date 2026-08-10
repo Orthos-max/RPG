@@ -91,8 +91,26 @@ Le pion est un `Sprite3D` en `billboard`, `vframes = 2` : il choisit dos ou face
 selon l'orientation par rapport à la caméra. Une planche mal découpée se voit
 tout de suite — l'unité change de moitié en tournant.
 
-Pour animer plus tard, il suffira de monter `TacticsPawnResource.ANIMATION_FRAMES`
-et d'ajouter des colonnes : la formule de choix de frame les prend déjà en compte.
+### Une seule colonne — décidé le 2026-08-10
+
+**Pas d'animation pour l'instant.** Une planche = une colonne, deux rangées, deux
+images en tout. `ANIMATION_FRAMES` reste à 1 et `hframes` à son défaut.
+
+Ça compte surtout au moment de **récupérer un pack acheté**. Les packs tactiques
+livrent presque toujours quatre directions × plusieurs images de marche : il ne
+faut en extraire que **deux images fixes** — la pose de repos vers le bas (le
+visage) au-dessus, la pose de repos vers le haut (le dos) en dessous. Tout le
+reste est à laisser de côté tant que l'animation n'est pas décidée.
+
+Une planche qui garderait ses colonnes de marche ne provoquerait aucune erreur :
+`hframes` valant 1, Godot prend **toute la largeur** du fichier comme une seule
+image et afficherait les quatre poses côte à côte, écrasées sur un pion quatre
+fois trop large. C'est spectaculaire, donc au moins ça ne passe pas inaperçu.
+
+Le jour où l'animation viendra, il suffira de monter
+`TacticsPawnResource.ANIMATION_FRAMES` et d'ajouter les colonnes à droite : la
+formule de choix de frame les prend déjà en compte, et garder les images de
+marche du pack quelque part de côté évitera de racheter ou redessiner.
 
 ### Repères de dessin
 
