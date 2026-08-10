@@ -40,6 +40,10 @@ fi
 SUITES=(test_combat test_features test_battle test_map)
 WINDOW_SUITES=()
 [ "${1:-}" = "--window" ] && WINDOW_SUITES=(test_window test_chapters)
+
+# Les suites vivent dans tests/ ; le chemin passé à --script est résolu par le
+# moteur, donc il s'écrit en res:// et non relativement au dossier courant.
+TESTS_DIR=res://tests
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
 
@@ -51,7 +55,7 @@ echo ""
 
 for suite in "${SUITES[@]}"; do
     log="$LOG_DIR/$suite.log"
-    "$GODOT" --headless --path "$PROJECT_DIR" --script "$suite.gd" >"$log" 2>&1
+    "$GODOT" --headless --path "$PROJECT_DIR" --script "$TESTS_DIR/$suite.gd" >"$log" 2>&1
     code=$?
 
     # Le compte de tests, tel que la suite le rapporte.
@@ -79,7 +83,7 @@ done
 # tableau est vide — c'est-à-dire à chaque lancement sans `--window`.
 for suite in ${WINDOW_SUITES[@]+"${WINDOW_SUITES[@]}"}; do
     log="$LOG_DIR/$suite.log"
-    "$GODOT" --path "$PROJECT_DIR" --resolution 1280x720 --script "$suite.gd" >"$log" 2>&1
+    "$GODOT" --path "$PROJECT_DIR" --resolution 1280x720 --script "$TESTS_DIR/$suite.gd" >"$log" 2>&1
     code=$?
     summary=$(grep -oE "RÉSULTATS: [0-9]+ OK / [0-9]+ ÉCHECS" "$log" | tail -1)
     [ -z "$summary" ] && summary="(aucun résumé)"

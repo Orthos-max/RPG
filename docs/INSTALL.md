@@ -264,11 +264,19 @@ bash scripts/test_net.sh
 | L'invité ne se connecte pas | pare-feu ou mauvaise interface | ouvrir le port 24710/UDP, ou `CIEL_HOST_IP=…` |
 | Partie en ligne figée | invité déconnecté | l'IA locale reprend le camp automatiquement |
 
-Tests de non-régression (développement) :
+Tests de non-régression (développement). Les suites vivent dans `tests/` ; le
+chemin passé à `--script` est résolu par le moteur, donc il s'écrit en `res://` :
+
 ```bash
-godot --headless --path . --script test_combat.gd    # combat FE
-godot --headless --path . --script test_map.gd       # cartes & terrains
-godot --headless --path . --script test_features.gd  # logique des features
-godot --headless --path . --script test_battle.gd    # intégration campagne + pont
-bash scripts/test_net.sh                             # transport réseau (2 processus)
+bash scripts/test_all.sh            # les quatre suites headless, d'un coup
+bash scripts/test_all.sh --window   # + test_window et test_chapters (vraie fenêtre)
+bash scripts/test_net.sh            # transport réseau (2 processus)
+```
+
+Une suite seule, si besoin :
+```bash
+godot --headless --path . --script res://tests/test_combat.gd    # combat FE
+godot --headless --path . --script res://tests/test_map.gd       # cartes & terrains
+godot --headless --path . --script res://tests/test_features.gd  # logique des features
+godot --headless --path . --script res://tests/test_battle.gd    # intégration campagne + pont
 ```

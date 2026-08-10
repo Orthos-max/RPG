@@ -81,8 +81,11 @@ docs/            → PROJECT_SPEC, CIEL_PROTOCOL, INSTALL
 scripts/
   ciel_game/     → PONT CielAI (_paths, launch, command, state)
   build/         → export.sh, package.sh
+  test_all.sh    → lance toutes les suites headless (--window ajoute les fenêtrées)
   test_net.sh    → test réseau à deux processus
-test_combat.gd / test_map.gd / test_features.gd / test_battle.gd / test_net.gd
+tests/           → les suites headless, toutes ensemble
+  test_combat.gd / test_map.gd / test_features.gd / test_battle.gd
+  test_window.gd / test_chapters.gd (vraie fenêtre) / test_net.gd (via test_net.sh)
 ```
 
 ### 3.2 Système de combat (`data/services/combat/fe_combat.gd`)
@@ -156,7 +159,7 @@ automatiquement par OS, surchargeable via `CIEL_USERDATA`).
 > Le joueur distant (mode réseau) emprunte **le même vocabulaire et la même
 > validation** : une seule surface d'ordres à maintenir.
 
-### 3.7 Tests automatisés (racine)
+### 3.7 Tests automatisés (`tests/`)
 - **`test_combat.gd`** — combat FE : stats, calculateur, soin, mort, victoire,
   soutien, triangle. *(31 assertions)*
 - **`test_map.gd`** — MapData (grille 16×10), terrains, hauteurs, chargement.

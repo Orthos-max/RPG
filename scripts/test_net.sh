@@ -23,7 +23,7 @@ CLIENT_LOG="$TMP/client.log"
 rm -f "$HOST_LOG" "$CLIENT_LOG"
 
 echo "▶ Démarrage de l'hôte…"
-"$GODOT" --headless --path "$PROJECT_DIR" --script test_net.gd -- host > "$HOST_LOG" 2>&1 &
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_net.gd -- host > "$HOST_LOG" 2>&1 &
 HOST_PID=$!
 
 # Attente du code d'accès (5 s max)
@@ -43,7 +43,7 @@ fi
 echo "  code d'accès : $CODE"
 
 echo "▶ Connexion de l'invité…"
-"$GODOT" --headless --path "$PROJECT_DIR" --script test_net.gd -- client "$CODE" > "$CLIENT_LOG" 2>&1
+"$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/test_net.gd -- client "$CODE" > "$CLIENT_LOG" 2>&1
 CLIENT_STATUS=$?
 
 wait $HOST_PID 2>/dev/null

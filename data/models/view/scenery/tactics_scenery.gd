@@ -9,14 +9,18 @@ extends RefCounted
 ## et un grain qui empêche seize cases d'herbe d'être exactement la même case
 ## répétée seize fois.
 ##
-## Tout est procédural : aucune image à produire, aucun asset à charger. Les
-## textures sont du bruit teinté, projetées en coordonnées *monde* (triplanaire)
-## pour que deux cases voisines ne montrent jamais le même motif tout en
-## partageant un seul matériau — le surlignage de portée continue de remplacer
-## ce matériau d'un bloc, comme avant.
+## Ciel, lumière et grain restent procéduraux. Tout est projeté en coordonnées
+## *monde* (triplanaire) : les cases partagent un seul matériau par terrain, et
+## le surlignage de portée part de ce matériau au lieu de l'effacer.
 ##
 ## Un seul endroit à retoucher pour la direction artistique, valable en
 ## bataille comme dans l'éditeur de cartes.
+##
+## Les terrains courants portent désormais une tuile 32×32 découpée du pack
+## SSCAP ([constant TERRAIN_TEXTURES]) ; ceux qui n'en ont pas gardent le grain
+## procédural. Les deux voies produisent le même genre de matériau, projeté de
+## la même façon : rien d'autre dans le jeu n'a besoin de savoir laquelle a
+## servi.
 
 const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 
@@ -71,10 +75,55 @@ const TERRAIN_GRAIN: Dictionary = {
 	MapDataClass.TerrainType.SWAMP: {"frequency": 0.038, "contrast": 0.40, "roughness": 0.60, "metallic": 0.10},
 }
 
+## Tuile 32×32 du pack SSCAP employée par chaque terrain, quand il en a une.
+##
+## Les six premières entrées sont des correspondances directes. Les suivantes
+## disent le **sol** du terrain bâti, comme le font déjà les teintes : la terre
+## battue d'un hameau, la cour dallée d'un fortin, le pavé disjoint d'une ruine,
+## les planches d'un pont, le noir d'une fosse.
+##
+## Ce qui n'est pas listé — porte, tour, neige, marais — garde le grain
+## procédural : aucune tuile du pack ne leur convenait sans mentir sur ce
+## qu'elles sont.
+const TERRAIN_TEXTURES: Dictionary = {
+	MapDataClass.TerrainType.GRASS: "res://assets/textures/terrain/terrain_outdoor_grass.png",
+	MapDataClass.TerrainType.FOREST: "res://assets/textures/terrain/terrain_outdoor_forest.png",
+	MapDataClass.TerrainType.MOUNTAIN: "res://assets/textures/terrain/terrain_mountain_rock.png",
+	MapDataClass.TerrainType.WATER: "res://assets/textures/terrain/terrain_outdoor_water.png",
+	MapDataClass.TerrainType.PATH: "res://assets/textures/terrain/terrain_outdoor_path.png",
+	MapDataClass.TerrainType.SAND: "res://assets/textures/terrain/terrain_outdoor_sand.png",
+	MapDataClass.TerrainType.WALL: "res://assets/textures/terrain/terrain_mountain_rock_dark.png",
+	MapDataClass.TerrainType.PIT: "res://assets/textures/terrain/terrain_mountain_void.png",
+	MapDataClass.TerrainType.VILLAGE: "res://assets/textures/terrain/terrain_outdoor_earth.png",
+	MapDataClass.TerrainType.FORT: "res://assets/textures/terrain/terrain_outdoor_pavement.png",
+	MapDataClass.TerrainType.RUINS: "res://assets/textures/terrain/terrain_outdoor_cobble.png",
+	MapDataClass.TerrainType.BRIDGE: "res://assets/textures/terrain/terrain_indoor_planks.png",
+}
+
 ## Échelle du bruit en unités monde : le motif se répète tous les 4 tuiles
 const GRAIN_WORLD_SCALE: float = 0.25
 ## Côté des textures de grain (assez pour ne pas pixelliser de près)
 const GRAIN_SIZE: int = 256
+
+## Échelle des tuiles SSCAP en unités monde : un motif par case
+##
+## Une case fait 1 unité de côté ([member MapData.tile_size]), et la tuile est
+## dessinée pour couvrir exactement une case : l'échelle vaut donc 1, et non
+## [constant GRAIN_WORLD_SCALE] qui étalait volontairement le bruit sur quatre
+## cases. Étirer le motif sur plusieurs cases le rendrait flou ; le resserrer
+## le réduirait à une bouillie de pixels vue de la caméra tactique.
+const TEXTURE_WORLD_SCALE: float = 1.0
+
+## Part de la teinte de terrain gardée sous une tuile (0 = tuile nue)
+##
+## L'albédo multiplie la texture : appliquer la couleur pleine assombrirait
+## deux fois. On la ramène donc près du blanc — assez pour que la tuile parle
+## d'elle-même, assez peu pour que deux terrains restent distincts quand le
+## surlignage vient teinter cette couleur ([method highlight_material]).
+const TEXTURE_TINT_STRENGTH: float = 0.22
+
+## Tuiles déjà chargées, par type de terrain (valeur nulle = pas de tuile)
+static var _texture_cache: Dictionary = {}
 
 
 #region Décor
@@ -170,25 +219,65 @@ static func apply_to(root: Node3D) -> void:
 
 
 #region Terrain
-## Matériau d'un type de terrain : teinte, grain, réponse à la lumière.
+## Matériau d'un type de terrain : teinte, motif, réponse à la lumière.
+##
+## Le motif vient de la tuile SSCAP du terrain quand il en a une, du bruit
+## procédural sinon. Le reste — teinte, rugosité, projection — ne change pas :
+## c'est ce qui permet au surlignage de partir de ce matériau sans savoir
+## laquelle des deux voies l'a produit.
 static func terrain_material(terrain_type: int) -> StandardMaterial3D:
 	var grain: Dictionary = TERRAIN_GRAIN.get(terrain_type, TERRAIN_GRAIN[MapDataClass.TerrainType.GRASS])
+	var base_color := Color(str(TERRAIN_COLORS.get(terrain_type, "#4a8c3f")))
 
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	mat.albedo_color = Color(str(TERRAIN_COLORS.get(terrain_type, "#4a8c3f")))
-	mat.albedo_texture = grain_texture(
-		float(grain["frequency"]), float(grain["contrast"]), terrain_type)
 	mat.roughness = float(grain["roughness"])
 	mat.metallic = float(grain["metallic"])
 
+	var tile: Texture2D = terrain_texture(terrain_type)
+	if tile:
+		mat.albedo_texture = tile
+		mat.albedo_color = base_color.lerp(Color.WHITE, 1.0 - TEXTURE_TINT_STRENGTH)
+		# Du pixel art filtré linéairement devient une purée : le plus proche
+		# voisin garde l'arête des pixels, les mipmaps évitent le grésillement
+		# des cases lointaines sous la caméra tactique.
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		mat.uv1_scale = Vector3.ONE * TEXTURE_WORLD_SCALE
+	else:
+		mat.albedo_texture = grain_texture(
+			float(grain["frequency"]), float(grain["contrast"]), terrain_type)
+		mat.albedo_color = base_color
+		mat.uv1_scale = Vector3.ONE * GRAIN_WORLD_SCALE
+
 	# Projection en coordonnées monde : le motif traverse les cases au lieu de
-	# recommencer à l'identique sur chacune.
+	# recommencer à l'identique sur chacune. Avec une tuile à l'échelle 1, les
+	# flancs des cases surélevées reçoivent le même motif que leur dessus, sans
+	# dépliage UV à écrire.
 	mat.uv1_triplanar = true
 	mat.uv1_world_triplanar = true
-	mat.uv1_scale = Vector3.ONE * GRAIN_WORLD_SCALE
 	return mat
+
+
+## Tuile SSCAP d'un terrain, ou `null` s'il n'en a pas.
+##
+## Le chargement passe par [method ResourceLoader.exists] plutôt que par un
+## `preload` : une image que Godot n'a pas encore importée ferait échouer la
+## compilation du script entier, et le terrain retomberait alors sans bruit sur
+## son grain procédural plutôt que d'emporter la scène avec lui.
+##
+## Le résultat est mis en cache, `null` compris — inutile de redemander à chaque
+## matériau une image dont on sait déjà qu'elle manque.
+static func terrain_texture(terrain_type: int) -> Texture2D:
+	if _texture_cache.has(terrain_type):
+		return _texture_cache[terrain_type]
+
+	var tile: Texture2D = null
+	var path: String = str(TERRAIN_TEXTURES.get(terrain_type, ""))
+	if not path.is_empty() and ResourceLoader.exists(path):
+		tile = load(path) as Texture2D
+	_texture_cache[terrain_type] = tile
+	return tile
 
 
 ## Texture de grain : du bruit ramené à une plage claire, qui module la teinte.
