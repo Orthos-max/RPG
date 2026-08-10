@@ -36,10 +36,10 @@ correctement jusqu'au pion depuis le 2026-08-07. Il n'y a simplement pas d'image
 | | |
 |---|---|
 | Format | **`.png`**, fond transparent |
-| Taille | **128 × 256** — une colonne, deux rangées de 128 × 128 |
+| Taille | **48 × 96** — une colonne, deux rangées de 48 × 48 |
 | Rangée du haut | l'unité **de face** (vue quand elle vient vers la caméra) |
 | Rangée du bas | l'unité **de dos** |
-| Style | pixel art, palette réduite, pieds posés sur la ligne `y = 120` |
+| Style | pixel art, palette réduite, pieds posés sur la ligne de sol |
 
 > ⚠️ **La rangée du haut est le visage, pas le dos.** Ce README a documenté
 > l'inverse jusqu'au 2026-08-10, alors que les planches livrées, elles, avaient
@@ -51,41 +51,51 @@ correctement jusqu'au pion depuis le 2026-08-07. Il n'y a simplement pas d'image
 > Dessiner en suivant l'ancienne consigne donnait des unités qui montrent leur
 > dos en avançant vers toi.
 
-### Le casting actuel ne tient pas ses 128
+### Pourquoi 48, et pas 128
 
-Les planches font bien 128 × 256, mais leur **contenu** n'est qu'un
-agrandissement ×4 au plus proche voisin d'un dessin de 32 × 32 : réduites en
-32 × 64 puis ré-agrandies, elles reviennent **à l'octet près**, toutes les huit.
-Les trois quarts du fichier ne portent aucune information.
+Le pion est un **jeton lu à distance**, pas un visage. Ce qu'il lui faut, c'est
+une silhouette qui se reconnaît sans effort ; le détail fin, lui, vit dans le
+**portrait de dialogue** (voir plus bas), affiché grand et immobile. Mettre le
+détail sur le pion, c'est le peindre là où personne ne le regarde de près.
 
-Le format reste donc 128 × 256, mais **128 est la grille à remplir pour de
-bon** — une planche neuve dessinée à cette taille porte seize fois plus de
-détail que le casting actuel. Les huit planches d'origine sont à retravailler,
-pas seulement les quatre manquantes : une figurine réellement dessinée en 128
-posée à côté d'un squelette en 32 se verra immédiatement.
+Les chiffres confirment ce raisonnement. La figurine mesure 1,28 unité de monde,
+la caméra est orthographique et cadre entre 7 et 26 unités de haut. Rapport
+entre un pixel d'art et un pixel d'écran, en 1080p :
 
-Le format a été arrêté le 2026-08-10 sur les chiffres suivants. La figurine
-mesure 1,28 unité de monde (`pixel_size` 0.01 × 128 px), la caméra est
-orthographique et cadre entre 7 et 26 unités de haut. Rapport entre un pixel
-d'art et un pixel d'écran :
+| Cadrage | Figurine à l'écran | Art 48 | Art 128 |
+|---|---|---|---|
+| Zoom max (7) | 197 px | 4,11× | 1,54× |
+| Ouverture serrée (9) | 154 px | 3,20× | 1,20× |
+| Repos (10) | 138 px | 2,88× | 1,08× |
+| Ouverture large (18) | 77 px | 1,60× | 0,60× — réduite |
+| Dézoom max (26) | 53 px | 1,11× | 0,42× — réduite |
 
-| Cadrage | Figurine à l'écran (1080p) | Art 128 |
-|---|---|---|
-| Zoom max (7) | 197 px | 1,54× |
-| Ouverture serrée (9) | 154 px | 1,20× |
-| Repos (10) | 138 px | 1,08× |
-| Ouverture large (18) | 77 px | 0,60× — réduite |
-| Dézoom max (26) | 53 px | 0,42× — réduite |
+**En 48, la figurine n'est jamais réduite** sur toute la plage de zoom : elle
+reste nette en permanence, et aucun détail peint n'est perdu dans le mipmap. En
+128, plus de la moitié du cadrage normal passe sous le 1:1.
 
-En 1080p le 128 passe donc sous le 1:1 à cadrage large : le détail peint y est
-moyenné par le mipmap. Ce n'est **pas** un défaut de rendu — une planche 128 n'y
-est jamais pire qu'une 64, seulement moins exploitée — c'est un coût de
-production à assumer sciemment. En 1440p le rapport tient à 0,80×, en 4K à
-1,20× : le 128 s'y justifie pleinement.
+48 est aussi la taille conventionnelle du sprite de combat dans un tactical RPG,
+ce qui **élargit beaucoup l'offre de packs** — le 128 n'existe presque qu'en
+personnage de plateforme ou en portrait.
 
-Côté machine, la question ne se pose pas : 60 planches en 128 × 256 sans perte,
-mipmaps comprises, pèsent **10 Mo de VRAM**. La puissance du PC du joueur
-n'entre pas dans l'arbitrage.
+### État des huit planches actuelles
+
+Elles font encore 128 × 256, et leur **contenu** n'est qu'un agrandissement ×4
+au plus proche voisin d'un dessin de 32 × 32 : réduites en 32 × 64 puis
+ré-agrandies, elles reviennent **à l'octet près**, toutes les huit.
+
+Elles n'ont **pas** été converties en 48 × 96, et c'est délibéré : passer de 32
+à 48 est un agrandissement ×1,5, non entier, qui rendrait un pixel sur deux
+deux fois plus large. On dégraderait des images sans rien y gagner, alors
+qu'elles sont toutes à remplacer.
+
+**Le basculement se fera le jour où la première vraie planche en 48 arrivera** :
+une seule ligne, `pixel_size = 0.02667` sur le `Sprite3D` de `pawn.tscn`. Toutes
+les planches doivent partager la même taille — `pixel_size` est porté par un
+nœud unique — donc la conversion des sept autres se fera au même moment.
+
+Côté machine la question ne se pose jamais : même en 128, 60 planches sans perte
+et mipmaps comprises pèsent 10 Mo de VRAM.
 
 Le pion est un `Sprite3D` en `billboard`, `vframes = 2` : il choisit dos ou face
 selon l'orientation par rapport à la caméra. Une planche mal découpée se voit
@@ -117,12 +127,16 @@ marche du pack quelque part de côté évitera de racheter ou redessiner.
 Mesurés sur les huit planches existantes, à respecter pour que le casting reste
 d'aplomb :
 
-| Repère | Position dans la cellule de 128 |
-|---|---|
-| Ligne de pieds | `y = 120` (dernière rangée opaque : 119) |
-| Sommet du crâne | `y = 8` |
-| Hauteur de la figurine | 108 à 116 px |
-| Axe de symétrie | `x = 64` |
+Ils sont donnés **en proportion de la cellule**, pour rester vrais quelle que
+soit la résolution. `atelier.py` les mesure sur les planches et affiche les
+valeurs en pixels du format courant — c'est lui qui fait foi, pas ce tableau.
+
+| Repère | Proportion | En 48 | En 128 (planches actuelles) |
+|---|---|---|---|
+| Ligne de pieds | 94 % de la hauteur | `y = 45` | `y = 120` |
+| Sommet du crâne | 6 % | `y = 3` | `y = 8` |
+| Hauteur de la figurine | 85 à 91 % | 41 à 44 px | 108 à 116 px |
+| Axe de symétrie | milieu | `x = 24` | `x = 64` |
 | Proportions | ~2,3 têtes de haut — du chibi franc, à tenir |
 | Palette | 25 couleurs pour tout le casting, 9 partagées |
 
@@ -140,6 +154,28 @@ figurines côte à côte en ×4, pour comparer proportions et teintes en dessina
 Un défaut connu à ne pas reproduire : `chr_pawn_skeleton_mage.png` a ses pieds
 de face à `y = 124`, quatre pixels plus bas que tout le monde. Il flotte donc très
 légèrement par rapport aux autres.
+
+### Les portraits — 128 × 128, pas encore construits
+
+Le découpage retenu le 2026-08-10 sépare deux choses qu'on avait confondues :
+
+| Catégorie | Taille | Rôle | État |
+|---|---|---|---|
+| **Portrait** | 128 × 128 | le visage qui parle, en dialogue | **rien n'existe** |
+| **Figurine** | 48 × 96 | le jeton sur la grille | huit planches, à refaire |
+| Icône d'objet | 32 × 32 | épée, potion, bâton | emoji pour l'instant |
+| Tuile de terrain | — | — | **sans objet, tout est procédural** |
+
+Le portrait est là où va le détail, parce que c'est là que le joueur regarde de
+près. Mais **aucun système de dialogue n'existe** : ni affichage, ni champ dans
+les fiches, ni fichier. Acheter des portraits d'avance est possible, s'en servir
+demandera d'abord d'écrire l'écran de dialogue.
+
+Le terrain et les props n'ont aucun asset à acheter : [TacticsScenery] et
+[TacticsProps] sont **entièrement procéduraux** — bruit teinté projeté en
+triplanaire pour le sol, primitives assemblées pour les arbres et les murs.
+« Aucune image à produire, aucun artiste. » Un pack de tuiles ne s'y brancherait
+pas, il faudrait jeter les deux modules.
 
 ### Réglages moteur — ne pas les défaire
 

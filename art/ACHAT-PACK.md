@@ -1,6 +1,6 @@
 # Acheter un pack de figurines — liste de contrôle
 
-Écrit pour Ciel Emblem, avec ses contraintes réelles : cellule de 128 × 128, deux
+Écrit pour Ciel Emblem, avec ses contraintes réelles : cellule de 48 × 48 pour les pions (128 × 128 pour les portraits), deux
 poses, caméra orthographique inclinée à −52°, figurine entre 53 et 197 px à
 l'écran. Le format complet est dans
 [`assets/textures/actor/README.md`](../assets/textures/actor/README.md).
@@ -34,9 +34,9 @@ est acceptable.
 Garder la facture **et le texte de la licence** archivés avec le projet. Dans
 trois ans, « je crois que c'était libre » ne vaudra rien.
 
-### 2. Résolution native de 128 × 128 par pose
+### 2. Résolution native — 48 par pose, 128 pour un portrait
 
-Pas 32 ou 64 agrandis. C'est exactement le piège dans lequel les planches
+Pas 32 agrandi en 48, ni 64 réduit. C'est exactement le piège dans lequel les planches
 actuelles de Ciel Emblem étaient tombées : 128 × 256 sur le disque, 32 × 32 de
 contenu réel. Un vendeur sérieux annonce la taille de cellule ; sinon, demander une
 image d'exemple et vérifier qu'une réduction ×4 puis un agrandissement ×4 ne
@@ -80,7 +80,7 @@ huit planches**, et 0 % d'alpha partiel.
 - **Ligne de pieds constante** sur tout le pack. C'est le défaut le plus fréquent
   et le plus coûteux : si chaque personnage pose ses pieds à une hauteur
   différente, les unités flottent ou s'enfoncent les unes par rapport aux autres,
-  et il faut recaler chaque planche. Ciel Emblem attend `y = 120`.
+  et il faut recaler chaque planche. Ciel Emblem attend le sol à 94 % de la hauteur de cellule.
 - **Poses de face et de dos** au minimum. Quatre directions, c'est mieux : le
   code retourne déjà l'image horizontalement (`flip_h`), donc gauche/droite
   servira si le besoin vient.
@@ -150,13 +150,17 @@ pack à 12 € qui en couvre deux.
 
 ---
 
-## Où chercher — et l'état du marché en 128
+## Où chercher — et l'état du marché
 
-**Le choix du 128 rétrécit fortement l'offre.** L'écrasante majorité des packs de
-pixel art tactique travaille en 16, 32 ou 48 px. Ce qui existe en 128 est surtout
-du personnage de plateforme, du *battler* de profil façon RPG Maker, ou du
-top-down de ferme — rarement un casting de classes façon Fire Emblem. Il faut le
-savoir avant de chercher : ce n'est pas qu'on cherche mal.
+**Passer le pion en 48 a débloqué l'offre.** L'écrasante majorité du pixel art
+tactique se vend en 16, 32 ou 48 px : le 48 est la taille conventionnelle du
+sprite de combat, donc la mieux fournie. Le 128, lui, n'existe presque qu'en
+personnage de plateforme, en *battler* de profil façon RPG Maker, ou justement
+en **portrait** — ce qui tombe bien, puisque c'est désormais le seul usage qu'on
+lui réserve.
+
+Chercher donc séparément : **48** pour les pions, **128** pour les portraits,
+**32** pour les icônes. Rien pour le terrain, il est procédural.
 
 | Site | Pour quoi | Licence |
 |---|---|---|
@@ -209,17 +213,45 @@ fournis**, et un système d'équipement en calques qui permet de tirer plusieurs
 classes d'une base. **Mais** : un seul personnage de base, et un thème western /
 ferme (chapeau de cow-boy, revolver, faux) au lieu de la fantasy.
 
-Aucun des deux ne se prend tel quel. Ils servent de calibrage : c'est le niveau
-de prix et le genre de compromis à attendre.
+Aucun des deux ne se prend tel quel — tous deux visaient le 128 pour le pion,
+qui n'est plus la cible. Ils restent utiles comme calibrage de prix.
+
+### Candidats en 48, examinés le 2026-08-10
+
+**[Franuka — Tactical RPG Overworld Pack](https://franuka.itch.io/tactical-rpg-overworld-pack)**
+(~15 $). Le meilleur candidat vu à ce jour :
+
+- **48 × 48 disponible** (et aussi 16 et 32) — la cible exacte
+- **quatre directions**, haut et bas donnant dos et face
+- **64 types d'unités** sur 4 factions, plus deux variantes de couleur
+- licence commerciale, retouche autorisée, revente interdite
+
+Réserves : **Beast Riders mais ni cavalerie classique ni monture volante** —
+c'est l'éliminatoire n°3 qui reste ouvert pour Sully et Cordelia. Pas de fichiers
+sources, pas de portraits (objectif de financement non atteint). Style « mignon
+et coloré », à confronter à « Velmar : nuit et or ».
+
+### Candidats portraits en 128
+
+- **[Magory — Fantasy Character Portraits](https://magory.itch.io/fantasy-portraits)**
+  (~8 $) : plus de 2 000 portraits, plusieurs tailles dont 128, usage libre en
+  projet gratuit ou commercial.
+- **[FinchL — Fantasy RPG Portraits 128×128](https://finchl.itch.io/fantasy-rpg-portraits-pack-128x128)** :
+  169 portraits, éventail d'espèces large (humains, elfes, nains, morts-vivants,
+  nécromanciens…).
+- **[PIXEL_1992 — RPG Mega Pixel Art Bundle](https://itch.io/s/167002/-rpg-mega-pixel-art-bundle-95k-fantasy-assets)** :
+  lot très fourni, dont 2 500+ visages en 128.
+
+Rappel : rien n'affiche encore un portrait dans le jeu. Acheter d'avance est
+possible, s'en servir demandera d'écrire l'écran de dialogue.
 
 ### Si rien ne convient
 
-- **Acheter un pack en 32 ou 48 comme référence de composition**, et dessiner à
-  128 par-dessus. Attention : le résultat reste une œuvre dérivée, la licence
-  s'applique toujours.
 - **Commander à un pixel artist.** À huit planches de deux poses, sans animation,
   une commande devient compétitive face au temps passé — et donne exactement le
   casting voulu, aux bonnes proportions, dans la bonne palette.
+- **Rendre depuis la 3D** — voir [`METHODES.md`](METHODES.md). C'est la seule
+  route qui règle les montures sans dépendre du catalogue.
 
 ---
 
