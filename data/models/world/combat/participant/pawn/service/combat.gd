@@ -23,7 +23,13 @@ var _victory_checked: bool = false  ## Prevents duplicate victory/defeat trigger
 func attack_target_pawn(pawn: TacticsPawn, target_pawn: TacticsPawn, delta: float) -> bool:
 	# Make the attacking pawn face the target
 	pawn.serv.movement.look_at_direction(pawn, target_pawn.global_position - pawn.global_position)
-	
+
+	# Le pas en avant part avec l'élan, pas avec le coup : il occupe la seconde
+	# quart d'attente ci-dessous, et l'assaillant est revenu sur sa case avant
+	# que l'étape suivante ne s'ouvre.
+	if is_zero_approx(pawn.res.wait_delay):
+		BattleVFX.lunge(pawn, target_pawn)
+
 	# --- Attack animation timing ---
 	# Wait for the attack animation "wind-up" period (0.25s) before resolving combat
 	if pawn.res.can_attack and pawn.res.wait_delay > TacticsPawnResource.MIN_TIME_FOR_ATTACK / 4.0:
@@ -97,6 +103,14 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 	var atk_side: Dictionary = _side_summary(rolled, "attack")
 	var def_side: Dictionary = _side_summary(rolled, "counter")
 
+	# --- Effets visuels ---
+	# L'échange entier est déjà tiré et appliqué : ce qui suit ne fait
+	# qu'illustrer un résultat acquis. La riposte est décalée d'un tiers de
+	# seconde, sans quoi les deux camps s'éclairent sur la même image.
+	_show_blows(target_pawn, atk_side, attack.is_magical, 0.0)
+	if bool(rolled["countered"]) and counter:
+		_show_blows(pawn, def_side, (counter as CombatCalc.CombatResult).is_magical, 0.35)
+
 	# --- Journal de l'assaut ---
 	if bool(atk_side["hit"]):
 		print(_blow_line(attacker_name, defender_name, dealt, atk_side, attack,
@@ -146,15 +160,26 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 		_check_death(pawn)
 
 
+## Les coups portés par un camp, mis en images ([BattleVFX] s'occupe du reste).
+##
+## Un coup manqué ne montre rien : l'oreille l'apprend déjà (`miss`), et un
+## éclat sur une esquive ferait croire à un dégât.
+func _show_blows(victim: TacticsPawn, side: Dictionary, magical: bool, delay: float) -> void:
+	if not bool(side["hit"]):
+		return
+	BattleVFX.play_strike(victim, magical, bool(side["crit"]), int(side["hits"]), delay)
+
+
 ## Résumé d'un camp dans un échange : a-t-il touché, critiqué, combien de coups.
 func _side_summary(rolled: Dictionary, side: String) -> Dictionary:
-	var out: Dictionary = {"strikes": 0, "hit": false, "crit": false, "skills": []}
+	var out: Dictionary = {"strikes": 0, "hits": 0, "hit": false, "crit": false, "skills": []}
 	for blow: Dictionary in rolled["strikes"]:
 		if str(blow["side"]) != side:
 			continue
 		out["strikes"] = int(out["strikes"]) + 1
 		if bool(blow["hit"]):
 			out["hit"] = true
+			out["hits"] = int(out["hits"]) + 1
 		if bool(blow["crit"]):
 			out["crit"] = true
 		for skill_id in blow["skills"]:
@@ -204,7 +229,8 @@ func _resolve_heal(healer: TacticsPawn, target: TacticsPawn) -> void:
 	var actual_heal: int = min(heal_amount, target.stats.max_hp - target.stats.hp)
 	
 	target.stats.apply_to_curr_health(actual_heal)
-	
+	BattleVFX.play_heal(target)
+
 	var h_name := _get_name(healer)
 	var t_name := _get_name(target)
 	_record(&"record_heal", [h_name, t_name, actual_heal, target.stats.hp])
@@ -232,6 +258,11 @@ func _check_death(p: TacticsPawn) -> void:
 	# Only process if dead
 	if p.is_alive():
 		return
+
+	# La gerbe est posée avant que le pion ne disparaisse : elle vit sous
+	# [BattleVFX], pas sous lui, et lui survit donc de quelques dixièmes.
+	# Le son, lui, part du journal ci-dessous — [Audio] l'écoute déjà.
+	BattleVFX.play_death(p)
 
 	# Journal de bataille : la mort est l'événement le plus utile à Ciel.
 	var team_name: String = "player" if p.get_parent() and p.get_parent().has_method("show_available_pawn_actions") else "opponent"

@@ -72,6 +72,20 @@ func frame_board(center: Vector3, radius: float, size: float) -> void:
 	p_pivot.rotation_degrees = Vector3(0, 0, res.z_rot)
 
 
+## Secoue brièvement la vue — un coup critique vient d'être porté.
+##
+## Le travail est délégué à [BattleVFX], qui décale l'objectif de la [Camera3D]
+## interne plutôt que de bouger la caméra : ce corps-ci est repositionné à
+## chaque image par [TacticsCameraMovementService], et lui disputer sa position
+## laisserait la vue de travers.
+##
+## @param amount: Amplitude du décalage, en unités d'objectif
+func shake(amount: float = BattleVFX.CRIT_SHAKE) -> void:
+	var vfx: BattleVFX = BattleVFX.host(self)
+	if vfx:
+		vfx.screen_shake(cam_node, amount)
+
+
 ## Moves the camera based on input
 func move_camera(h: float, v: float, joystick: bool, delta: float) -> void:
 	serv.move.move_camera(h, v, joystick, delta, self)
