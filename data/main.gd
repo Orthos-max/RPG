@@ -14,6 +14,8 @@ const LobbyScreen = preload("res://data/modules/menu/lobby_screen.gd")
 const SaveScreen = preload("res://data/modules/menu/save_screen.gd")
 const CharacterEditor = preload("res://data/modules/menu/character_editor.gd")
 const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
+const ScreenFaderClass = preload("res://data/modules/ui/fader.gd")
+const MinimapClass = preload("res://data/modules/ui/minimap.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 const MapEditorScene = preload("res://assets/maps/level/map_editor_level.tscn")
@@ -32,12 +34,15 @@ var _runner: ChapterRunner = null
 var _chapter: ChapterData = null
 ## Carte du joueur en cours d'essai (null hors éditeur) — sert au retour
 var _custom_map: MapDocument = null
+## Voile de transition, gardé pour toute la partie (voir [ScreenFader])
+var _fader: ScreenFader = null
 
 
 func _ready() -> void:
 	# Avant tout écran, sinon le premier serait le seul à ne pas l'avoir.
 	CielTheme.apply_to_tree(get_tree())
 	get_tree().node_added.connect(CielTheme.adopt)
+	_fader = ScreenFaderClass.attach(self)
 	var network: Node = get_node_or_null("/root/Network")
 	if network:
 		network.battle_started.connect(_on_net_battle_started)
@@ -70,16 +75,20 @@ func show_title() -> void:
 	_play_music("music_title")
 
 	var screen := TitleScreen.new()
-	screen.new_game_requested.connect(_on_new_game)
-	screen.continue_requested.connect(_on_continue)
+	# Les départs vers un autre écran passent par un fondu ; ce qui reste sur le
+	# titre (les options audio) n'en a pas besoin.
+	screen.new_game_requested.connect(func(difficulty: int, permadeath: bool) -> void:
+		_transition(_on_new_game.bind(difficulty, permadeath)))
+	screen.continue_requested.connect(func() -> void: _transition(_on_continue))
 	screen.load_requested.connect(func() -> void: show_saves(false))
-	screen.ciel_mode_requested.connect(_on_ciel_skirmish)
+	screen.ciel_mode_requested.connect(func() -> void: _transition(_on_ciel_skirmish))
 	screen.host_requested.connect(func() -> void: show_lobby(true))
 	screen.join_requested.connect(func() -> void: show_lobby(false))
-	screen.editor_requested.connect(func() -> void: show_editor())
+	screen.editor_requested.connect(func() -> void: _transition(show_editor.bind(null)))
 	screen.character_editor_requested.connect(show_character_editor)
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
 	_mount_ui(screen)
+	_fade_in()
 
 
 ## Alias attendu par le service de combat en fin de bataille.
@@ -106,10 +115,11 @@ func show_prep() -> void:
 	_chapter = campaign.current_chapter()
 	var screen := PrepScreen.new()
 	screen.chapter = _chapter
-	screen.battle_requested.connect(_on_battle_requested)
-	screen.back_requested.connect(show_title)
+	screen.battle_requested.connect(func() -> void: _transition(_on_battle_requested))
+	screen.back_requested.connect(func() -> void: _transition(show_title))
 	screen.save_requested.connect(func() -> void: show_saves(true))
 	_mount_ui(screen)
+	_fade_in()
 
 
 ## Éditeur de personnages : créer une recrue, l'enregistrer, l'enrôler.
@@ -283,6 +293,7 @@ func _show_message(title_text: String, body_text: String, next: Callable = Calla
 
 	add_child(layer)
 	_ui = layer
+	_fade_in()
 
 
 ## Tableau du bilan : deux paires « libellé / valeur » par ligne.
@@ -492,6 +503,13 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		mirror.level = _level
 		_level.add_child(mirror)
 
+	# Vue d'ensemble du plateau, dans le coin haut-droit (touche M).
+	if _level is TacticsLevel and MinimapClass.available():
+		var minimap: CanvasLayer = MinimapClass.new()
+		minimap.name = "BattleMinimap"
+		minimap.level = _level
+		_level.add_child(minimap)
+
 	# En campagne, le runner applique le roster et surveille l'objectif.
 	if _chapter and _level is TacticsLevel:
 		_runner = ChapterRunnerClass.new()
@@ -499,6 +517,8 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		_runner.setup(_level, _chapter)
 		_runner.chapter_finished.connect(_on_chapter_finished)
 		_level.add_child(_runner)
+
+	_fade_in()
 
 
 ## Décharge le niveau courant (appelé aussi par le service de combat).
@@ -537,6 +557,27 @@ func _clear_ui() -> void:
 	if _ui and is_instance_valid(_ui):
 		_ui.queue_free()
 	_ui = null
+
+
+## Passe d'un écran à l'autre par un fondu au noir.
+##
+## Le voile s'éteint, **puis** [param change] monte l'écran suivant — qui se
+## termine par [method _fade_in] et rallume. Sans écran (tests headless), le
+## fondu se résout dans la frame : `change` s'exécute aussitôt, comme avant.
+##
+## Les écrans, eux, restent synchrones : c'est ici, au moment où le joueur
+## clique, que la transition s'insère. `show_prep()` appelé directement — par un
+## test, par la fin d'une bataille — monte toujours son écran sur-le-champ.
+func _transition(change: Callable) -> void:
+	if _fader and is_instance_valid(_fader):
+		await _fader.fade_out()
+	change.call()
+
+
+## Rallume l'écran (depuis le noir). Appelé par chaque écran une fois monté.
+func _fade_in() -> void:
+	if _fader and is_instance_valid(_fader):
+		_fader.fade_in()
 
 
 ## Change la musique d'ambiance selon l'écran.

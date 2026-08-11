@@ -12,9 +12,14 @@ signal host_requested()
 signal join_requested()
 signal editor_requested()
 signal character_editor_requested()
+## Le joueur ouvre les options audio. L'écran monte lui-même le panneau ; le
+## signal existe pour qui voudrait en faire autre chose (un écran dédié, un son).
+signal options_requested()
 signal quit_requested()
 
 const DIFF = preload("res://data/models/world/ai/difficulty.gd")
+const OptionsPanelClass = preload("res://data/modules/ui/options_panel.gd")
+const TitleBackdropClass = preload("res://data/modules/ui/title_backdrop.gd")
 
 const C_BG := Color("#141026")
 const C_ACCENT := Color("#e94560")
@@ -81,6 +86,10 @@ func _build() -> void:
 	bg.color = C_BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+
+	# Par-dessus la nuit unie : le halo qui respire et les braises. Le fond ne
+	# prend pas les clics, le menu reste au-dessus (voir [TitleBackdrop]).
+	add_child(TitleBackdropClass.new())
 
 	# Tout le menu vit dans un défilement : une fenêtre courte fait défiler au
 	# lieu de pousser les derniers boutons hors de l'écran.
@@ -175,6 +184,10 @@ func _build() -> void:
 	chars_btn.pressed.connect(func() -> void: character_editor_requested.emit())
 	extras.add_child(chars_btn)
 
+	var options_btn := _make_button("🔊  Options audio")
+	options_btn.pressed.connect(_open_options)
+	extras.add_child(options_btn)
+
 	var quit_btn := _make_button("🚪  Quitter")
 	quit_btn.pressed.connect(func() -> void: quit_requested.emit())
 	extras.add_child(quit_btn)
@@ -203,6 +216,22 @@ func _make_grid(parent: Node) -> GridContainer:
 
 
 #region Options
+## Ouvre le panneau audio par-dessus le menu (une seule fois à la fois).
+##
+## Le panneau est le dernier enfant : il se dessine donc au-dessus du menu, et
+## comme il arrête les clics, aucun bouton ne reste actionnable derrière lui.
+func _open_options() -> OptionsPanel:
+	options_requested.emit()
+	var existing: Node = get_node_or_null("OptionsPanel")
+	if existing:
+		return existing as OptionsPanel
+
+	var panel := OptionsPanelClass.new()
+	panel.name = "OptionsPanel"
+	add_child(panel)
+	return panel
+
+
 func _cycle_difficulty() -> void:
 	_difficulty = (_difficulty + 1) % DIFF.Level.size()
 	_difficulty_button.text = _difficulty_label()
