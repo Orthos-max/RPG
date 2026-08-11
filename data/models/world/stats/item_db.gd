@@ -17,22 +17,34 @@ const MAX_ITEMS: int = 5
 ## Prix de revente, en fraction du prix d'achat
 const RESALE_RATIO: float = 0.5
 
+## Dossier des vignettes 32×32 découpées du pack Shikashi.
+const ICON_DIR: String = "res://assets/textures/items/"
+
+## Le catalogue.
+##
+## `icon` nomme la vignette du dossier [constant ICON_DIR] : les trois soins
+## portent la fiole à croix verte (rouge, verte, dorée — du plus faible au plus
+## fort), les toniques une fiole nue, et les gains permanents un objet à part,
+## pour qu'on ne confonde pas d'un coup d'œil ce qui se boit et ce qui se garde.
 static var DATA: Dictionary = {
-	"Vulnerary": {"kind": Kind.HEAL, "amount": 10, "price": 100, "label": "Potion"},
-	"Concoction": {"kind": Kind.HEAL, "amount": 20, "price": 220, "label": "Élixir mineur"},
-	"Elixir": {"kind": Kind.HEAL, "amount": 999, "price": 500, "label": "Élixir"},
+	"Vulnerary": {"kind": Kind.HEAL, "amount": 10, "price": 100, "label": "Potion",
+		"icon": "vulnerary"},
+	"Concoction": {"kind": Kind.HEAL, "amount": 20, "price": 220, "label": "Élixir mineur",
+		"icon": "concoction"},
+	"Elixir": {"kind": Kind.HEAL, "amount": 999, "price": 500, "label": "Élixir",
+		"icon": "elixir"},
 	"Def Tonic": {"kind": Kind.BUFF, "stat": "def", "amount": 2, "turns": 2, "price": 180,
-		"label": "Tonique de défense"},
+		"label": "Tonique de défense", "icon": "def_tonic"},
 	"Spd Tonic": {"kind": Kind.BUFF, "stat": "spd", "amount": 2, "turns": 2, "price": 180,
-		"label": "Tonique de vitesse"},
+		"label": "Tonique de vitesse", "icon": "spd_tonic"},
 	"Energy Drop": {"kind": Kind.BOOST, "stat": "str", "amount": 2, "price": 900,
-		"label": "Potion de force (+2 FOR définitif)"},
+		"label": "Potion de force (+2 FOR définitif)", "icon": "energy_drop"},
 	"Speedwing": {"kind": Kind.BOOST, "stat": "spd", "amount": 2, "price": 900,
-		"label": "Aile de vitesse (+2 VIT définitif)"},
+		"label": "Aile de vitesse (+2 VIT définitif)", "icon": "speedwing"},
 	"Dracoshield": {"kind": Kind.BOOST, "stat": "def", "amount": 2, "price": 900,
-		"label": "Écaille de dragon (+2 DÉF définitif)"},
+		"label": "Écaille de dragon (+2 DÉF définitif)", "icon": "dracoshield"},
 	"Seraph Robe": {"kind": Kind.BOOST, "stat": "max_hp", "amount": 5, "price": 1000,
-		"label": "Robe séraphique (+5 PV définitif)"},
+		"label": "Robe séraphique (+5 PV définitif)", "icon": "seraph_robe"},
 }
 
 
@@ -70,6 +82,12 @@ static func resale_price(item_name: String) -> int:
 static func label(item_name: String) -> String:
 	var item: Dictionary = get_item(item_name)
 	return str(item.get("label", item_name))
+
+
+## Chemin de la vignette de l'objet — "" s'il n'en a pas.
+static func icon_path(item_name: String) -> String:
+	var icon: String = str(get_item(item_name).get("icon", ""))
+	return (ICON_DIR + icon + ".png") if not icon.is_empty() else ""
 
 
 ## L'objet donne-t-il un gain permanent ? (utilisable seulement hors combat)

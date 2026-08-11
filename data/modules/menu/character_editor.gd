@@ -21,6 +21,7 @@ const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
+const ICON = preload("res://data/modules/menu/item_icon.gd")
 
 const C_BG := Color("#141026")
 const C_PANEL := Color("#16213e")
@@ -225,7 +226,7 @@ func _rebuild_form() -> void:
 		check.add_theme_font_size_override("font_size", 13)
 		check.add_theme_color_override("font_color", C_TEXT)
 		check.toggled.connect(func(on: bool) -> void: _on_weapon_toggled(weapon_id, on))
-		_rows.add_child(check)
+		_rows.add_child(_with_icon(ICON.of_weapon(id), check))
 
 	# --- Consommables de départ ---
 	var item_title := Label.new()
@@ -244,7 +245,7 @@ func _rebuild_form() -> void:
 		check.add_theme_font_size_override("font_size", 13)
 		check.add_theme_color_override("font_color", C_TEXT)
 		check.toggled.connect(func(on: bool) -> void: _on_item_toggled(key, on))
-		_rows.add_child(check)
+		_rows.add_child(_with_icon(ICON.of_item(item_name), check))
 
 	# --- Compétences ---
 	_skills_box = VBoxContainer.new()
@@ -434,6 +435,17 @@ func _labelled(text: String, field: Control, tooltip: String = "") -> Control:
 		label.tooltip_text = tooltip
 		field.tooltip_text = tooltip
 	row.add_child(label)
+	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(field)
+	return row
+
+
+## Une ligne avec la vignette de l'objet devant le champ.
+func _with_icon(icon_rect: TextureRect, field: Control) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	if icon_rect:
+		row.add_child(icon_rect)
 	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(field)
 	return row

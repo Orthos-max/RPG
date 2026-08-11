@@ -33,43 +33,43 @@ const RESALE_RATIO: float = 0.5
 static var DATA: Dictionary = {
 	# --- Lames ---
 	"iron_sword": {"label": "Épée de fer", "type": WT.Type.SWORD,
-		"might": 5, "range": 1, "hit": 0, "crit": 0, "weight": 5, "price": 300},
+		"might": 5, "range": 1, "hit": 0, "crit": 0, "weight": 5, "price": 300, "icon": "iron_sword"},
 	"steel_sword": {"label": "Épée d'acier", "type": WT.Type.SWORD,
-		"might": 8, "range": 1, "hit": -5, "crit": 0, "weight": 10, "price": 700},
+		"might": 8, "range": 1, "hit": -5, "crit": 0, "weight": 10, "price": 700, "icon": "steel_sword"},
 	"rapier": {"label": "Rapière", "type": WT.Type.SWORD,
-		"might": 5, "range": 1, "hit": 10, "crit": 5, "weight": 4, "price": 900},
+		"might": 5, "range": 1, "hit": 10, "crit": 5, "weight": 4, "price": 900, "icon": "rapier"},
 	"killing_edge": {"label": "Épée tueuse", "type": WT.Type.SWORD,
-		"might": 7, "range": 1, "hit": 0, "crit": 30, "weight": 8, "price": 1300},
+		"might": 7, "range": 1, "hit": 0, "crit": 30, "weight": 8, "price": 1300, "icon": "killing_edge"},
 
 	# --- Lances ---
 	"iron_lance": {"label": "Lance de fer", "type": WT.Type.LANCE,
-		"might": 6, "range": 1, "hit": -5, "crit": 0, "weight": 7, "price": 320},
+		"might": 6, "range": 1, "hit": -5, "crit": 0, "weight": 7, "price": 320, "icon": "iron_lance"},
 	"steel_lance": {"label": "Lance d'acier", "type": WT.Type.LANCE,
-		"might": 9, "range": 1, "hit": -10, "crit": 0, "weight": 12, "price": 720},
+		"might": 9, "range": 1, "hit": -10, "crit": 0, "weight": 12, "price": 720, "icon": "steel_lance"},
 	"javelin": {"label": "Javelot", "type": WT.Type.LANCE,
-		"might": 4, "range": 2, "hit": -10, "crit": 0, "weight": 8, "price": 500},
+		"might": 4, "range": 2, "hit": -10, "crit": 0, "weight": 8, "price": 500, "icon": "javelin"},
 
 	# --- Haches ---
 	"iron_axe": {"label": "Hache de fer", "type": WT.Type.AXE,
-		"might": 7, "range": 1, "hit": -15, "crit": 0, "weight": 9, "price": 300},
+		"might": 7, "range": 1, "hit": -15, "crit": 0, "weight": 9, "price": 300, "icon": "iron_axe"},
 	"steel_axe": {"label": "Hache d'acier", "type": WT.Type.AXE,
-		"might": 10, "range": 1, "hit": -20, "crit": 0, "weight": 13, "price": 650},
+		"might": 10, "range": 1, "hit": -20, "crit": 0, "weight": 13, "price": 650, "icon": "steel_axe"},
 
 	# --- Arcs (jamais utilisables au contact) ---
 	"iron_bow": {"label": "Arc de fer", "type": WT.Type.BOW,
-		"might": 5, "range": 2, "hit": 0, "crit": 0, "weight": 6, "price": 350},
+		"might": 5, "range": 2, "hit": 0, "crit": 0, "weight": 6, "price": 350, "icon": "iron_bow"},
 	"steel_bow": {"label": "Arc d'acier", "type": WT.Type.BOW,
-		"might": 8, "range": 2, "hit": -5, "crit": 0, "weight": 10, "price": 700},
+		"might": 8, "range": 2, "hit": -5, "crit": 0, "weight": 10, "price": 700, "icon": "steel_bow"},
 
 	# --- Grimoires (visent la RÉS) ---
 	"fire": {"label": "Feu", "type": WT.Type.TOME,
-		"might": 5, "range": 2, "hit": 5, "crit": 0, "weight": 5, "price": 400},
+		"might": 5, "range": 2, "hit": 5, "crit": 0, "weight": 5, "price": 400, "icon": "fire"},
 	"thunder": {"label": "Foudre", "type": WT.Type.TOME,
-		"might": 3, "range": 2, "hit": 10, "crit": 10, "weight": 4, "price": 560},
+		"might": 3, "range": 2, "hit": 10, "crit": 10, "weight": 4, "price": 560, "icon": "thunder"},
 
 	# --- Bâtons (soignent, ne ripostent pas) ---
 	"heal_staff": {"label": "Bâton de soin", "type": WT.Type.STAFF,
-		"might": 0, "range": 1, "hit": 0, "crit": 0, "weight": 3, "price": 400},
+		"might": 0, "range": 1, "hit": 0, "crit": 0, "weight": 3, "price": 400, "icon": "heal_staff"},
 }
 
 
@@ -104,6 +104,15 @@ static func all_weapons() -> Array:
 static func label(weapon_id: String) -> String:
 	var w: Dictionary = get_weapon(weapon_id)
 	return str(w.get("label", weapon_id))
+
+
+## Chemin de la vignette de l'arme — "" si elle n'en a pas.
+##
+## Les vignettes partagent le dossier des objets ([constant ItemDB.ICON_DIR]) :
+## c'est le même pack, et l'intendance les affiche côte à côte.
+static func icon_path(weapon_id: String) -> String:
+	var icon: String = str(get_weapon(weapon_id).get("icon", ""))
+	return (ItemDB.ICON_DIR + icon + ".png") if not icon.is_empty() else ""
 
 
 ## Prix d'achat (0 si l'arme est inconnue).

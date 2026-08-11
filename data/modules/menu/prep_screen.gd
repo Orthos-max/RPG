@@ -22,6 +22,7 @@ const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const CDB = preload("res://data/models/world/stats/class_data.gd")
 const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
+const ICON = preload("res://data/modules/menu/item_icon.gd")
 
 var _selected: Array = []
 var _slots_label: Label
@@ -371,6 +372,7 @@ func _build_shop() -> Control:
 	for item_name: String in ITEMS.shop_stock():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
+		row.add_child(ICON.of_item(item_name))
 
 		var label := Label.new()
 		label.text = "%-28s %5d or" % [ITEMS.label(item_name), ITEMS.price(item_name)]
@@ -423,6 +425,7 @@ func _build_shop() -> Control:
 	for weapon_id: String in WEAPONS.shop_stock():
 		var w_row := HBoxContainer.new()
 		w_row.add_theme_constant_override("separation", 8)
+		w_row.add_child(ICON.of_weapon(weapon_id))
 
 		var w_label := Label.new()
 		w_label.text = "%-20s %-34s %5d or" % [
@@ -687,12 +690,33 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 		host.add_child(_detail_chips("Compétences", skill_chips))
 
 	# --- Arsenal ---
+	# Chaque arme du fourreau porte sa vignette : à quatre lames aux noms
+	# proches, l'image dit plus vite que le texte laquelle est en main.
 	var held: String = str(unit.get("weapon", ""))
-	var arsenal: Array = []
-	for w: Variant in unit.get("weapons", []):
-		arsenal.append("%s%s" % [WEAPONS.label(str(w)), "  ⟵ en main" if str(w) == held else ""])
-	host.add_child(_detail_line("Fourreau",
-		"   ".join(arsenal) if not arsenal.is_empty() else "mains nues"))
+	var arsenal: Array = unit.get("weapons", [])
+	if arsenal.is_empty():
+		host.add_child(_detail_line("Fourreau", "mains nues"))
+	else:
+		var rack := VBoxContainer.new()
+		var rack_head := Label.new()
+		rack_head.text = "Fourreau"
+		rack_head.add_theme_font_size_override("font_size", 12)
+		rack_head.add_theme_color_override("font_color", C_ACCENT)
+		rack.add_child(rack_head)
+
+		var rack_row := HBoxContainer.new()
+		rack_row.add_theme_constant_override("separation", 6)
+		for w: Variant in arsenal:
+			var weapon_id: String = str(w)
+			var equipped: bool = weapon_id == held
+			rack_row.add_child(ICON.of_weapon(weapon_id))
+			var name_label := Label.new()
+			name_label.text = "%s%s" % [WEAPONS.label(weapon_id), "  ⟵ en main" if equipped else ""]
+			name_label.add_theme_font_size_override("font_size", 14)
+			name_label.add_theme_color_override("font_color", C_GOLD if equipped else C_TEXT)
+			rack_row.add_child(name_label)
+		rack.add_child(rack_row)
+		host.add_child(rack)
 
 	# --- Inventaire ---
 	# La fiche listait ce que l'unité portait sans permettre d'y toucher : c'est
@@ -729,6 +753,7 @@ func _detail_inventory(unit: Dictionary) -> Control:
 		var item_name: String = str(it)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
+		row.add_child(ICON.of_item(item_name))
 
 		var label := Label.new()
 		label.text = ITEMS.label(item_name)
@@ -931,6 +956,7 @@ func _make_weapon_row(campaign: Node, unit: Dictionary, weapon: Dictionary,
 		status: Label) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
+	row.add_child(ICON.of_weapon(str(weapon["id"])))
 
 	var penalty: int = maxi(0, int(WEAPONS.get_weapon(str(weapon["id"])).get("weight", 0))
 		- int(unit.get("str", 0)))
