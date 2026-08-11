@@ -211,7 +211,12 @@ func _on_play_custom_map(document: MapDocument, with_ciel: bool) -> void:
 
 
 ## Écran de fin de bataille (victoire, défaite, fin de campagne).
-func _show_message(title_text: String, body_text: String, next: Callable = Callable()) -> void:
+##
+## [param details] Bilan chiffré, `[[libellé, valeur], …]` — tel que
+## [method BattleStats.rows] le rend. Vide, l'écran est celui d'avant : un
+## titre, un texte, un bouton.
+func _show_message(title_text: String, body_text: String, next: Callable = Callable(),
+		details: Array = []) -> void:
 	_clear_ui()
 
 	var layer := CanvasLayer.new()
@@ -232,18 +237,33 @@ func _show_message(title_text: String, body_text: String, next: Callable = Calla
 	title.offset_bottom = 220
 	layer.add_child(title)
 
+	# Le récit, puis le bilan, empilés entre le titre et le bouton : sans
+	# conteneur, le tableau chiffré aurait fallu positionner à la main sous un
+	# texte dont on ne connaît pas la hauteur (l'outro d'un chapitre fait deux
+	# lignes, la liste des objectifs autant qu'il y en a).
+	var column := VBoxContainer.new()
+	column.anchor_left = 0.5
+	column.anchor_right = 0.5
+	column.anchor_top = 0.0
+	column.anchor_bottom = 1.0
+	column.offset_left = -360
+	column.offset_right = 360
+	column.offset_top = 215
+	column.offset_bottom = -150  # au-dessus du bouton « Continuer »
+	column.add_theme_constant_override("separation", 16)
+	layer.add_child(column)
+
 	var body := Label.new()
 	body.text = body_text
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_theme_font_size_override("font_size", 16)
 	body.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
-	body.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	body.offset_top = 230
-	body.offset_left = -360
-	body.offset_right = 360
-	body.offset_bottom = 460
-	layer.add_child(body)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(body)
+
+	if not details.is_empty():
+		column.add_child(_build_summary_table(details))
 
 	var btn := Button.new()
 	btn.text = "Continuer"
@@ -263,6 +283,50 @@ func _show_message(title_text: String, body_text: String, next: Callable = Calla
 
 	add_child(layer)
 	_ui = layer
+
+
+## Tableau du bilan : deux paires « libellé / valeur » par ligne.
+##
+## Deux colonnes de paires plutôt qu'une : huit lignes empilées auraient repoussé
+## le tableau sous le bouton, et la place perdue à droite d'un écran 16/9 se voit.
+func _build_summary_table(details: Array) -> Control:
+	var frame := PanelContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1, 1, 1, 0.04)
+	style.border_color = Color("#f5c842")
+	style.border_width_left = 2
+	style.set_content_margin_all(16)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	frame.add_theme_stylebox_override("panel", style)
+
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 6)
+	frame.add_child(grid)
+
+	for row: Array in details:
+		var label := Label.new()
+		label.text = "%s " % str(row[0])
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		label.custom_minimum_size = Vector2(150, 0)
+		label.add_theme_font_size_override("font_size", 15)
+		label.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+		grid.add_child(label)
+
+		var value := Label.new()
+		value.text = str(row[1])
+		value.custom_minimum_size = Vector2(110, 0)
+		value.add_theme_font_size_override("font_size", 16)
+		value.add_theme_color_override("font_color", Color("#f5c842"))
+		grid.add_child(value)
+
+	return frame
 #endregion
 
 
@@ -316,6 +380,10 @@ func _on_battle_requested() -> void:
 
 
 func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void:
+	# Le bilan se prend **avant** tout déchargement : il compte les unités encore
+	# en scène et l'XP qu'elles ont gagnée depuis leur entrée en lice.
+	var summary: Dictionary = _runner.battle_summary() if _runner else BattleStats.empty()
+
 	# Une carte d'essai ne touche pas à la campagne : ni XP, ni or, ni progression.
 	if _custom_map:
 		var document: MapDocument = _custom_map
@@ -323,7 +391,8 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 		_show_message(
 			"⚔️ Victoire — %s" % document.name if victory else "💀 Défaite — %s" % document.name,
 			"%s\n\nCarte d'essai : rien n'a été reporté dans ta campagne." % reason,
-			func() -> void: show_editor(document))
+			func() -> void: show_editor(document),
+			BattleStats.rows(summary))
 		return
 
 	var campaign: Node = _campaign()
@@ -348,20 +417,29 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 		var lines: Array = []
 		for b: Dictionary in bonuses:
 			lines.append("%s %s" % ["✔" if bool(b["achieved"]) else "✘", str(b["label"])])
+		# La récompense du chapitre et les primes d'objectifs sont versées ici :
+		# c'est l'écart avant/après qui dit ce que la bataille a rapporté, plutôt
+		# que le seul total de la bourse.
+		var gold_before: int = campaign.gold
 		campaign.complete_chapter(bonuses)
+		summary["gold_gained"] = campaign.gold - gold_before
+		summary["gold"] = campaign.gold
 		campaign.save_game(SAVE_SLOT)
 		var session: Node = _session()
 		if session:
 			session.chapter_index = campaign.chapter_index
 		_show_message("⚔️ Victoire — %s" % chapter_title,
-			"%s\n\n%s\n\nObjectifs secondaires :\n%s\n\nOr : %d" % [
-				reason, outro, "\n".join(lines), campaign.gold
-			], show_prep)
+			"%s\n\n%s\n\nObjectifs secondaires :\n%s" % [
+				reason, outro, "\n".join(lines)
+			], show_prep, BattleStats.rows(summary))
 	else:
+		# Défaite : pas un sou de plus, mais la bourse reste affichée — le joueur
+		# retentera le chapitre et voudra savoir avec quoi il repart.
+		summary["gold"] = campaign.gold
 		campaign.save_game(SAVE_SLOT)
 		_show_message("💀 Défaite — %s" % chapter_title,
 			"%s\n\nLes unités tombées le restent si la mort permanente est active.\nTu peux retenter le chapitre." % reason,
-			show_prep)
+			show_prep, BattleStats.rows(summary))
 
 	unload_level()
 #endregion

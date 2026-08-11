@@ -43,6 +43,13 @@ var _deploying: bool = false
 ## unité qui disparaît laisse son dernier état, PV à zéro compris.
 var _last_seen: Dictionary = {}
 
+## État de chaque unité à son entrée en lice, `id` → instantané.
+##
+## Le pendant de [member _last_seen] au premier instant : sans ce point de
+## départ, le bilan de fin de bataille ne saurait pas dire *combien* d'XP la
+## bataille a rapporté — seulement combien chaque unité en porte au total.
+var _exp_baseline: Dictionary = {}
+
 
 ## Branche le runner sur un niveau chargé.
 func setup(target_level: TacticsLevel, target_chapter: ChapterData) -> void:
@@ -142,6 +149,46 @@ func player_unit_snapshots() -> Array:
 	return out
 
 
+## Bilan chiffré de la bataille, pour l'écran de fin.
+##
+## Les pertes, les critiques et les dégâts se relisent dans [BattleRecorder] —
+## il note déjà chaque assaut et chaque mort ; le nombre de tours et l'XP
+## gagnée, eux, n'appartiennent qu'au runner : il compte les uns et connaît
+## l'état des unités avant la bataille.
+##
+## À appeler **avant** de décharger le niveau : les unités encore en scène y
+## comptent. L'or, qui relève de la campagne et non de la bataille, est ajouté
+## par [Main] (voir [method BattleStats.rows]).
+func battle_summary() -> Dictionary:
+	_remember_player_units()
+
+	var names: Array = []
+	for id: String in _last_seen:
+		names.append(str((_last_seen[id] as Dictionary).get("name", "")))
+
+	var recorder: Node = get_node_or_null("/root/BattleRecorder")
+	var events: Array = recorder.events if recorder else []
+	var summary: Dictionary = BattleStats.from_events(events, names)
+	summary["turns"] = turn
+	summary["exp_gained"] = _exp_gained()
+	return summary
+
+
+## XP accumulée par l'ensemble du camp depuis le début de la bataille.
+##
+## Une unité qui monte de niveau voit ses points repartir de zéro : la
+## comparaison passe donc par l'XP totale ([method BattleStats.total_exp]) et
+## non par le seul `exp` de la fiche.
+func _exp_gained() -> int:
+	var total: int = 0
+	for id: String in _last_seen:
+		var now: Dictionary = _last_seen[id]
+		var before: Dictionary = _exp_baseline.get(id, now)
+		total += BattleStats.total_exp(int(now.get("level", 1)), int(now.get("exp", 0))) \
+			- BattleStats.total_exp(int(before.get("level", 1)), int(before.get("exp", 0)))
+	return maxi(total, 0)
+
+
 ## Retient l'état de chaque unité du joueur encore en scène.
 func _remember_player_units() -> void:
 	if not level or not level.player or not is_instance_valid(level.player):
@@ -155,7 +202,11 @@ func _remember_player_units() -> void:
 		if p.is_queued_for_deletion():
 			continue
 		var snapshot: Dictionary = _snapshot_of(p)
-		_last_seen[str(snapshot["id"])] = snapshot
+		var id: String = str(snapshot["id"])
+		# Premier regard porté sur cette unité : c'est son état de départ.
+		if not _exp_baseline.has(id):
+			_exp_baseline[id] = snapshot
+		_last_seen[id] = snapshot
 
 
 func _snapshot_of(p: TacticsPawn) -> Dictionary:
@@ -345,7 +396,9 @@ func _start_deployment() -> void:
 		# La bataille commence ici. Ce que la scène portait avant — les pions que
 		# le roster n'a pas retenus, ceux d'avant le déploiement — n'a rien à
 		# faire dans la mémoire des morts : ils n'ont pas combattu.
-		_last_seen.clear())
+		_last_seen.clear()
+		# Ni dans le bilan : l'XP se compte à partir d'ici.
+		_exp_baseline.clear())
 	_deploying = true
 	add_child(phase)
 

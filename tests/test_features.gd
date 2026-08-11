@@ -2368,12 +2368,13 @@ func _test_audio() -> void:
 	for bus: String in buses:
 		_check(AudioServer.get_bus_index(bus) != -1, "bus %s créé au démarrage" % bus)
 
-	# Sans fichier, jouer ne doit rien casser — et le dire proprement.
-	_check(not audio.play("hit"), "un son absent ne se joue pas")
+	# Avec les fichiers fournis, jouer fonctionne — et une clé inconnue ou vide
+	# ne doit rien casser.
+	_check(audio.play("hit"), "un son fourni se joue")
 	_check(not audio.play("inexistant"), "une clé inconnue ne se joue pas")
 	_check(not audio.play(""), "une clé vide ne se joue pas")
-	_check(audio.missing_cues().size() == SoundDB.keys().size(),
-		"tous les sons sont encore à fournir (%d)" % audio.missing_cues().size())
+	_check(audio.missing_cues().is_empty(),
+		"tous les sons du catalogue sont fournis (%d restants)" % audio.missing_cues().size())
 
 	# --- Réglages de volume ---
 	var before: float = audio.get_volume(SoundDB.BUS_MUSIC)
