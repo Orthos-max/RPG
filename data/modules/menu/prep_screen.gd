@@ -35,6 +35,11 @@ var _equip_unit: String = ""
 var _detail_panel: Control = null
 ## Unité affichée à la fiche détaillée.
 var _detail_unit: String = ""
+## Ligne de retour de la fiche détaillée (ce que l'objet consommé a fait).
+var _detail_status: Label = null
+## Dernier message de la fiche, retenu à travers la reconstruction du panneau :
+## sans lui, « +10 PV » disparaissait au moment même où l'on venait de le mériter.
+var _detail_message: String = ""
 
 
 func _ready() -> void:
@@ -382,15 +387,29 @@ func _build_shop() -> Control:
 			_rebuild_shop())
 		row.add_child(buy)
 
-		if ITEMS.is_boost(item_name):
-			var use := _make_button("Utiliser", false)
-			use.custom_minimum_size = Vector2(120, 30)
-			use.pressed.connect(func() -> void:
-				var r: Dictionary = campaign.use_booster(selected_id.call(), item_name)
-				status.text = ("+%d %s définitif." % [int(r.get("amount", 0)), str(r.get("stat", ""))]) \
-					if bool(r.get("ok", false)) else str(r.get("reason", ""))
-				_rebuild_shop())
-			row.add_child(use)
+		# « Utiliser » vaut pour tout le catalogue, pas seulement les gains
+		# permanents : une potion achetée ici se boit ici, sinon elle ne servait à
+		# rien tant qu'on n'était pas en bataille — où le joueur n'a pas non plus de
+		# geste pour la boire.
+		var use := _make_button("Utiliser", false)
+		use.custom_minimum_size = Vector2(120, 30)
+		use.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.use_item(selected_id.call(), item_name)
+			status.text = _item_use_message(r, item_name)
+			_rebuild_shop())
+		row.add_child(use)
+
+		# Revendre ne valait que pour les armes : l'objet acheté par erreur restait
+		# sur les bras de l'unité.
+		var sell := _make_button("Revendre", false)
+		sell.custom_minimum_size = Vector2(120, 30)
+		sell.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.sell_item(selected_id.call(), item_name)
+			status.text = ("%s revendu (+%d or)." % [
+				ITEMS.label(item_name), int(r.get("earned", 0))
+			]) if bool(r.get("ok", false)) else str(r.get("reason", ""))
+			_rebuild_shop())
+		row.add_child(sell)
 
 		shop_list.add_child(row)
 
@@ -504,6 +523,9 @@ func _toggle_detail() -> void:
 		_detail_panel = null
 		_refresh()
 		return
+	# On rouvre les fiches sur une ligne vierge : le message de la fois d'avant
+	# parlerait d'un objet bu il y a longtemps.
+	_detail_message = ""
 	_detail_panel = _build_detail()
 	add_child(_detail_panel)
 
@@ -557,6 +579,12 @@ func _build_detail() -> Control:
 	if target.item_count > 0 and target.selected < 0:
 		target.select(0)
 	box.add_child(target)
+
+	_detail_status = Label.new()
+	_detail_status.add_theme_font_size_override("font_size", 13)
+	_detail_status.add_theme_color_override("font_color", C_ACCENT)
+	_detail_status.text = _detail_message
+	box.add_child(_detail_status)
 
 	var sheet := VBoxContainer.new()
 	sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -667,11 +695,60 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 		"   ".join(arsenal) if not arsenal.is_empty() else "mains nues"))
 
 	# --- Inventaire ---
-	var bag: Array = []
-	for it: Variant in unit.get("items", []):
-		bag.append(str(it))
-	host.add_child(_detail_line("Objets",
-		"   ".join(bag) if not bag.is_empty() else "sac vide"))
+	# La fiche listait ce que l'unité portait sans permettre d'y toucher : c'est
+	# pourtant l'écran où l'on voit ses PV, donc celui où l'on décide de lui faire
+	# boire une potion. Chaque objet porte maintenant son bouton.
+	host.add_child(_detail_inventory(unit))
+
+
+## L'inventaire d'une unité, un objet par ligne, chacun avec son bouton.
+##
+## Une unité tombée ne consomme plus rien : les boutons sont grisés plutôt
+## qu'absents, pour que le sac reste lisible.
+func _detail_inventory(unit: Dictionary) -> Control:
+	var section := VBoxContainer.new()
+	var head := Label.new()
+	head.text = "Objets  (%d / %d)" % [unit.get("items", []).size(), ITEMS.MAX_ITEMS]
+	head.add_theme_font_size_override("font_size", 12)
+	head.add_theme_color_override("font_color", C_ACCENT)
+	section.add_child(head)
+
+	var bag: Array = unit.get("items", [])
+	if bag.is_empty():
+		var empty := Label.new()
+		empty.text = "sac vide — l'intendance en vend"
+		empty.add_theme_font_size_override("font_size", 14)
+		empty.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+		section.add_child(empty)
+		return section
+
+	var campaign: Node = get_node_or_null("/root/Campaign")
+	var unit_id: String = str(unit.get("id", ""))
+	var alive: bool = bool(unit.get("alive", true))
+	for it: Variant in bag:
+		var item_name: String = str(it)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+
+		var label := Label.new()
+		label.text = ITEMS.label(item_name)
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", C_TEXT)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var use := _make_button("Utiliser", false)
+		use.custom_minimum_size = Vector2(110, 28)
+		use.add_theme_font_size_override("font_size", 13)
+		use.disabled = not alive or not campaign
+		use.pressed.connect(func() -> void:
+			var r: Dictionary = campaign.use_item(unit_id, item_name)
+			_detail_message = _item_use_message(r, item_name)
+			_rebuild_detail())
+		row.add_child(use)
+
+		section.add_child(row)
+	return section
 
 
 ## Une ligne « intitulé : contenu » de la fiche.
@@ -891,6 +968,39 @@ func _rebuild_equipment() -> void:
 	var old: Control = _equip_panel
 	_equip_panel = _build_equipment()
 	add_child(_equip_panel)
+	old.queue_free()
+	_refresh()
+
+
+## Ce qu'un objet consommé vient de faire, dit en une ligne — ou la raison du
+## refus. Un seul texte pour les deux écrans qui savent utiliser un objet.
+func _item_use_message(result: Dictionary, item_name: String) -> String:
+	if not bool(result.get("ok", false)):
+		return str(result.get("reason", ""))
+	var amount: int = int(result.get("amount", 0))
+	var stat: String = str(result.get("stat", ""))
+	match str(result.get("effect", "")):
+		"heal":
+			return "%s bu : +%d PV." % [ITEMS.label(item_name), amount]
+		"buff":
+			# Le tonique ne peut pas vieillir entre deux chapitres : il attend la
+			# bataille, et le joueur doit savoir qu'il n'agira que là.
+			return "%s bu : +%d %s pendant %d tour(s), dès l'entrée en bataille." % [
+				ITEMS.label(item_name), amount, GLOSSARY.label(stat),
+				int(result.get("turns", 0))]
+		"boost":
+			return "%s : +%d %s définitif." % [
+				ITEMS.label(item_name), amount, GLOSSARY.label(stat)]
+	return "%s utilisé." % ITEMS.label(item_name)
+
+
+## Reconstruit la fiche après un objet consommé (PV, statistiques et sac ont bougé).
+func _rebuild_detail() -> void:
+	if not _detail_panel or not is_instance_valid(_detail_panel):
+		return
+	var old: Control = _detail_panel
+	_detail_panel = _build_detail()
+	add_child(_detail_panel)
 	old.queue_free()
 	_refresh()
 

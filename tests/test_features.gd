@@ -972,6 +972,55 @@ func _test_economy() -> void:
 	_check(not bool(campaign.use_booster(id, "Vulnerary")["ok"]),
 		"objet de combat refusé à l'intendance")
 
+	# --- Consommer un objet hors bataille ---
+	# Une potion achetée à l'intendance doit pouvoir s'y boire : sans cela on
+	# achetait un objet que rien, nulle part, ne savait utiliser.
+	unit["items"] = ["Vulnerary", "Def Tonic", "Seraph Robe"]
+	var full_hp: int = int(unit["max_hp"])
+	unit["hp"] = full_hp - 3
+	var healed: Dictionary = campaign.use_item(id, "Vulnerary")
+	_check(bool(healed["ok"]) and int(campaign.get_unit(id)["hp"]) == full_hp,
+		"potion : soigne sans dépasser les PV max (%d/%d, +%d rendus sur %d)" % [
+			int(campaign.get_unit(id)["hp"]), full_hp, int(healed.get("amount", 0)),
+			int(ITEMS.get_item("Vulnerary").get("amount", 0))])
+	_check(not "Vulnerary" in campaign.get_unit(id)["items"], "potion consommée du sac")
+	_check(not bool(campaign.use_item(id, "Vulnerary")["ok"]),
+		"objet absent du sac refusé")
+
+	# À pleine santé la potion est refusée plutôt que gâchée.
+	unit["items"].append("Vulnerary")
+	var wasted: Dictionary = campaign.use_item(id, "Vulnerary")
+	_check(not bool(wasted["ok"]) and "Vulnerary" in campaign.get_unit(id)["items"],
+		"potion refusée (et gardée) à pleine santé")
+
+	# Tonique : pas de tours entre deux chapitres, le bonus attend la bataille.
+	var tonic: Dictionary = campaign.use_item(id, "Def Tonic")
+	var pending: Array = campaign.get_unit(id).get("buffs", [])
+	_check(bool(tonic["ok"]) and pending.size() == 1
+			and str(pending[0]["stat"]) == "def" and int(pending[0]["turns"]) == 2,
+		"tonique : bonus en réserve pour la prochaine bataille (%s)" % str(pending))
+	_check(not "Def Tonic" in campaign.get_unit(id)["items"], "tonique consommé du sac")
+
+	# La réserve se verse sur le pion à l'entrée en lice, et le sac se vide.
+	var carrier: CharStats = CharStats.new()
+	ChapterRunner.apply_roster_unit(carrier, campaign.get_unit(id))
+	_check(carrier.def == int(campaign.get_unit(id)["def"]) + 2,
+		"tonique versé sur le pion au déploiement (DÉF %d)" % carrier.def)
+	_check(not campaign.get_unit(id).has("buffs"), "réserve de toniques vidée une fois versée")
+	carrier.tick_buffs()
+	carrier.tick_buffs()
+	_check(carrier.def == int(campaign.get_unit(id)["def"]), "bonus expiré après ses 2 tours")
+	carrier.free()
+
+	# Gain permanent par la même porte : les PV max gagnés sont des PV gagnés.
+	var hp_before: int = int(campaign.get_unit(id)["hp"])
+	var max_before: int = int(campaign.get_unit(id)["max_hp"])
+	var robed: Dictionary = campaign.use_item(id, "Seraph Robe")
+	_check(bool(robed["ok"]) and int(campaign.get_unit(id)["max_hp"]) == max_before + 5
+			and int(campaign.get_unit(id)["hp"]) == hp_before + 5,
+		"robe séraphique : +5 PV max et courants (%d/%d)" % [
+			int(campaign.get_unit(id)["hp"]), int(campaign.get_unit(id)["max_hp"])])
+
 	# --- Le repos entre deux batailles ---
 	# Il n'y a plus de soin payant : l'armée se repose toute seule, victoire ou
 	# défaite. Faire payer tirait la difficulté dans le mauvais sens — l'or

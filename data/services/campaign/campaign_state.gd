@@ -393,29 +393,89 @@ func sell_item(unit_id: String, item_name: String) -> Dictionary:
 	return {"ok": true, "earned": earned, "reason": ""}
 
 
-## Consomme un objet à effet permanent depuis l'intendance (hors combat).
-func use_booster(unit_id: String, item_name: String) -> Dictionary:
+## Consomme un objet de l'inventaire d'une unité, hors bataille.
+##
+## Le pendant hors combat de [method Stats.use_item], qui n'existe que pour un
+## pion en scène : entre deux chapitres, une unité n'est qu'une entrée de roster,
+## et rien ne savait lui faire boire ce qu'elle porte. Acheter une potion à
+## l'intendance revenait donc à acheter un objet inutilisable.
+##
+## Les trois effets du catalogue :
+## [br]• [b]HEAL[/b] — rend des PV sur-le-champ, jamais au-delà des PV max ;
+##   refusé à pleine santé, pour ne pas gâcher l'objet ;
+## [br]• [b]BUFF[/b] — il n'y a pas de tours entre deux chapitres : le tonique
+##   se garde en réserve sur la fiche (`buffs`) et [ChapterRunner] le pose sur le
+##   pion à l'entrée en lice, où il vieillira tour par tour comme en combat ;
+## [br]• [b]BOOST[/b] — gain définitif, PV courants suivant les PV max.
+##
+## [returns] {ok, item, effect, stat, amount, turns, reason}
+func use_item(unit_id: String, item_name: String) -> Dictionary:
 	var key: String = ITEMS.canonical_name(item_name)
 	var unit: Dictionary = get_unit(unit_id)
 	if key.is_empty() or unit.is_empty():
 		return {"ok": false, "reason": "objet ou unité inconnu"}
-	if not ITEMS.is_boost(key):
-		return {"ok": false, "reason": "%s ne s'utilise qu'en combat" % key}
+	var who: String = str(unit.get("name", ""))
+	if not bool(unit.get("alive", true)):
+		return {"ok": false, "reason": "%s est tombée au combat" % who}
 
 	var inventory: Array = unit.get("items", [])
 	if not key in inventory:
-		return {"ok": false, "reason": "%s ne porte pas de %s" % [str(unit.get("name", "")), key]}
+		return {"ok": false, "reason": "%s ne porte pas de %s" % [who, ITEMS.label(key)]}
 
 	var item: Dictionary = ITEMS.get_item(key)
-	var stat: String = str(item.get("stat", "str"))
-	var amount: int = int(item.get("amount", 2))
-	unit[stat] = int(unit.get(stat, 0)) + amount
-	if stat == "max_hp":
-		unit["hp"] = int(unit.get("hp", 0)) + amount
+	var stat: String = str(item.get("stat", ""))
+	var amount: int = int(item.get("amount", 0))
+	var result: Dictionary = {}
+
+	match int(item.get("kind", ITEMS.Kind.HEAL)):
+		ITEMS.Kind.HEAL:
+			var max_hp: int = int(unit.get("max_hp", 0))
+			var before: int = int(unit.get("hp", max_hp))
+			# Boire à pleine santé ne rendrait rien : l'objet est refusé plutôt que
+			# consommé pour zéro PV.
+			if before >= max_hp:
+				return {"ok": false, "reason": "%s est déjà au maximum de ses PV" % who}
+			unit["hp"] = mini(max_hp, before + amount)
+			result = {"ok": true, "effect": "heal", "stat": "hp",
+				"amount": int(unit["hp"]) - before, "turns": 0}
+		ITEMS.Kind.BUFF:
+			var turns: int = int(item.get("turns", 2))
+			var pending: Array = unit.get("buffs", [])
+			pending.append({"stat": stat, "amount": amount, "turns": turns})
+			unit["buffs"] = pending
+			result = {"ok": true, "effect": "buff", "stat": stat,
+				"amount": amount, "turns": turns}
+		ITEMS.Kind.BOOST:
+			unit[stat] = int(unit.get(stat, 0)) + amount
+			# Les PV max gagnés sont des PV gagnés : sans cela le bonus ne se
+			# verrait qu'après un repos.
+			if stat == "max_hp":
+				unit["hp"] = int(unit.get("hp", 0)) + amount
+			result = {"ok": true, "effect": "boost", "stat": stat,
+				"amount": amount, "turns": 0}
+		_:
+			return {"ok": false, "reason": "effet non supporté : %s" % key}
+
 	inventory.erase(key)
 	unit["items"] = inventory
+	result["item"] = key
+	result["reason"] = ""
 	roster_changed.emit()
-	return {"ok": true, "stat": stat, "amount": amount, "reason": ""}
+	return result
+
+
+## Consomme un objet à effet permanent depuis l'intendance (hors combat).
+##
+## Porte d'entrée étroite de [method use_item] : elle refuse tout ce qui n'est
+## pas un gain définitif. L'intendance s'en sert là où le bouton ne doit rien
+## faire d'autre ; ailleurs, c'est [method use_item] qui répond.
+func use_booster(unit_id: String, item_name: String) -> Dictionary:
+	var key: String = ITEMS.canonical_name(item_name)
+	if key.is_empty():
+		return {"ok": false, "reason": "objet inconnu : %s" % item_name}
+	if not ITEMS.is_boost(key):
+		return {"ok": false, "reason": "%s n'est pas un gain définitif" % ITEMS.label(key)}
+	return use_item(unit_id, key)
 
 
 #region Armes
@@ -810,6 +870,23 @@ func _normalize_unit(raw: Dictionary) -> Dictionary:
 	u["weapon"] = equipped if equipped in arsenal else ""
 	# Absent des sauvegardes d'avant le catalogue : elles gardent leurs valeurs brutes.
 	u["uses_arsenal"] = bool(u.get("uses_arsenal", false))
+
+	# Toniques bus entre deux chapitres et pas encore versés sur un pion. Le JSON
+	# les rend en flottants, et une entrée mal formée poserait un bonus de zéro
+	# sur une statistique qui n'existe pas.
+	var pending: Array = []
+	for b in u.get("buffs", []):
+		if typeof(b) != TYPE_DICTIONARY or not b.has("stat"):
+			continue
+		pending.append({
+			"stat": str(b["stat"]),
+			"amount": int(b.get("amount", 0)),
+			"turns": int(b.get("turns", 1)),
+		})
+	if pending.is_empty():
+		u.erase("buffs")
+	else:
+		u["buffs"] = pending
 
 	# Compétences d'une fiche écrite à la main. Même règle que l'arsenal : une
 	# compétence retirée du catalogue ne doit pas ressusciter par le JSON, et la

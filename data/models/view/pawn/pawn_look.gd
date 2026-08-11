@@ -7,10 +7,12 @@ extends RefCounted
 ## pixel, flottement). [TacticsPawnSprite] ne fait que les appliquer.
 ##
 ## Pourquoi une couche à part de `stats.sprite` — la fiche d'une unité continue
-## de porter sa figurine « maison » en 48 × 96, celle qu'affichent l'éditeur de
-## personnages et l'écran de préparation. Le plateau, lui, montre le pack. Les
-## deux vivent côte à côte : si le pack manque (dossier non copié), [method
-## for_stats] rend un dictionnaire vide et le pion reprend sa planche de fiche.
+## de porter sa figurine « maison », celle que l'écran de préparation affiche et
+## que le pion reprend en repli. Les deux vivent côte à côte : si le pack manque
+## (dossier non copié) ou si la classe n'y a pas d'équivalent, [method for_stats]
+## rend un dictionnaire vide et la planche de fiche reprend la main. Les menus
+## qui veulent montrer la figurine du plateau passent par [method
+## still_for_stats] — c'est le cas de l'éditeur de personnages.
 ##
 ## Le pack libre ne contient que cinq unités pour vingt-et-une classes : les
 ## rapprochements sont notés dans [constant CLASS_UNIT], approximations comprises.
@@ -133,6 +135,33 @@ static func for_stats(stats: Stats, side: int) -> Dictionary:
 		"pixel_size": PIXEL_SIZE,
 		"hover": HOVER if CD.is_flying(stats.character_class) else 0.0,
 	}
+
+
+## La figurine **fixe** d'un pion, pour un menu : la première image de sa boucle
+## de repos, ou null si sa classe n'a pas d'équivalent dans le pack.
+##
+## Un menu n'a pas de [TacticsPawnSprite] à animer, seulement un [TextureRect] à
+## remplir. Le découpage vit ici pour que « une cellule est carrée, la hauteur de
+## la planche donne son côté » ne soit pas réécrit écran par écran.
+##
+## La vignette ne prend qu'une **demi-cellule**, calée en bas sur la ligne de
+## pieds et centrée horizontalement : le pack laisse la moitié de sa cellule vide
+## au-dessus de l'unité (~88 px dessinés sur 192): rendue entière, la figurine
+## occuperait le tiers de la vignette.
+static func still_for_stats(stats: Stats, side: int) -> Texture2D:
+	var look: Dictionary = for_stats(stats, side)
+	if look.is_empty():
+		return null
+	var sheet: Texture2D = load(str(look["idle"])) as Texture2D
+	if not sheet:
+		return null
+
+	var cell: float = float(sheet.get_height())
+	var box: float = cell / 2.0
+	var still := AtlasTexture.new()
+	still.atlas = sheet
+	still.region = Rect2((cell - box) / 2.0, maxf(0.0, float(look["foot"]) - box), box, box)
+	return still
 
 
 #region Internes

@@ -184,7 +184,10 @@ func _rebuild_form() -> void:
 	_class_picker.item_selected.connect(_on_class_changed)
 	_rows.add_child(_labelled("Classe", _class_picker))
 
-	_rows.add_child(_labelled("Figurine", _build_sprite_picker()))
+	_rows.add_child(_labelled("Figurine", _build_sprite_picker(),
+		"Figurine\n\nLa planche de fiche du personnage : elle illustre sa fiche, et elle part"
+			+ " sur le plateau pour les classes que le pack de figurines ne couvre pas."
+			+ "\n\nL'aperçu à droite montre, lui, ce que le pion sera vraiment au combat."))
 
 	# Le niveau décide des compétences que la classe accorde : le changer refait
 	# la section des compétences, pas seulement l'aperçu.
@@ -310,18 +313,18 @@ func _refresh_skills() -> void:
 
 
 ## Une ligne « intitulé + champ ».
-## Choix de la figurine, avec un aperçu de ce qu'on choisit.
+## Choix de la figurine, avec un aperçu de ce que le personnage sera au combat.
 ##
 ## Une liste de noms ne dirait rien : « chemist » ou « mage » ne se devinent pas.
-## L'aperçu montre la rangée du haut de la planche — l'unité **de face**, celle
-## qu'on veut reconnaître en choisissant.
+## L'aperçu montre donc ce que le joueur verra sur le plateau — la figurine du
+## pack quand la classe en a une, la planche de fiche sinon.
 func _build_sprite_picker() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
 	var preview := TextureRect.new()
-	# 64 px pour une case de planche de 128 : une réduction de moitié pile, donc
-	# une moyenne propre de 2×2 pixels plutôt qu'un rééchantillonnage bancal.
+	# 64 px pour une case de 128 (planche de fiche) ou de 96 (demi-cellule du
+	# pack) : dans les deux cas on descend en résolution.
 	preview.custom_minimum_size = Vector2(64, 64)
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -330,19 +333,12 @@ func _build_sprite_picker() -> Control:
 	# moyenner — un liseré sur deux disparaîtrait. Le linéaire est le bon choix
 	# quand on descend en résolution, le « nearest » quand on monte.
 	preview.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	preview.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var show_look := func(path: String) -> void:
-		var sheet: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
-		if not sheet:
-			preview.texture = null
-			return
-		# Deux rangées : le VISAGE en haut, le dos en bas (voir le README des
-		# figurines — la convention inverse a longtemps été écrite par erreur).
-		# On découpe la première, personne ne choisit une figurine de dos.
-		var half := AtlasTexture.new()
-		half.atlas = sheet
-		half.region = Rect2(0, 0, sheet.get_width(), sheet.get_height() / 2.0)
-		preview.texture = half
+	var show_look := func() -> void:
+		var look: Dictionary = _battlefield_look()
+		preview.texture = look["texture"] as Texture2D
+		preview.tooltip_text = str(look["hint"])
 
 	_sprite_picker = OptionButton.new()
 	_sprite_picker.custom_minimum_size = Vector2(0, 34)
@@ -362,13 +358,61 @@ func _build_sprite_picker() -> Control:
 
 	_sprite_picker.item_selected.connect(func(index: int) -> void:
 		doc.sprite = str(_sprite_picker.get_item_metadata(index))
-		show_look.call(doc.effective_sprite())
+		show_look.call()
 		_refresh_preview())
 
 	row.add_child(_sprite_picker)
 	row.add_child(preview)
-	show_look.call(doc.effective_sprite())
+	show_look.call()
 	return row
+
+
+## La figurine que ce personnage portera au combat, et ce qu'il faut en dire.
+##
+## Le plateau ne montre plus les planches de fiche dès que la classe a une
+## correspondance dans le pack ([PawnLook]) : l'aperçu doit dire la même chose
+## que la bataille, sinon on écrit un personnage sur une apparence qu'il n'aura
+## jamais. Le repli sur la planche reste entier — le pack ne couvre que cinq
+## silhouettes, et il peut être absent de l'installation.
+##
+## [returns] {texture: Texture2D, hint: String}
+func _battlefield_look() -> Dictionary:
+	var sheet_path: String = doc.effective_sprite()
+
+	# `PawnLook` lit une unité vivante : classe (l'unité du pack) et planche de
+	# fiche (le noir des morts-vivants). Le camp est celui du joueur — une recrue
+	# écrite ici entre dans son armée, donc en bleu, ou en or si elle est seigneur.
+	var probe: CharStats = CharStats.new()
+	probe.character_class = doc.class_id
+	probe.sprite = sheet_path
+	var still: Texture2D = PawnLook.still_for_stats(probe, TeamData.Side.PLAYER)
+	probe.free()
+
+	if still:
+		return {
+			"texture": still,
+			"hint": "Ce que le pion montrera au combat.\n\nSa classe a une figurine dans le pack :"
+				+ " elle part sur le plateau aux couleurs de son camp, et la planche choisie"
+				+ " ci-contre ne sert plus qu'aux fiches.",
+		}
+	return {
+		"texture": _sheet_front(sheet_path),
+		"hint": "Ce que le pion montrera au combat.\n\nSa classe n'a pas d'équivalent dans le"
+			+ " pack : c'est la planche choisie ci-contre qui part sur le plateau.",
+	}
+
+
+## La moitié haute d'une planche de fiche : l'unité **de face**, celle qu'on veut
+## reconnaître en choisissant. Le visage est en haut, le dos en bas (voir le
+## README des figurines — la convention inverse a longtemps été écrite par erreur).
+func _sheet_front(path: String) -> Texture2D:
+	var sheet: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	if not sheet:
+		return null
+	var half := AtlasTexture.new()
+	half.atlas = sheet
+	half.region = Rect2(0, 0, sheet.get_width(), sheet.get_height() / 2.0)
+	return half
 
 
 ## Une ligne « intitulé + champ », avec son explication au survol.

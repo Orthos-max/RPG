@@ -376,6 +376,17 @@ static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	# unité de campagne ordinaire n'en a pas, et garde donc celles de sa classe.
 	if unit.get("skills") is Array:
 		stats.set_skills(unit["skills"])
+
+	# Toniques bus à l'intendance. Entre deux chapitres il n'y a pas de tours pour
+	# les faire vieillir : ils attendent sur la fiche et se versent ici, à l'entrée
+	# en lice, où [method Stats.tick_buffs] les décomptera. Bus une fois, versés une
+	# fois — la réserve se vide en même temps.
+	for buff in unit.get("buffs", []):
+		if typeof(buff) == TYPE_DICTIONARY:
+			stats.apply_buff(str(buff.get("stat", "")), int(buff.get("amount", 0)),
+				int(buff.get("turns", 1)))
+	unit.erase("buffs")
+
 	stats.attack_power = stats.get_total_attack()
 
 	# L'apparence, et le nom qui va avec. Le pion a déjà monté sa figurine à son

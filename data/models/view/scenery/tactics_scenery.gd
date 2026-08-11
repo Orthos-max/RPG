@@ -238,7 +238,18 @@ static func terrain_material(terrain_type: int) -> StandardMaterial3D:
 	var tile: Texture2D = terrain_texture(terrain_type)
 	if tile:
 		mat.albedo_texture = tile
-		mat.albedo_color = base_color.lerp(Color.WHITE, 1.0 - TEXTURE_TINT_STRENGTH)
+		# La texture porte sa propre couleur : la teinte de base est réduite à
+		# une trace (10 %) pour que le pixel art domine — sinon elle écrase la
+		# tuile et le rendu retombe sur l'ancien grain procédural (le bug
+		# « seule la forêt montre sa tuile »). Cette trace suffit pourtant à ce
+		# que deux terrains restent distinguables sous le surlignage (un test
+		# l'exige). Le grain est conservé en relief (normal map) pour que la
+		# surface garde du volume sous la caméra tactique.
+		mat.albedo_color = base_color.lerp(Color.WHITE, 0.9)
+		mat.normal_enabled = true
+		mat.normal_texture = grain_normal_texture(
+			float(grain["frequency"]), float(grain["contrast"]), terrain_type)
+		mat.normal_scale = 0.35
 		# Du pixel art filtré linéairement devient une purée : le plus proche
 		# voisin garde l'arête des pixels, les mipmaps évitent le grésillement
 		# des cases lointaines sous la caméra tactique.
@@ -301,6 +312,34 @@ static func grain_texture(frequency: float, contrast: float, seed_value: int) ->
 	texture.width = GRAIN_SIZE
 	texture.height = GRAIN_SIZE
 	texture.seamless = true
+	texture.color_ramp = ramp
+	return texture
+
+
+## Texture de relief (normal map) : le même bruit, converti en hauteurs.
+##
+## Une normal map reçoit du RGB qui encode des directions, pas une teinte : un
+## bruit en niveaux de gris y fait des creux et des bosses. C'est ce qui rend
+## la tuile SSCAP vivante sans retoucher à ses pixels — le grain de l'ancien
+## rendu procédural survit, mais en volume, sous la couleur du pack.
+static func grain_normal_texture(frequency: float, contrast: float, seed_value: int) -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = frequency
+	noise.seed = seed_value + 4096
+	noise.fractal_octaves = 3
+
+	var ramp := Gradient.new()
+	var floor_value: float = clampf(1.0 - contrast, 0.0, 1.0)
+	ramp.set_color(0, Color(0.5, 0.5, 1.0))          # plat (bleu = zéro hauteur)
+	ramp.set_color(1, Color(0.5 + floor_value * 0.5, 0.5 + floor_value * 0.5, 1.0))
+
+	var texture := NoiseTexture2D.new()
+	texture.noise = noise
+	texture.width = GRAIN_SIZE
+	texture.height = GRAIN_SIZE
+	texture.seamless = true
+	texture.as_normal_map = true
 	texture.color_ramp = ramp
 	return texture
 

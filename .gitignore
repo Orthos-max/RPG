@@ -12,6 +12,9 @@ export.cfg
 # Imported translations (automatically generated from CSV files)
 *.translation
 
+# Sondes jetables de diagnostic (jamais commitées : voir la convention du repo)
+tests/_probe_*.gd
+
 # Mono-specific ignores
 .mono/
 data_*/
