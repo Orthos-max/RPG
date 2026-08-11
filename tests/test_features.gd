@@ -3094,3 +3094,81 @@ func _test_charter() -> void:
 	_check(Palette.shade(Palette.GOLD, -0.2).v < Palette.GOLD.v,
 		"assombrir une couleur de la charte l'assombrit")
 #endregion
+
+
+#region 25. Bilan de bataille — les pertes ont deux camps
+## Le bilan comptait bien deux lignes, mais il les remplissait avec le même
+## chiffre : le journal notait « player » pour toutes les morts.
+func _test_battle_summary() -> void:
+	print("\n📜 Test 25: le bilan de bataille distingue les camps")
+
+	# --- Le piège, à la source : qui est mort, et de quel côté ---
+	# Le camp était deviné en demandant au nœud parent s'il savait montrer un menu
+	# d'actions. Les deux camps savent : la méthode vit sur leur classe commune.
+	var player_camp := TacticsPlayer.new()
+	player_camp.name = "TacticsPlayer"
+	var enemy_camp := TacticsOpponent.new()
+	enemy_camp.name = "TacticsOpponent"
+
+	_check(player_camp.has_method("show_available_pawn_actions")
+			and enemy_camp.has_method("show_available_pawn_actions"),
+		"les deux camps exposent les mêmes méthodes — deviner par là était perdu d'avance")
+	_check(TacticsPawnCombatService.team_name_for_camp(player_camp) == "player",
+		"une unité du joueur meurt du côté du joueur",
+		TacticsPawnCombatService.team_name_for_camp(player_camp))
+	_check(TacticsPawnCombatService.team_name_for_camp(enemy_camp) == "opponent",
+		"une unité adverse meurt du côté adverse",
+		TacticsPawnCombatService.team_name_for_camp(enemy_camp))
+
+	# Le même champ décide du son : abattre un brigand ne doit pas sonner comme
+	# perdre un allié.
+	_check(SoundDB.cue_for_event({"kind_name": "death", "team": "opponent"}) == "death_enemy"
+			and SoundDB.cue_for_event({"kind_name": "death", "team": "player"}) == "death_ally",
+		"la mort d'un ennemi et celle d'un allié ne s'entendent pas pareil")
+
+	player_camp.free()
+	enemy_camp.free()
+
+	# --- Le compte, ensuite ---
+	var events: Array = [
+		{"kind_name": "turn_start", "team": "player", "turn": 3},
+		{"kind_name": "attack", "attacker": "Elyan", "defender": "Brigand",
+			"damage": 12, "hit": true, "crit": true},
+		{"kind_name": "attack", "attacker": "Brigand", "defender": "Elyan",
+			"damage": 5, "hit": true, "crit": false},
+		{"kind_name": "death", "pawn": "Brigand", "team": "opponent"},
+		{"kind_name": "death", "pawn": "Archer", "team": "opponent"},
+		{"kind_name": "death", "pawn": "Elyan", "team": "player"},
+	]
+	var summary: Dictionary = BattleStats.from_events(events, ["Elyan"])
+
+	_check(int(summary["enemies_defeated"]) == 2,
+		"deux ennemis vaincus", str(summary["enemies_defeated"]))
+	_check(int(summary["allies_fallen"]) == 1,
+		"un allié tombé", str(summary["allies_fallen"]))
+	_check(int(summary["damage_dealt"]) == 12 and int(summary["damage_taken"]) == 5,
+		"les dégâts restent attribués au bon camp")
+
+	# --- L'affichage : deux lignes, et chacune dit de quel camp elle parle ---
+	var rows: Array = BattleStats.rows(summary)
+	var labels: Array = []
+	var by_label: Dictionary = {}
+	for row: Array in rows:
+		labels.append(str(row[0]))
+		by_label[str(row[0])] = str(row[1])
+
+	_check(by_label.get("Ennemis vaincus", "") == "2"
+			and by_label.get("Alliés tombés", "") == "1",
+		"le bilan affiche les deux comptes séparément", str(labels))
+	_check(not "Unités tombées" in labels,
+		"plus de ligne « Unités tombées » : elle ne disait pas de quel camp")
+
+	# Une bataille sans perte doit afficher zéro, pas rien : c'est le chiffre
+	# qu'un joueur vient chercher.
+	var clean: Array = BattleStats.rows(BattleStats.empty())
+	var clean_labels: Array = []
+	for row: Array in clean:
+		clean_labels.append(str(row[0]))
+	_check("Ennemis vaincus" in clean_labels and "Alliés tombés" in clean_labels,
+		"les deux lignes existent même à zéro", str(clean_labels))
+#endregion

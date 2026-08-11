@@ -87,6 +87,11 @@ static func total_exp(level: int, exp_points: int) -> int:
 ##
 ## L'ordre est celui d'un compte rendu de bataille : le déroulé (tours), la
 ## récolte (XP, or), puis les pertes des deux camps.
+##
+## Les deux camps ont chacun leur ligne, et chaque libellé nomme le sien :
+## « Unités tombées » ne disait pas de quel côté elles étaient tombées, et se
+## lisait donc comme le total des morts de la bataille — juste au-dessous du
+## compte des ennemis vaincus, qui en fait déjà partie.
 static func rows(summary: Dictionary) -> Array:
 	var out: Array = [
 		["Tours joués", str(int(summary.get("turns", 0)))],
@@ -103,7 +108,7 @@ static func rows(summary: Dictionary) -> Array:
 
 	out.append_array([
 		["Ennemis vaincus", str(int(summary.get("enemies_defeated", 0)))],
-		["Unités tombées", str(int(summary.get("allies_fallen", 0)))],
+		["Alliés tombés", str(int(summary.get("allies_fallen", 0)))],
 		["Coups critiques", str(int(summary.get("crits", 0)))],
 		["Critiques subis", str(int(summary.get("crits_taken", 0)))],
 		["Dégâts infligés", str(int(summary.get("damage_dealt", 0)))],

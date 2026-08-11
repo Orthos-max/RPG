@@ -10,6 +10,7 @@ const MapDataRef = preload("res://data/models/world/map/map_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 const ForecastRef = preload("res://data/services/combat/battle_forecast.gd")
 const BattleLog = preload("res://data/services/combat/battle_log.gd")
+const TeamDataRef = preload("res://data/models/world/combat/team/team_data.gd")
 
 var _victory_checked: bool = false  ## Prevents duplicate victory/defeat triggers
 
@@ -265,8 +266,7 @@ func _check_death(p: TacticsPawn) -> void:
 	BattleVFX.play_death(p)
 
 	# Journal de bataille : la mort est l'événement le plus utile à Ciel.
-	var team_name: String = "player" if p.get_parent() and p.get_parent().has_method("show_available_pawn_actions") else "opponent"
-	_record(&"record_death", [_get_name(p), team_name, ""])
+	_record(&"record_death", [_get_name(p), team_name_for_camp(p.get_parent()), ""])
 
 	# Make invisible and non-interactive
 	p.visible = false
@@ -284,6 +284,20 @@ func _check_death(p: TacticsPawn) -> void:
 	
 	# Check victory condition
 	_check_victory(p)
+
+
+## Camp d'un nœud de camp, tel que le journal de bataille l'écrit ("player",
+## "opponent", "guest") — "unknown" si le nœud n'est aucun camp connu.
+##
+## Le camp se lit sur le **nom du nœud**, via [TeamData], et non sur les méthodes
+## qu'il expose. Le test précédent — « ce camp sait-il montrer un menu d'actions ? »
+## — était vrai des deux : `show_available_pawn_actions()` vit sur
+## [TacticsParticipant], dont [TacticsOpponent] hérite tout autant que
+## [TacticsPlayer]. Toutes les morts partaient donc au crédit du joueur : le bilan
+## de fin de bataille annonçait zéro ennemi vaincu quel qu'ait été le carnage, et
+## la mort d'un brigand jouait la plainte réservée aux alliés ([SoundDB.cue_for_event]).
+static func team_name_for_camp(camp: Node) -> String:
+	return TeamDataRef.state_team_name(TeamDataRef.side_for_camp_node(camp))
 
 
 ## Check if all enemies are defeated and show victory
