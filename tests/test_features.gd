@@ -48,6 +48,7 @@ func _init() -> void:
 	_test_session()
 	await _test_skills()
 	_test_economy()
+	await _test_item_buttons()
 	_test_network_codes()
 	_test_three_way()
 	_test_reconnection()
@@ -1157,6 +1158,120 @@ func _test_economy() -> void:
 	_test_weapon_economy(campaign)
 	_test_save_slots(campaign)
 	_test_character_editor(campaign)
+
+
+## Les boutons d'objet pressés pour de vrai, sur l'écran monté.
+##
+## Le joueur ne signalait pas une règle fausse mais des boutons qui « ne
+## servaient à rien » : `Campaign.use_item()` pouvait être juste sans
+## qu'aucun clic ne l'atteigne jamais. Les tests d'économie ci-dessus appellent
+## la campagne directement et resteraient donc verts avec une interface morte.
+## Celui-ci monte l'écran de préparation, presse, et regarde le roster bouger.
+func _test_item_buttons() -> void:
+	print("\n🖱  Test 12septies: boutons d'objet de l'intendance et des fiches")
+
+	var campaign: Node = root.get_node_or_null("Campaign")
+	if not campaign:
+		_ko("Autoload Campaign", "introuvable")
+		return
+
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	campaign.gold = 5000
+	var unit: Dictionary = campaign.available_units()[0]
+	var id: String = str(unit["id"])
+
+	var screen: Control = load("res://data/modules/menu/prep_screen.gd").new()
+	screen.chapter = campaign.current_chapter()
+	root.add_child(screen)
+	await process_frame
+
+	# --- Intendance : « Utiliser » et « Revendre » sur tout le catalogue ---
+	# Ils ne valaient que pour les gains permanents et pour les armes : une potion
+	# achetée ici ne pouvait ni se boire ni se revendre.
+	unit["items"] = ["Vulnerary"]
+	unit["hp"] = int(unit["max_hp"]) - 5
+	screen._toggle_shop()
+	await process_frame
+
+	var slot: int = ITEMS.shop_stock().find("Vulnerary")
+	var use: Button = _item_row_button(screen._shop_panel, slot, "Utiliser")
+	_check(use != null, "l'intendance porte un bouton « Utiliser » sur la potion")
+	if use:
+		use.pressed.emit()
+		await process_frame
+		_check(int(campaign.get_unit(id)["hp"]) == int(campaign.get_unit(id)["max_hp"])
+				and not "Vulnerary" in campaign.get_unit(id)["items"],
+			"le presser soigne l'unité et vide le sac (%d/%d, sac %s)" % [
+				int(campaign.get_unit(id)["hp"]), int(campaign.get_unit(id)["max_hp"]),
+				str(campaign.get_unit(id)["items"])])
+
+	unit["items"] = ["Vulnerary"]
+	var purse: int = campaign.gold
+	var sell: Button = _item_row_button(screen._shop_panel, slot, "Revendre")
+	_check(sell != null, "et un bouton « Revendre »")
+	if sell:
+		sell.pressed.emit()
+		await process_frame
+		_check(campaign.gold == purse + ITEMS.resale_price("Vulnerary")
+				and campaign.get_unit(id)["items"].is_empty(),
+			"le presser rend l'objet contre la moitié de son prix (%d → %d or)" % [
+				purse, campaign.gold])
+
+	# --- Fiches : un bouton par objet du sac ---
+	# C'est l'écran où l'on lit les PV : c'est donc là qu'on décide de faire boire
+	# une potion, sans repasser par la boutique.
+	screen._toggle_shop()
+	unit["items"] = ["Vulnerary", "Def Tonic"]
+	unit["hp"] = 1
+	screen._toggle_detail()
+	await process_frame
+
+	var sheet_use: Button = _item_row_button(screen._detail_panel, 0, "Utiliser")
+	_check(sheet_use != null, "la fiche porte un bouton « Utiliser » par objet du sac")
+	if sheet_use:
+		sheet_use.pressed.emit()
+		await process_frame
+		_check(int(campaign.get_unit(id)["hp"]) > 1
+				and campaign.get_unit(id)["items"] == ["Def Tonic"],
+			"le presser fait boire la potion (%d PV, sac %s)" % [
+				int(campaign.get_unit(id)["hp"]), str(campaign.get_unit(id)["items"])])
+		_check(screen._detail_message.contains("PV"),
+			"et la fiche dit ce que ça a fait : « %s »" % screen._detail_message)
+
+	# Le tonique reste, et son bouton sait le mettre en réserve pour la bataille.
+	var tonic_use: Button = _item_row_button(screen._detail_panel, 0, "Utiliser")
+	if tonic_use:
+		tonic_use.pressed.emit()
+		await process_frame
+		_check(campaign.get_unit(id).get("buffs", []).size() == 1
+				and campaign.get_unit(id)["items"].is_empty(),
+			"le tonique passe en réserve depuis la fiche (%s)" % str(
+				campaign.get_unit(id).get("buffs", [])))
+
+	screen.queue_free()
+
+
+## Le bouton d'intitulé [param text] de la [param index]-ième ligne d'objet.
+##
+## Une ligne d'objet est celle qui porte un « Utiliser » : à l'intendance elles
+## suivent l'ordre de [method ItemDB.shop_stock] (les lignes d'arme et de recrue
+## n'en ont pas), sur une fiche celui du sac.
+func _item_row_button(panel: Node, index: int, text: String) -> Button:
+	var rows: Array[Node] = []
+	for node: Node in _walk(panel):
+		if node is HBoxContainer and _row_button(node, "Utiliser"):
+			rows.append(node)
+	if index < 0 or index >= rows.size():
+		return null
+	return _row_button(rows[index], text)
+
+
+## Le bouton d'intitulé [param text] porté directement par une ligne.
+func _row_button(row: Node, text: String) -> Button:
+	for child in row.get_children():
+		if child is Button and (child as Button).text == text:
+			return child
+	return null
 
 
 #region 12quater. Emplacements de sauvegarde
