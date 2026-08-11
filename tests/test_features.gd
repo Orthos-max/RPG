@@ -23,6 +23,9 @@ const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
 const CharStats = preload("res://data/modules/stats/stats.gd")
 const Calc = preload("res://data/services/combat/fe_combat.gd")
 const SPLIT = preload("res://data/models/world/combat/team/army_split.gd")
+const HISTORY = preload("res://data/modules/ui/battle_history.gd")
+const SPEED = preload("res://data/modules/ui/battle_speed.gd")
+const BattleLogRef = preload("res://data/services/combat/battle_log.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -54,6 +57,7 @@ func _init() -> void:
 	_test_reconnection()
 	_test_deployment()
 	_test_ux_polish()
+	_test_comfort()
 	_test_audio()
 	_test_map_editor()
 	_test_map_history()
@@ -2311,6 +2315,142 @@ func _test_action_labels() -> void:
 		"une action sans libellé reste lisible au lieu de disparaître")
 
 	node.free()
+#endregion
+
+
+#region 17bis. Confort de jeu — accélérateur, historique, reprise de chapitre
+## Les quatre commodités ajoutées le 2026-08-11. Ce qui se vérifie ici est ce qui
+## n'a pas besoin d'écran : les constantes des raccourcis, la traduction d'un
+## événement du journal en ligne lisible, l'échelle de temps, et l'instantané de
+## début de chapitre. Le dessin des panneaux, lui, n'a pas lieu en `--headless`.
+func _test_comfort() -> void:
+	print("\n🛋 Test 17bis: confort de jeu (X, H, reprise, sauvegarde auto)")
+
+	# --- 1. Accélérateur d'animations (X maintenue) ---
+	_check(not SPEED.available(),
+		"sans écran, l'accélérateur ne se monte pas — rien à accélérer en headless")
+	_check(SPEED.HOLD_KEY == KEY_X and SPEED.SCALE >= 2.0,
+		"X accélère, et d'un facteur qui se voit (×%s)" % str(SPEED.SCALE))
+
+	var before_scale: float = Engine.time_scale
+	var speed: CanvasLayer = SPEED.new()
+	speed.engage()
+	_check(speed.is_engaged() and is_equal_approx(Engine.time_scale, SPEED.SCALE),
+		"touche enfoncée : le temps court ×%s" % str(SPEED.SCALE), str(Engine.time_scale))
+	speed.engage()  # Répétition clavier : elle ne doit rien réapprendre.
+	speed.release()
+	_check(not speed.is_engaged() and is_equal_approx(Engine.time_scale, before_scale),
+		"touche relâchée : le temps reprend son cours", str(Engine.time_scale))
+	speed.release()
+	_check(is_equal_approx(Engine.time_scale, before_scale),
+		"un second relâchement ne fait rien", str(Engine.time_scale))
+
+	# Le vrai danger : une bataille qui se décharge pendant l'accélération. Sans
+	# le rattrapage de sortie d'arbre, tous les écrans suivants resteraient à ×3.
+	speed.engage()
+	speed.free()
+	_check(is_equal_approx(Engine.time_scale, before_scale),
+		"un accélérateur libéré en pleine accélération rend le temps", str(Engine.time_scale))
+
+	# --- 2. Historique de combat (H) ---
+	_check(not HISTORY.available(), "sans écran, l'historique ne se monte pas")
+	_check(HISTORY.TOGGLE_KEY == KEY_H and HISTORY.MAX_LINES >= 20,
+		"H ouvre l'historique, qui garde %d lignes" % HISTORY.MAX_LINES)
+
+	var crit: String = HISTORY.describe({"kind_name": "attack", "attacker": "Chrom",
+		"defender": "Brigand", "damage": 12, "hit": true, "crit": true,
+		"double": false, "defender_hp": 8})
+	_check(crit.contains("Chrom") and crit.contains("Brigand") and crit.contains("12")
+			and crit.contains("critique") and crit.contains("8"),
+		"un critique se relit en entier : qui, sur qui, combien, et ce qu'il reste", crit)
+
+	var missed: String = HISTORY.describe({"kind_name": "attack", "attacker": "Virion",
+		"defender": "Brigand", "damage": 0, "hit": false})
+	_check(missed.contains("manque") and not missed.contains("dégâts"),
+		"un coup manqué ne raconte pas de dégâts", missed)
+
+	var doubled: String = HISTORY.describe({"kind_name": "attack", "attacker": "Sully",
+		"defender": "Brigand", "damage": 14, "hit": true, "crit": false,
+		"double": true, "defender_hp": 3})
+	_check(doubled.contains("×2") and not doubled.contains("critique"),
+		"l'attaque redoublée se distingue du critique", doubled)
+
+	_check(HISTORY.describe({"kind_name": "death", "pawn": "Brigand",
+		"team": "opponent"}).contains("Adversaire"),
+		"les camps sont traduits pour le joueur, pas laissés en « opponent »")
+	_check(HISTORY.describe({"kind_name": "turn_start", "team": "player",
+		"turn": 3}).contains("Tour 3"),
+		"le début de tour ouvre une section lisible")
+	_check(HISTORY.describe({"kind_name": "heal", "healer": "Lissa", "target": "Chrom",
+		"amount": 10, "target_hp": 28}).contains("soigne"), "le soin est journalisé")
+	_check(HISTORY.describe({"kind_name": "level_up", "pawn": "Chrom",
+		"level": 5}).contains("niveau 5"), "la montée de niveau est journalisée")
+	_check(HISTORY.describe({}).is_empty(),
+		"un événement inconnu ne produit pas de ligne vide à l'écran")
+	_check(HISTORY.tint({"kind_name": "attack", "crit": true})
+			!= HISTORY.tint({"kind_name": "attack", "crit": false}),
+		"un critique ne se lit pas de la même couleur qu'un coup ordinaire")
+
+	# Tous les genres d'événements que le journal sait écrire doivent avoir une
+	# traduction : en ajouter un sans ligne le rendrait invisible au joueur.
+	var untranslated: Array = []
+	for kind: int in [BattleLogRef.Kind.TURN_START, BattleLogRef.Kind.MOVE,
+			BattleLogRef.Kind.ATTACK, BattleLogRef.Kind.HEAL, BattleLogRef.Kind.DEATH,
+			BattleLogRef.Kind.LEVEL_UP, BattleLogRef.Kind.PROMOTION,
+			BattleLogRef.Kind.COMMAND_REJECTED, BattleLogRef.Kind.OBJECTIVE]:
+		var kind_label: String = BattleLogRef.kind_name(kind)
+		if HISTORY.describe({"kind_name": kind_label, "hit": true}).is_empty():
+			untranslated.append(kind_label)
+	_check(untranslated.is_empty(),
+		"chaque genre d'événement du journal a sa ligne", str(untranslated))
+
+	# --- 3 & 4. Sauvegarde de début de chapitre, et reprise après défaite ---
+	var campaign: Node = root.get_node_or_null("Campaign")
+	if not campaign:
+		_ko("Autoload Campaign", "introuvable")
+		return
+
+	campaign.new_game(DIFF.Level.NORMAL, true)
+	_check(not campaign.has_chapter_autosave(),
+		"une partie neuve n'hérite pas de l'instantané de la précédente")
+
+	campaign.gold = 500
+	var protege: String = str(campaign.roster[0]["id"])
+	_check(campaign.autosave_chapter(), "instantané de début de chapitre écrit")
+	_check(campaign.has_chapter_autosave(campaign.chapter_index),
+		"l'instantané est bien celui du chapitre en cours")
+	_check(not campaign.has_chapter_autosave(campaign.chapter_index + 9),
+		"il ne se fait pas passer pour celui d'un autre chapitre")
+
+	# La bataille tourne mal : une unité tombe pour de bon, la bourse se vide.
+	campaign.apply_battle_result({"id": protege, "hp": 0})
+	campaign.gold = 0
+	_check(not bool(campaign.get_unit(protege)["alive"]),
+		"l'unité est tombée en mort permanente")
+
+	# « Recommencer le chapitre » : l'armée d'avant le premier coup.
+	_check(campaign.restore_chapter(), "instantané relu")
+	_check(bool(campaign.get_unit(protege)["alive"]) and campaign.gold == 500,
+		"recommencer rend l'armée et la bourse d'avant la bataille",
+		"%s / %d or" % [str(campaign.get_unit(protege)["alive"]), campaign.gold])
+
+	# L'emplacement dédié ne prend la place d'aucun de ceux du joueur.
+	var player_slots: Array = []
+	for info: Dictionary in campaign.all_slots():
+		player_slots.append(int(info["slot"]))
+	_check(player_slots.size() == campaign.SAVE_SLOTS
+			and not campaign.CHAPTER_SLOT in player_slots,
+		"les 4 emplacements du joueur restent les siens", str(player_slots))
+
+	var auto_info: Dictionary = campaign.chapter_slot_info()
+	_check(bool(auto_info["exists"]) and bool(auto_info["chapter_start"]),
+		"l'écran de chargement sait le décrire à part", str(auto_info))
+	_check(not bool(campaign.slot_info(0).get("chapter_start", true)),
+		"un emplacement ordinaire n'est pas confondu avec lui")
+
+	# On ne laisse pas une campagne de test se faire passer pour une vraie.
+	campaign.delete_save(campaign.CHAPTER_SLOT)
+	_check(not campaign.has_chapter_autosave(), "instantané de test retiré")
 #endregion
 
 

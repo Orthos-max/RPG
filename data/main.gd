@@ -16,6 +16,8 @@ const CharacterEditor = preload("res://data/modules/menu/character_editor.gd")
 const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const ScreenFaderClass = preload("res://data/modules/ui/fader.gd")
 const MinimapClass = preload("res://data/modules/ui/minimap.gd")
+const BattleHistoryClass = preload("res://data/modules/ui/battle_history.gd")
+const BattleSpeedClass = preload("res://data/modules/ui/battle_speed.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 const MapEditorScene = preload("res://assets/maps/level/map_editor_level.tscn")
@@ -231,8 +233,12 @@ func _on_play_custom_map(document: MapDocument, with_ciel: bool) -> void:
 ## [param details] Bilan chiffré, `[[libellé, valeur], …]` — tel que
 ## [method BattleStats.rows] le rend. Vide, l'écran est celui d'avant : un
 ## titre, un texte, un bouton.
+##
+## [param extra] Boutons supplémentaires posés à côté de « Continuer »,
+## `[[libellé, Callable], …]` — c'est par là que la défaite propose de
+## recommencer le chapitre.
 func _show_message(title_text: String, body_text: String, next: Callable = Callable(),
-		details: Array = []) -> void:
+		details: Array = [], extra: Array = []) -> void:
 	_clear_ui()
 
 	var layer := CanvasLayer.new()
@@ -281,25 +287,47 @@ func _show_message(title_text: String, body_text: String, next: Callable = Calla
 	if not details.is_empty():
 		column.add_child(_build_summary_table(details))
 
-	var btn := Button.new()
-	btn.text = "Continuer"
-	btn.custom_minimum_size = Vector2(240, 48)
-	btn.add_theme_font_size_override("font_size", 18)
-	btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	btn.offset_top = -140
-	btn.offset_bottom = -92
-	btn.offset_left = -120
-	btn.offset_right = 120
+	# Une barre de boutons plutôt qu'un bouton posé à la main : le second choix
+	# n'apparaît que sur certains écrans (la défaite), et deux boutons ancrés
+	# chacun de leur côté se décentrent dès qu'il n'y en a qu'un.
+	var bar := HBoxContainer.new()
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.anchor_right = 1.0
+	bar.anchor_top = 1.0
+	bar.anchor_bottom = 1.0
+	bar.offset_top = -140
+	bar.offset_bottom = -92
+	bar.add_theme_constant_override("separation", 16)
+	layer.add_child(bar)
+
+	var btn := _message_button("Continuer")
 	btn.pressed.connect(func() -> void:
 		if next.is_valid():
 			next.call()
 		else:
 			show_title())
-	layer.add_child(btn)
+	bar.add_child(btn)
+
+	for action: Array in extra:
+		var side := _message_button(str(action[0]))
+		var callback: Callable = action[1]
+		side.pressed.connect(func() -> void:
+			if callback.is_valid():
+				callback.call())
+		bar.add_child(side)
 
 	add_child(layer)
 	_ui = layer
 	_fade_in()
+
+
+## Un bouton de la barre d'un écran de message.
+func _message_button(text: String) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(260, 48)
+	btn.add_theme_font_size_override("font_size", 18)
+	return btn
 
 
 ## Tableau du bilan : deux paires « libellé / valeur » par ligne.
@@ -393,6 +421,12 @@ func _on_battle_requested() -> void:
 	var campaign: Node = _campaign()
 	if session and campaign:
 		session.chapter_index = campaign.chapter_index
+	# Sauvegarde automatique de début de chapitre, prise ici et pas ailleurs :
+	# c'est le dernier instant où l'armée est encore intacte — achats faits,
+	# déploiement arrêté, pas un coup échangé. C'est de cet instantané que part
+	# « Recommencer le chapitre » après une défaite.
+	if campaign:
+		campaign.autosave_chapter()
 	_load_level(_chapter.scene_path)
 
 
@@ -454,11 +488,48 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 		# retentera le chapitre et voudra savoir avec quoi il repart.
 		summary["gold"] = campaign.gold
 		campaign.save_game(SAVE_SLOT)
+
+		# Recommencer n'est proposé que si l'instantané de début de chapitre est
+		# bien celui de *ce* chapitre : un fichier laissé par une autre partie
+		# renverrait le joueur ailleurs, et « recommencer » deviendrait un piège.
+		var retry: Array = []
+		if campaign.has_chapter_autosave(campaign.chapter_index):
+			retry.append(["↻ Recommencer le chapitre",
+				func() -> void: _transition(_retry_chapter)])
+
 		_show_message("💀 Défaite — %s" % chapter_title,
 			"%s\n\nLes unités tombées le restent si la mort permanente est active.\nTu peux retenter le chapitre." % reason,
-			show_prep, BattleStats.rows(summary))
+			show_prep, BattleStats.rows(summary), retry)
 
 	unload_level()
+
+
+## Relance le chapitre en cours tel qu'il a commencé.
+##
+## La bataille perdue a déjà tout reporté dans la campagne — morts permanentes,
+## blessures, XP — et l'emplacement automatique en porte l'état. Repartir de la
+## mémoire vive rejouerait donc le chapitre avec une armée déjà entamée, ce qui
+## n'est pas « recommencer ». On relit l'instantané pris à l'entrée en lice
+## ([method Campaign.autosave_chapter]) : le roster, l'or et le déploiement d'
+## avant le premier coup.
+func _retry_chapter() -> void:
+	var campaign: Node = _campaign()
+	if not campaign or not campaign.restore_chapter():
+		_show_message("Reprise impossible",
+			"Aucune sauvegarde de début de chapitre n'a été retrouvée.\n"
+			+ "Repasse par l'écran de préparation.", show_prep)
+		return
+
+	var session: Node = _session()
+	if session:
+		session.difficulty = campaign.difficulty
+		session.chapter_index = campaign.chapter_index
+		session.set_mode(session.Mode.SOLO)
+
+	# `_on_battle_requested` recharge le niveau, qui nettoie l'écran de bilan et
+	# reprend l'instantané au passage : le chapitre repart de zéro, filet compris.
+	_chapter = campaign.current_chapter()
+	_on_battle_requested()
 #endregion
 
 
@@ -515,6 +586,21 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		minimap.name = "BattleMinimap"
 		minimap.level = _level
 		_level.add_child(minimap)
+
+	# Historique des coups portés, dans le coin bas-droit (touche H). Monté après
+	# `start_battle` : il se branche sur le journal et reprend ce qu'il y trouve.
+	if _level is TacticsLevel and BattleHistoryClass.available():
+		var history: CanvasLayer = BattleHistoryClass.new()
+		history.name = "BattleHistory"
+		_level.add_child(history)
+
+	# Accélérateur d'animations (touche X maintenue). Enfant du niveau, donc
+	# libéré avec lui : c'est ce qui rend l'échelle de temps à 1× en fin de
+	# bataille, quoi qu'il arrive.
+	if _level is TacticsLevel and BattleSpeedClass.available():
+		var speed: CanvasLayer = BattleSpeedClass.new()
+		speed.name = "BattleSpeed"
+		_level.add_child(speed)
 
 	# En campagne, le runner applique le roster et surveille l'objectif.
 	if _chapter and _level is TacticsLevel:

@@ -103,6 +103,15 @@ func _refresh() -> void:
 	for info: Dictionary in campaign.all_slots():
 		_rows.add_child(_make_row(info, campaign))
 
+	# L'instantané de début de chapitre, en plus des emplacements du joueur.
+	# **Au chargement seulement** : il s'écrit tout seul à chaque entrée en
+	# bataille, et le proposer à l'écriture reviendrait à laisser le joueur
+	# saborder le filet auquel « Recommencer le chapitre » se raccroche.
+	if not saving:
+		var auto_info: Dictionary = campaign.chapter_slot_info()
+		if bool(auto_info["exists"]):
+			_rows.add_child(_make_row(auto_info, campaign))
+
 
 ## Une ligne d'emplacement : ce qu'il contient, et ce qu'on peut en faire.
 func _make_row(info: Dictionary, campaign: Node) -> Control:
@@ -148,7 +157,12 @@ func _make_row(info: Dictionary, campaign: Node) -> Control:
 
 	var erase := _make_button("Supprimer" if _pending_delete != slot else "Confirmer ?", false)
 	erase.custom_minimum_size = Vector2(130, 40)
-	erase.disabled = not bool(info["exists"])
+	# L'instantané de chapitre ne s'efface pas non plus : le supprimer priverait
+	# la défaite en cours de son bouton « Recommencer le chapitre », sans que rien
+	# ne dise pourquoi.
+	erase.disabled = not bool(info["exists"]) or bool(info.get("chapter_start", false))
+	if erase.disabled and bool(info.get("chapter_start", false)):
+		erase.tooltip_text = "Réécrit à chaque entrée en bataille."
 	erase.pressed.connect(func() -> void: _erase_slot(slot, campaign))
 	row.add_child(erase)
 
@@ -157,9 +171,11 @@ func _make_row(info: Dictionary, campaign: Node) -> Control:
 
 ## Description d'un emplacement, telle qu'elle s'affiche.
 func _describe(info: Dictionary) -> String:
-	var head: String = "Emplacement %d%s" % [
-		int(info["slot"]) + 1, "  (automatique)" if bool(info["auto"]) else "",
-	]
+	var head: String = "⏱  Reprise automatique — début de chapitre" \
+		if bool(info.get("chapter_start", false)) \
+		else "Emplacement %d%s" % [
+			int(info["slot"]) + 1, "  (automatique)" if bool(info["auto"]) else "",
+		]
 	if not bool(info["exists"]):
 		return "%s\nvide" % head
 	return "%s\n%s — %d unité(s)%s, %d or — %s, mort permanente : %s\n%s" % [

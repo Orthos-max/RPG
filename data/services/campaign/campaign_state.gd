@@ -26,6 +26,17 @@ const SAVE_VERSION: int = 1
 const SAVE_SLOTS: int = 4
 ## Emplacement écrit automatiquement par la campagne.
 const AUTO_SLOT: int = 0
+## Emplacement réservé à l'instantané pris au démarrage d'un chapitre.
+##
+## **Hors des emplacements du joueur** (0…3, voir [constant SAVE_SLOTS]) : il ne
+## se propose ni à l'écriture ni à la suppression, et l'écran de chargement
+## l'affiche à part.
+##
+## Il ne fait pas double emploi avec [constant AUTO_SLOT], qui s'écrit à la *fin*
+## d'un chapitre : après une défaite, celui-là porte déjà les morts et les
+## blessures de la bataille perdue. Recommencer le chapitre demande l'état
+## d'*avant* — c'est celui-ci, et lui seul.
+const CHAPTER_SLOT: int = SAVE_SLOTS
 
 ## Prix d'un personnage écrit par le joueur, à l'intendance.
 ##
@@ -80,6 +91,9 @@ func new_game(diff: int = DIFF.Level.NORMAL, with_permadeath: bool = true) -> vo
 	deployment_tiles.clear()
 	bonus_history.clear()
 	turn_count = 1
+	# L'instantané de la campagne précédente n'a plus de sens : le laisser
+	# offrirait de « recommencer le chapitre » d'une partie qui n'existe plus.
+	delete_save(CHAPTER_SLOT)
 	roster_changed.emit()
 
 
@@ -760,17 +774,60 @@ func load_game(slot: int = 0) -> bool:
 	return true
 
 
+#region Instantané de début de chapitre
+## Écrit l'instantané de début de chapitre dans [constant CHAPTER_SLOT].
+##
+## Appelé par [Main] au moment où la bataille se charge, donc après l'écran de
+## préparation : l'armée, l'or, les achats et les cases de départ sont ceux avec
+## lesquels le joueur entre en lice. C'est ce qui rend « Recommencer le
+## chapitre » possible après une défaite — et ce qui rattrape une coupure de
+## courant en pleine bataille, qui ne coûte plus qu'un chapitre.
+func autosave_chapter() -> bool:
+	return save_game(CHAPTER_SLOT)
+
+
+## Un instantané de début de chapitre existe-t-il ?
+##
+## [param index] restreint la question à un chapitre précis : après une défaite,
+## la campagne n'a pas avancé, donc l'instantané qu'on s'apprête à relire doit
+## bien être celui du chapitre affiché. Un fichier laissé par une autre partie —
+## chargée depuis un emplacement manuel, par exemple — ne doit pas passer pour
+## le filet du chapitre en cours.
+func has_chapter_autosave(index: int = -1) -> bool:
+	if not has_save(CHAPTER_SLOT):
+		return false
+	if index < 0:
+		return true
+	return int(slot_info(CHAPTER_SLOT).get("chapter_index", -1)) == index
+
+
+## Recharge l'instantané de début de chapitre. `false` s'il n'y en a pas.
+func restore_chapter() -> bool:
+	return load_game(CHAPTER_SLOT)
+
+
+## Description de l'instantané, pour l'écran de chargement.
+##
+## Une méthode plutôt que la constante : les écrans tiennent la campagne par un
+## [Node] non typé (c'est un autoload), et lui demander une constante par ce
+## chemin ne marche pas.
+func chapter_slot_info() -> Dictionary:
+	return slot_info(CHAPTER_SLOT)
+#endregion
+
+
 ## Ce que contient un emplacement, sans charger la partie.
 ##
 ## L'écran de sauvegarde a besoin de décrire quatre emplacements d'un coup :
 ## les charger pour les lire écraserait la partie en cours. On relit donc
 ## l'en-tête du JSON et on n'en garde que de quoi remplir une ligne.
 ##
-## [returns] {exists, slot, auto, saved_at, chapter_index, chapter_title,
-##            gold, units, fallen, difficulty, permadeath}
+## [returns] {exists, slot, auto, chapter_start, saved_at, chapter_index,
+##            chapter_title, gold, units, fallen, difficulty, permadeath}
 func slot_info(slot: int) -> Dictionary:
 	var out: Dictionary = {
 		"exists": false, "slot": slot, "auto": slot == AUTO_SLOT,
+		"chapter_start": slot == CHAPTER_SLOT,
 		"saved_at": "", "chapter_index": 0, "chapter_title": "",
 		"gold": 0, "units": 0, "fallen": 0,
 		"difficulty": DIFF.Level.NORMAL, "permadeath": true,

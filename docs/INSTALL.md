@@ -56,6 +56,20 @@ dépenser l'or : potions, objets à gain permanent, soins des blessés et recrut
 Commandes de bataille : souris (clic pour sélectionner/déplacer), manette et clavier
 supportés (`ZQSD`/`WASD` pour la caméra, `A`/`E` pour pivoter).
 
+* **`X` (maintenue)** → accélère les animations ×3 tant que la touche est enfoncée :
+  de quoi passer un tour adverse sans attendre chaque déplacement. Relâcher rend au
+  jeu sa vitesse normale (Alt-Tab et fin de bataille aussi, par sécurité).
+* **`H`** → ouvre et referme le **journal de bataille** en bas à droite : les 50
+  derniers événements (attaques, dégâts, critiques, soins, chutes, montées de
+  niveau), utile quand les chiffres passent trop vite. Un bouton *📜 Journal* fait
+  la même chose à la souris.
+
+La partie est **sauvegardée automatiquement au début de chaque chapitre**, dans un
+emplacement dédié affiché à part sur l'écran de chargement (*⏱ Reprise automatique*).
+C'est de là que part le bouton **↻ Recommencer le chapitre** proposé sur l'écran de
+défaite : il rejoue le chapitre avec l'armée et l'or d'avant la bataille perdue —
+les morts permanentes de la tentative ratée sont annulées.
+
 Après avoir choisi **Attack** (ou **Heal**), survoler une cible à portée affiche la
 **prévision de combat** en haut à droite : dégâts totaux, nombre de coups, précision,
 critique et PV restants — en rouge si le coup tue, en ambre s'il ne tue qu'en cas de
