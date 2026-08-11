@@ -13,6 +13,11 @@ var reachable: bool = false
 var attackable: bool = false
 ## Whether the tile is being hovered over
 var hover: bool = false
+## Case menacée par l'adversaire, montrée tant que le joueur tient la touche C
+## (voir [BattleThreatRange]). Ce drapeau n'appartient qu'à l'affichage : il ne
+## participe à aucune règle, et [method reset_markers] ne le touche pas — c'est
+## le nœud qui l'a allumé qui l'éteint, au relâchement de la touche.
+var threat: bool = false
 ## Point de commandement à prendre (objectif « prise de point » du chapitre)
 var seize_point: bool = false
 ## Case où le joueur peut poser une unité avant la bataille
@@ -59,7 +64,13 @@ func _process(_delta: float) -> void:
 	# continuer à voir sa portée de déplacement par-dessus.
 	if not attackable and not reachable and not hover:
 		tile.visible = true
-		if deploy_point:
+		# La portée ennemie passe devant les marques de scénario : elle ne s'affiche
+		# que le temps d'une touche tenue, et c'est justement pour la lire que le
+		# joueur la demande. Elle reste derrière tout ce qui dépend du pion en
+		# cours — sa propre portée doit rester lisible par-dessus.
+		if threat:
+			tile.material_override = highlight("threat")
+		elif deploy_point:
 			tile.material_override = highlight("deploy")
 		elif seize_point:
 			tile.material_override = highlight("seize")

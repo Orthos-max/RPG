@@ -1,10 +1,46 @@
 class_name TacticsControls
 extends Control
 ## Handles UI elements and player controls for the Tactics systems
-## 
+##
 ## Resource Interface: [TacticsControlsResource] -- Service: [TacticsControlsService]
+##
+## [b]Raccourcis clavier de bataille[/b] — tout ce que le menu d'actions propose
+## à la souris se joue aussi au clavier. Les touches n'ont aucune logique à
+## elles : elles appellent les mêmes méthodes que les boutons, à la seule
+## condition que l'étape en cours rende le geste sensé.
+##
+## [codeblock]
+##   Entrée   Fin de tour        (seulement hors action : aucune unité engagée)
+##   I        Inventaire         (menu d'actions ouvert)
+##   W        Attendre           (menu d'actions ouvert)
+##   Échap    Annuler            (retour d'une étape ; sinon, quitte la bataille)
+##   X        Accélérer          — tenue, gérée par [BattleSpeed]
+##   C        Portée ennemie     — tenue, gérée par [BattleThreatRange]
+##   M        Carte              — [BattleMinimap]
+##   H        Journal            — [BattleHistory]
+## [/codeblock]
+##
+## [b]Deux chevauchements assumés.[/b] Entrée est aussi `ui_accept`, donc le clic
+## de confirmation : la fin de tour est pour cela refusée dès qu'une unité est
+## engagée, où Entrée doit rester le « oui » du menu. W est aussi
+## `camera_forward` : une pression fait avancer la caméra d'un cheveu en même
+## temps qu'elle fait attendre l'unité — sans conséquence, la caméra revient au
+## pion suivant.
+##
+## Échap n'est consommé que s'il y avait quelque chose à annuler ; sinon il
+## remonte à [Main], qui ramène à l'écran-titre. C'est ce qui garde la sortie de
+## bataille accessible tout en rendant à Échap son sens habituel.
 
 #region: --- Props ---
+## Touche de fin de tour.
+const KEY_END_TURN: Key = KEY_ENTER
+## Touche d'ouverture de l'inventaire.
+const KEY_INVENTORY: Key = KEY_I
+## Touche « Attendre » (l'unité termine son tour sur place).
+const KEY_WAIT: Key = KEY_W
+## Touche d'annulation (retour d'une étape).
+const KEY_CANCEL: Key = KEY_ESCAPE
+
 ## Resource containing control-related data and settings
 @export var controls: TacticsControlsResource = load("res://data/models/view/control/tactics/control.tres")
 ## Resource containing camera-related data and settings

@@ -357,6 +357,9 @@ const HIGHLIGHT_TINTS: Dictionary = {
 	"hover_attackable": "#ff5a5a",
 	"seize": "#f5c842",
 	"deploy": "#27d9c5",
+	## Portée adverse (touche C) — un rose franc, qui ne se confond ni avec le
+	## bleu de son propre déplacement ni avec le rouge de sa propre portée d'arme.
+	"threat": "#e0559c",
 }
 
 ## Part de la teinte dans le mélange avec la couleur du terrain (0 = terrain nu).

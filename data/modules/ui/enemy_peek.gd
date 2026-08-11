@@ -1,0 +1,228 @@
+class_name EnemyPeekPanel
+extends CanvasLayer
+## Aperçu des stats d'une unité adverse, au simple survol de la souris.
+##
+## La fiche complète ([UnitSheetPanel], en bas à gauche) ne s'affiche qu'aux
+## étapes où le jeu interroge le survol — choisir une unité, choisir une cible.
+## Entre les deux, regarder ce que vaut un ennemi demandait de sélectionner une
+## de ses unités, d'ouvrir « Attaquer », puis d'annuler. Cette étiquette-ci suit
+## le curseur et répond tout de suite : PV, les cinq stats qui décident d'un
+## échange, et l'arme en main.
+##
+## [b]Elle ne touche à rien.[/b] Le survol se lit par un rayon à elle, tiré
+## depuis la caméra sur le calque des pions — aucun état de sélection n'est
+## consulté ni modifié, et le jeu se joue exactement pareil qu'elle soit là ou
+## non.
+##
+## [b]Rien ne tourne sans écran.[/b] [method available] rend `false` en
+## `--headless`, où il n'y a ni souris ni caméra : [Main] ne monte alors pas le
+## nœud. Les lignes, elles, se construisent sans nœud ([method lines_for]).
+
+const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
+
+## Calque de collision des pions — le même que celui du clic de sélection.
+const PAWN_MASK: int = 2
+## Portée du rayon de survol, en mètres.
+const RAY_LENGTH: float = 1000.0
+## Intervalle entre deux lectures du survol, en secondes.
+##
+## Un rayon par image serait gratuit pour le moteur mais reconstruirait six
+## chaînes de texte à chaque frame ; un dixième de seconde suit la souris sans
+## que l'œil voie le retard.
+const REFRESH: float = 0.1
+## Décalage de l'étiquette par rapport au curseur, en pixels.
+const CURSOR_OFFSET := Vector2(20, 20)
+## Marge gardée avec le bord de l'écran.
+const SCREEN_MARGIN: float = 8.0
+
+## Sous le journal (12) et l'accélérateur (11) : c'est une étiquette de survol,
+## elle ne doit rien recouvrir de ce qu'on a ouvert exprès.
+const LAYER: int = 8
+
+const C_PANEL := Color(0.05, 0.04, 0.10, 0.9)
+const C_ENEMY := Color("#e94560")
+const C_TEXT := Color(1, 1, 1, 0.88)
+const C_DIM := Color(0.72, 0.74, 0.8)
+
+## Les stats montrées, dans l'ordre — celles qui décident d'un échange.
+const SHOWN_STATS: Array[String] = ["FOR", "MAG", "VIT", "DÉF", "RÉS"]
+
+var _root: Control = null
+var _frame: PanelContainer = null
+var _title: Label = null
+var _health: Label = null
+var _stats: Label = null
+var _weapon: Label = null
+
+var _since_refresh: float = 0.0
+var _shown: TacticsPawn = null
+
+
+## Y a-t-il un écran, et donc une souris pour survoler ?
+static func available() -> bool:
+	return DisplayServer.get_name() != "headless"
+
+
+#region Contenu
+## Ce pion est-il une unité adverse encore en vie ?
+##
+## Le camp se lit sur le nœud parent ([method TeamData.side_for_camp_node]),
+## comme partout ailleurs dans le jeu.
+static func is_enemy(pawn: Object) -> bool:
+	if not pawn is TacticsPawn or not is_instance_valid(pawn):
+		return false
+	var unit: TacticsPawn = pawn as TacticsPawn
+	if not unit.stats or not unit.is_alive():
+		return false
+	return TeamDataClass.side_for_camp_node(unit.get_parent()) == TeamDataClass.Side.OPPONENT
+
+
+## Les quatre lignes de l'étiquette : titre, PV, stats, arme.
+##
+## Rien n'est calculé ici : [UnitSheet] met déjà en forme tout ce qu'on montre,
+## et c'est lui que lit la fiche complète — les deux doivent dire la même chose.
+static func lines_for(stats: Stats) -> Array[String]:
+	if not stats:
+		return ["", "", "", ""]
+	var sheet: Dictionary = UnitSheet.build(stats)
+
+	var shown: Array[String] = []
+	for entry: Dictionary in sheet.get("stats", []):
+		if str(entry.get("label", "")) in SHOWN_STATS:
+			shown.append("%s %d" % [str(entry["label"]), int(entry["value"])])
+
+	return [
+		str(sheet.get("title", "")),
+		"PV %d / %d" % [int(sheet.get("hp", 0)), int(sheet.get("max_hp", 0))],
+		"   ".join(shown),
+		"%s (%d)     Portée %d" % [
+			str(sheet.get("weapon", "")), int(sheet.get("weapon_might", 0)),
+			int(sheet.get("range", 1)),
+		],
+	]
+#endregion
+
+
+#region Montage
+func _ready() -> void:
+	layer = LAYER
+	_build()
+
+
+func _build() -> void:
+	_root = Control.new()
+	_root.name = "PeekRoot"
+	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_root)
+
+	_frame = PanelContainer.new()
+	_frame.name = "PeekPanel"
+	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_frame.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = C_PANEL
+	style.border_color = C_ENEMY
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(8)
+	_frame.add_theme_stylebox_override("panel", style)
+	_root.add_child(_frame)
+
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 2)
+	_frame.add_child(column)
+
+	_title = _make_label(column, 14, C_ENEMY)
+	_health = _make_label(column, 13, C_TEXT)
+	_stats = _make_label(column, 13, C_TEXT)
+	_weapon = _make_label(column, 12, C_DIM)
+
+
+func _make_label(parent: Node, font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	parent.add_child(label)
+	return label
+#endregion
+
+
+#region Vie de l'étiquette
+func _process(delta: float) -> void:
+	_since_refresh += delta
+	if _since_refresh < REFRESH:
+		# L'étiquette suit quand même le curseur : la relecture est cadencée, pas
+		# le placement — sinon elle sauterait par à-coups derrière la souris.
+		_follow_cursor()
+		return
+	_since_refresh = 0.0
+
+	var hovered: Object = _pawn_under_cursor()
+	if is_enemy(hovered):
+		show_for(hovered as TacticsPawn)
+	else:
+		clear_peek()
+	_follow_cursor()
+
+
+## Le pion sous la souris, ou `null`.
+func _pawn_under_cursor() -> Object:
+	var viewport: Viewport = get_viewport()
+	if not viewport:
+		return null
+	var camera: Camera3D = viewport.get_camera_3d()
+	if not camera:
+		return null
+
+	var pointer: Vector2 = viewport.get_mouse_position()
+	var from: Vector3 = camera.project_ray_origin(pointer)
+	var to: Vector3 = from + camera.project_ray_normal(pointer) * RAY_LENGTH
+	var world: World3D = viewport.find_world_3d()
+	if not world:
+		return null
+
+	var query := PhysicsRayQueryParameters3D.create(from, to, PAWN_MASK, [])
+	return world.direct_space_state.intersect_ray(query).get("collider")
+
+
+## Affiche l'aperçu d'une unité (sans rien reconstruire si c'est déjà la sienne).
+func show_for(pawn: TacticsPawn) -> void:
+	if not _frame:
+		return
+	if pawn == _shown and _frame.visible:
+		return
+	_shown = pawn
+
+	var lines: Array[String] = lines_for(pawn.stats)
+	_title.text = lines[0]
+	_health.text = lines[1]
+	_stats.text = lines[2]
+	_weapon.text = lines[3]
+	_frame.visible = true
+
+
+## Masque l'aperçu : la souris a quitté l'unité.
+func clear_peek() -> void:
+	_shown = null
+	if _frame:
+		_frame.visible = false
+
+
+## L'unité actuellement montrée, ou `null`.
+func shown_pawn() -> TacticsPawn:
+	return _shown
+
+
+## Pose l'étiquette près du curseur, sans la laisser déborder de l'écran.
+func _follow_cursor() -> void:
+	if not _frame or not _frame.visible or not _root:
+		return
+	var wanted: Vector2 = get_viewport().get_mouse_position() + CURSOR_OFFSET
+	var bounds: Vector2 = _root.size - _frame.size - Vector2(SCREEN_MARGIN, SCREEN_MARGIN)
+	_frame.position = Vector2(
+		clampf(wanted.x, SCREEN_MARGIN, maxf(SCREEN_MARGIN, bounds.x)),
+		clampf(wanted.y, SCREEN_MARGIN, maxf(SCREEN_MARGIN, bounds.y)))
+#endregion
