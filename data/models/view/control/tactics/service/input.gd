@@ -16,12 +16,34 @@ func _init(_controls: TacticsControlsResource, _input_capture: Node) -> void:
 
 ## Updates the mouse mode based on whether a joystick is being used.
 func update_mouse_mode() -> void:
-	Input.set_mouse_mode(int(controls.is_joystick))
+	# Ne cache la souris QUE si un vrai joystick est connecté ET utilisé.
+	# Un simple événement joypad parasite (manette branchée, stick qui envoie
+	# des micro-valeurs) ne doit pas faire disparaître le curseur : sur
+	# Windows, une manette connectée émet des événements fantômes en continu,
+	# et `is_joystick` restait vrai → MOUSE_MODE_HIDDEN → la souris « clippait »
+	# pour le joueur au clavier/souris.
+	var joystick_connected: bool = not Input.get_connected_joypads().is_empty()
+	if joystick_connected and controls.is_joystick:
+		Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN)
+	else:
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 ## Handles input events and updates the joystick status.
 func handle_input(event: InputEvent) -> void:
-	controls.is_joystick = event is InputEventJoypadButton or event is InputEventJoypadMotion
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		controls.is_joystick = true
+	elif event is InputEventJoypadMotion:
+		# Deadzone : ignorer les micro-valeurs du stick (dérive, événements
+		# fantômes) qui ne sont pas une vraie intention de jeu.
+		var joy: InputEventJoypadMotion = event as InputEventJoypadMotion
+		controls.is_joystick = absf(joy.axis_value) > JOYSTICK_DEADZONE
+	elif event is InputEventMouseMotion or event is InputEventMouseButton:
+		controls.is_joystick = false
+
+
+## Seuil sous lequel un mouvement de stick n'est pas une intention de jeu.
+const JOYSTICK_DEADZONE: float = 0.5
 
 
 ## Gets the 3D position of the mouse in the game world.
