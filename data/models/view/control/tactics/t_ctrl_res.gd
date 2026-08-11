@@ -43,7 +43,7 @@ var actions: Dictionary = {
 	"Wait": "_player_wants_to_wait",
 	"Cancel": "_player_wants_to_cancel",
 	"Attack": "_player_wants_to_attack",
-	"Debug_next_turn": "_player_wants_to_skip_turn"
+	"Inventory": "_player_wants_to_open_inventory",
 }
 
 ## Libellés affichés, par clé d'action. Le jeu est francophone : le menu aussi.
@@ -53,7 +53,7 @@ var action_labels: Dictionary = {
 	"Wait": "Attendre",
 	"Cancel": "Retour",
 	"Attack": "Attaquer",
-	"Debug_next_turn": "Debug : fin de tour",
+	"Inventory": "Inventaire",
 }
 
 ## Libellé du bouton d'attaque quand l'unité porte un bâton : elle soigne.

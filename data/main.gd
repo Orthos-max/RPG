@@ -200,6 +200,12 @@ func show_editor(document: MapDocument = null) -> void:
 		add_child(editor)
 	_level = editor
 
+	# Sans ceci, l'éditeur atteint depuis le titre s'ouvre derrière un voile
+	# opaque : `_transition` éteint l'écran, et c'est à l'écran d'arrivée de le
+	# rallumer. Tous les autres le font (titre, préparation, bataille, bilan) ;
+	# celui-ci l'avait oublié, d'où l'écran noir au clic sur « Éditeur de map ».
+	_fade_in()
+
 
 ## Essai d'une carte du joueur : elle se joue comme un chapitre.
 ##

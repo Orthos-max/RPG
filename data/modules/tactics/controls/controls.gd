@@ -18,6 +18,8 @@ extends Control
 var curr_pawn: TacticsPawn = null
 ## Service handling control logic
 var serv: TacticsControlsService
+## Panneau d'inventaire ouvert, le cas échéant (voir [BattleInventoryPanel])
+var _inventory: BattleInventoryPanel = null
 
 ## Texture for Xbox controller layout
 @onready var layout_xbox: Texture2D = load("res://assets/textures/ui/labels/controls-ui-xbox.png")
@@ -171,9 +173,38 @@ func _player_wants_to_wait() -> void:
 	serv.player_wants_to_wait()
 
 
-## Handles the player's intention to skip their turn
-func _player_wants_to_skip_turn() -> void:
-	serv.player_wants_to_skip_turn()
+## Ouvre le sac et le fourreau de l'unité sélectionnée.
+##
+## Le panneau remplace l'ancien bouton « Debug : fin de tour », qui n'avait rien
+## à faire dans un menu de joueur. Passer son tour reste possible : chaque unité
+## a « Attendre », et c'est le camp qui rend la main quand elles ont toutes joué.
+func _player_wants_to_open_inventory() -> void:
+	if not is_instance_valid(curr_pawn):
+		return
+	if _inventory and is_instance_valid(_inventory):
+		return  # Déjà ouvert : un second clic ne doit pas empiler deux panneaux.
+
+	_inventory = BattleInventoryPanel.open(self, curr_pawn)
+	if not _inventory:
+		return
+	_play_ui("ui_select")
+	_inventory.item_chosen.connect(_on_inventory_item)
+	_inventory.weapon_chosen.connect(_on_inventory_weapon)
+	_inventory.closed.connect(func() -> void: _play_ui("ui_cancel"))
+
+
+## L'unité boit : l'effet s'applique et son tour se termine.
+func _on_inventory_item(item_name: String) -> void:
+	var result: Dictionary = serv.player_wants_to_use_item(item_name)
+	_play_ui("ui_confirm" if bool(result.get("ok", false)) else "ui_cancel")
+
+
+## L'unité dégaine : la fiche affichée doit suivre, la portée vient de changer.
+func _on_inventory_weapon(weapon_id: String) -> void:
+	var result: Dictionary = serv.player_wants_to_equip(weapon_id)
+	_play_ui("ui_confirm" if bool(result.get("ok", false)) else "ui_cancel")
+	if bool(result.get("ok", false)) and is_instance_valid(curr_pawn):
+		set_actions_menu_visibility(true, curr_pawn)
 
 
 ## Handles the player's intention to attack

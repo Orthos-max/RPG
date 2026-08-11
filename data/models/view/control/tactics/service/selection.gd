@@ -224,6 +224,61 @@ func player_wants_to_attack() -> void:
 	participant.stage = 5
 
 
+## L'unité boit une potion ou avale un tonique, au milieu de la bataille.
+##
+## Le tour se consomme, exactement comme « Attendre » : sans ce prix, un sac
+## plein rendrait une unité inusable — elle se soignerait à chaque échange sans
+## jamais renoncer à frapper. C'est la règle de Fire Emblem, et c'est elle qui
+## donne son poids au choix d'emporter une potion plutôt qu'une arme.
+##
+## Les gains permanents sont refusés ici : ils se boivent à l'intendance, seule à
+## pouvoir les inscrire au roster. Bus en bataille, le gain s'évaporerait au
+## report de fin de chapitre.
+##
+## [returns] le compte rendu de [method Stats.use_item], `ok` à false si rien n'a
+## été consommé.
+func player_wants_to_use_item(item_name: String) -> Dictionary:
+	var p: TacticsPawn = participant.curr_pawn
+	if not p or not is_instance_valid(p) or not p.stats:
+		return {"ok": false, "reason": "aucune unité sélectionnée"}
+	if not p.can_act():
+		return {"ok": false, "reason": "%s a déjà joué" % p.base_name()}
+	if ItemDB.is_boost(item_name):
+		return {"ok": false,
+			"reason": "%s se garde pour l'intendance" % ItemDB.label(item_name)}
+
+	var result: Dictionary = p.stats.use_item(item_name)
+	if not bool(result.get("ok", false)):
+		return result
+
+	controls.set_battle_forecast({})
+	participant.display_opponent_stats = false
+	p.end_pawn_turn()
+	participant.stage = participant.STAGE_SELECT_PAWN
+	return result
+
+
+## L'unité change l'arme qu'elle tient en main.
+##
+## Gratuit, et volontairement : dégainer est un choix, pas une action. C'est ce
+## qui rend le fourreau utile — sinon changer d'arme pour riposter coûterait le
+## tour qu'on voulait justement passer à frapper.
+##
+## [returns] le compte rendu de [method Stats.equip].
+func player_wants_to_equip(weapon_id: String) -> Dictionary:
+	var p: TacticsPawn = participant.curr_pawn
+	if not p or not is_instance_valid(p) or not p.stats:
+		return {"ok": false, "weapon": "", "reason": "aucune unité sélectionnée"}
+
+	var result: Dictionary = p.stats.equip(weapon_id)
+	if bool(result.get("ok", false)):
+		# La portée vient de changer : les cases marquées et la prévision de combat
+		# décrivent l'arme d'avant.
+		arena.reset_all_tile_markers()
+		controls.set_battle_forecast({})
+	return result
+
+
 ## Annule le déplacement du pion courant et le remet d'où il venait.
 ##
 ## Fire Emblem autorise ce retour tant que l'unité n'a rien fait d'autre : sans

@@ -128,6 +128,16 @@ func player_wants_to_attack() -> void:
 	pawn_selection_service.player_wants_to_attack()
 
 
+## L'unité boit ou se pare au milieu de la bataille (le tour se consomme).
+func player_wants_to_use_item(item_name: String) -> Dictionary:
+	return pawn_selection_service.player_wants_to_use_item(item_name)
+
+
+## L'unité change l'arme qu'elle tient en main (gratuit).
+func player_wants_to_equip(weapon_id: String) -> Dictionary:
+	return pawn_selection_service.player_wants_to_equip(weapon_id)
+
+
 ## Ramène le pion courant à son point de départ (annulation du déplacement).
 func player_wants_to_undo_move() -> void:
 	pawn_selection_service.player_wants_to_undo_move()

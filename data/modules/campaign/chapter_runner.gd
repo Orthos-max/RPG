@@ -12,6 +12,13 @@ signal chapter_finished(victory: bool, bonuses: Array, reason: String)
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
 const DEPLOYMENT = preload("res://data/modules/campaign/deployment_phase.gd")
+const PAWN_SCENE = preload("res://data/modules/tactics/level/pawn/pawn.tscn")
+const EXPERTISE_SCENE = preload("res://data/modules/stats/expertise/expertise.tscn")
+
+## Fiche prêtée à une recrue qui n'a pas de `.tres` — un personnage écrit dans
+## l'éditeur n'est pas une ressource. Tout y est réécrit par
+## [method apply_roster_unit] : seul compte qu'elle existe au `_ready` du pion.
+const FALLBACK_SHEET: String = "res://data/models/world/stats/hero/lord.tres"
 
 ## Intervalle d'évaluation de l'objectif (secondes)
 const CHECK_INTERVAL: float = 0.5
@@ -281,6 +288,9 @@ func _apply_roster() -> void:
 		return
 
 	_deployed_names.clear()
+	# Les identifiants déjà représentés par un pion de la carte : ce qui manque
+	# à l'appel une fois cette boucle finie doit être monté de toutes pièces.
+	var present: Dictionary = {}
 	for p in level.player.get_children():
 		if not p is TacticsPawn or not is_instance_valid(p) or not p.stats:
 			continue
@@ -302,13 +312,148 @@ func _apply_roster() -> void:
 			p.queue_free()
 			continue
 
+		present[id] = true
 		_deployed_names.append(unit_name)
 		apply_roster_unit(p.stats, unit)
+
+	_spawn_missing_units(campaign, present)
 
 	print_rich("[color=cyan]📋 Déploiement : %s[/color]" % (
 		", ".join(_deployed_names) if not _deployed_names.is_empty() else "roster par défaut du niveau"
 	))
 	_check_protected_present()
+
+
+## Fait entrer en scène les unités déployées que la carte ne porte pas.
+##
+## Un chapitre pose ses pions dans son `.tscn` ; [method _apply_roster] ne faisait
+## que les **reconnaître au nom** pour leur verser la fiche du roster. Une recrue
+## écrite dans l'éditeur de personnages n'a, elle, aucun pion à reconnaître : elle
+## n'existe que dans le roster. L'intendance l'enrôlait, l'écran de préparation la
+## retenait au déploiement, et elle n'apparaissait jamais sur le plateau —
+## silencieusement, puisque rien ne cherchait ce qui manquait à l'appel.
+##
+## Les vraies recrues (`source` pointe un `.tres`) partent de leur propre fiche ;
+## un personnage écrit à la main emprunte [constant FALLBACK_SHEET], entièrement
+## réécrite ensuite. C'est le même détour que [CustomBattle] prend pour l'éditeur
+## de cartes.
+func _spawn_missing_units(campaign: Node, present: Dictionary) -> void:
+	var camp: Node = level.player
+	var occupied: Array[Vector2i] = _occupied_cells()
+	var index: int = _highest_pawn_index(camp)
+
+	for raw in campaign.deployment:
+		var id: String = str(raw)
+		if present.has(id):
+			continue
+		var unit: Dictionary = campaign.get_unit(id)
+		if unit.is_empty() or not bool(unit.get("alive", true)):
+			continue
+
+		index += 1
+		var pawn: Node3D = _make_pawn(str(unit.get("source", "")), index)
+		if not pawn:
+			continue
+
+		var cell: Vector2i = _free_cell(campaign, id, occupied)
+		# Dans l'arbre d'abord : le pion passe son `_ready` ici, donc c'est
+		# seulement après cet appel qu'il a des statistiques à recevoir — et une
+		# `global_position` qui veuille dire quelque chose.
+		camp.add_child(pawn)
+		if cell.x >= 0:
+			occupied.append(cell)
+			_place_on_cell(pawn, cell)
+		if pawn.get("stats"):
+			apply_roster_unit(pawn.stats, unit)
+		_deployed_names.append(EXECUTOR.display_name(pawn))
+
+
+## Un pion complet (scène de pion + expertise), avant son entrée dans l'arbre.
+##
+## L'ordre compte : [TacticsPawn] lit `$Expertise/Stats` dans son `_ready`, donc
+## l'expertise doit être en place avant que le pion rejoigne la scène.
+func _make_pawn(sheet_path: String, index: int) -> Node3D:
+	var path: String = sheet_path if ResourceLoader.exists(sheet_path) else FALLBACK_SHEET
+	var sheet: Resource = load(path)
+	if not sheet:
+		push_warning("[ChapterRunner] Fiche de départ introuvable : %s" % path)
+		return null
+
+	var pawn: Node3D = PAWN_SCENE.instantiate()
+	# Le suffixe du nom affiché vient du nom de nœud : « Pawn », « Pawn2 »…
+	pawn.name = "Pawn" if index <= 1 else "Pawn%d" % index
+	var expertise: Node = EXPERTISE_SCENE.instantiate()
+	expertise.name = "Expertise"
+	expertise.starting_stats = sheet
+	pawn.add_child(expertise)
+	return pawn
+
+
+## Indice le plus élevé déjà porté par un pion du camp ("Pawn3" → 3).
+##
+## Les noms de nœuds servent à départager les homonymes ([method TacticsPawn.display_name]) :
+## repartir de zéro donnerait deux « Pawn2 », et Godot en renommerait un dans son dos.
+func _highest_pawn_index(camp: Node) -> int:
+	var highest: int = 0
+	for child: Node in camp.get_children():
+		var digits: String = String(child.name).lstrip("Pawn")
+		highest = maxi(highest, int(digits) if digits.is_valid_int() else 1)
+	return highest
+
+
+## Cases actuellement tenues par un pion, tous camps confondus.
+func _occupied_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for camp: Node3D in level.camps:
+		if not is_instance_valid(camp):
+			continue
+		for p in camp.get_children():
+			if not (p is TacticsPawn) or not is_instance_valid(p) or p.is_queued_for_deletion():
+				continue
+			var tile: Node = p.get_tile()
+			if not tile:
+				continue
+			var cell: Vector2i = TacticsGrid.tile_to_grid(level.arena, tile)
+			if cell.x >= 0 and not cell in cells:
+				cells.append(cell)
+	return cells
+
+
+## Où poser une unité qui n'a pas de pion sur la carte — (-1,-1) si nulle part.
+##
+## Trois recours, du plus intentionnel au plus mécanique : la case choisie par le
+## joueur à l'écran de préparation, une case de déploiement déclarée par le
+## chapitre, puis n'importe quelle case libre de la carte. La dernière n'est pas
+## un beau placement, mais une unité mal posée reste jouable — et déplaçable dès
+## la phase de déploiement — là où une unité absente ne l'est pas.
+func _free_cell(campaign: Node, unit_id: String, occupied: Array[Vector2i]) -> Vector2i:
+	var chosen: Vector2i = campaign.deployment_tile(unit_id)
+	if chosen.x >= 0 and not chosen in occupied:
+		return chosen
+
+	for raw: Variant in (chapter.deploy_tiles if chapter else []):
+		var pos: Vector2i = raw if raw is Vector2i else Vector2i(int(raw[0]), int(raw[1]))
+		if not pos in occupied and TacticsGrid.find_tile(level.arena, pos.x, pos.y):
+			return pos
+
+	var size: Vector2i = TacticsGrid.grid_size(level.arena)
+	for row: int in size.y:
+		for col: int in size.x:
+			var pos := Vector2i(col, row)
+			if not pos in occupied and TacticsGrid.find_tile(level.arena, col, row):
+				return pos
+
+	push_warning("[ChapterRunner] Aucune case libre pour %s : elle entre là où la scène l'a posée."
+		% unit_id)
+	return Vector2i(-1, -1)
+
+
+## Pose un pion sur une case de la grille.
+func _place_on_cell(pawn: Node3D, cell: Vector2i) -> void:
+	var tile: Node3D = TacticsGrid.find_tile(level.arena, cell.x, cell.y)
+	if not tile:
+		return
+	pawn.global_position = tile.global_position + Vector3(0, DEPLOYMENT.PAWN_LIFT, 0)
 
 
 ## Vérifie que la protégée d'un objectif « protéger » est bien entrée en scène.
