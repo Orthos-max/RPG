@@ -840,23 +840,21 @@ func _front_of(sheet_path: String) -> Texture2D:
 	return half
 
 
-## La figurine de fiche d'une unité, avec repli sur celle de sa classe.
+## La figurine de fiche d'une unité — le sprite du pack d'abord.
 ##
-## Une recrue écrite dans l'éditeur n'a pas de `.tres` et donc pas de planche :
-## `unit.sprite` est vide et [method _front_of] répond `null`, ce qui affichait
-## l'icône Godot par défaut dans le roster. On retombe alors sur la figurine de
-## la classe via [PawnLook], exactement comme le fait l'éditeur — jamais le
-## placeholder du moteur.
+## Le roster montrait les **anciennes** planches : `unit.sprite` pointe vers la
+## planche historique, pas vers les figurines Tiny Swords du pack qui équipent
+## les pions au combat. On résout donc d'abord le sprite à jour via [PawnLook]
+## (la même clé classe/camp que le pion), et on ne retombe sur la planche
+## directe que si le pack ne connaît pas l'unité. Jamais le placeholder Godot.
 func _unit_front(unit: Dictionary) -> Texture2D:
-	var sheet_path := str(unit.get("sprite", ""))
-	var direct: Texture2D = _front_of(sheet_path)
-	if direct:
-		return direct
 	var probe := Stats.new()
 	probe.character_class = int(unit.get("class_id", 0))
 	var still: Texture2D = PawnLook.still_for_stats(probe, TeamData.Side.PLAYER)
 	probe.free()
-	return still
+	if still:
+		return still
+	return _front_of(str(unit.get("sprite", "")))
 
 
 func _note(text: String) -> Control:

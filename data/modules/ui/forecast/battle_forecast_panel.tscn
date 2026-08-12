@@ -22,6 +22,12 @@ corner_radius_bottom_left = 6
 ; le coin haut-droit et passe par-dessus les contrôles — la prévision s'affichait
 ; dessous, tronquée à droite. Le bas de la colonne de droite est libre : seul le
 ; bouton « Journal (H) » y tient, d'où les 56 px gardés sous le panneau.
+;
+; ⚠️ Hauteur volontairement bornée : un `offset_top == offset_bottom` (hauteur 0)
+; faisait s'étirer le panneau n'importe comment sur le centre de l'écran et le
+; superposait à la fiche d'unité ([UnitSheet], bas-gauche). Le contenu
+; (VBox de cinq lignes) tient dans ~230 px ; la marge de 56 px sous le panneau
+; préserve le bouton Journal.
 [node name="BattleForecast" type="PanelContainer"]
 unique_name_in_owner = true
 visible = false
@@ -31,12 +37,12 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -396.0
-offset_top = -56.0
+offset_top = -286.0
 offset_right = -16.0
 offset_bottom = -56.0
 grow_horizontal = 0
 grow_vertical = 0
-custom_minimum_size = Vector2(380, 0)
+custom_minimum_size = Vector2(380, 230)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frcst")
 script = ExtResource("1_frcst")
