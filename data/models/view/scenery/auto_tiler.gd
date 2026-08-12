@@ -49,15 +49,15 @@ const OVERLAY_NODE: String = "AutoTile"
 
 ## Terrains qui reçoivent des bords, et le jeu de tuiles qui les porte.
 ##
-## La montagne n'y est pas, et ce n'est pas un oubli : elle est infranchissable,
-## donc toujours vue de loin ou bordée d'une falaise, jamais collée à une case
-## où l'œil irait chercher une transition. Le pack ne lui en fournit d'ailleurs
-## aucune sur fond d'herbe.
+## La montagne y est depuis le 2026-08-12 : elle est franchissable (coût 2),
+## donc souvent collée à une plaine que l'œil traverse — ses bords sont
+## synthétisés par `art/decouper-bords.py` (le pack SSCAP n'en fournit pas).
 const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.WATER: "water",
 	MapDataClass.TerrainType.FOREST: "forest",
 	MapDataClass.TerrainType.SAND: "sand",
 	MapDataClass.TerrainType.PATH: "path",
+	MapDataClass.TerrainType.MOUNTAIN: "mountain",
 }
 
 ## Dossier des tuiles de bord.
