@@ -537,7 +537,7 @@ func _check_arena_binding(main: Node, level: Node) -> void:
 	var start: Node3D = TacticsGrid.find_tile(level.arena, 4, 4)
 	var goal: Node3D = TacticsGrid.find_tile(level.arena, 6, 4)
 	if start and goal:
-		level.arena.process_surrounding_tiles(start, 10.0, [])
+		level.arena.process_surrounding_tiles(start, 10.0, false)
 		var path: Array = controls.arena.get_pathfinding_tilestack(goal)
 		_check(path.size() >= 2,
 			"un trajet demandé par les contrôles fait %d étape(s)" % path.size(),

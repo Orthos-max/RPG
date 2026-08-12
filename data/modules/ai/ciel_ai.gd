@@ -344,7 +344,7 @@ func _mark_movement_range(arena: TacticsArena, pawn: TacticsPawn) -> void:
 		return
 	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
 	arena.res.reset_all_tile_markers()
-	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
+	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, true)
 	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
 
 
@@ -360,7 +360,7 @@ func _do_move(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsA
 
 	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
 	arena.res.reset_all_tile_markers()
-	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
+	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, true)
 	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
 
 	if not target_tile.get("reachable"):
@@ -470,7 +470,7 @@ func _do_flee(pawn: TacticsPawn, pr: TacticsParticipantResource, arena: TacticsA
 	var level: TacticsLevel = _resolve_level()
 	var allies: Array = _opponent.get_children() if _opponent and is_instance_valid(_opponent) else []
 	arena.res.reset_all_tile_markers()
-	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, allies)
+	arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, true)
 	arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
 
 	var tile: Node = EXECUTOR.safest_retreat_tile(arena, pawn, level.player if level else null)

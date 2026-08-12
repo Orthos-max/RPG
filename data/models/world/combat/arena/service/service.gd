@@ -54,47 +54,59 @@ func configure_tiles(arena: TacticsArena) -> void:
 	grid = BattleGrid.build_for(_tiles, pawn_root, tile_size)
 	arena.grid = grid
 
+	# Les transitions de terrain se posent une fois la grille bâtie : chaque case
+	# a besoin de connaître ses quatre voisines pour savoir de quel côté son
+	# terrain s'arrête. C'est de l'habillage — rien de ce qui suit ne le lit.
+	TacticsAutoTiler.apply_to_grid(grid)
+
 
 ## Calcule le parcours depuis une tuile.
 ##
 ## [param root_tile] La tuile de départ.
 ## [param height] Le dénivelé franchissable d'une case à l'autre (le saut).
-## [param allies_on_map] Les unités du camp qui joue. **C'est cette liste qui dit
-## de quel calcul il s'agit** :
+## [param blocked_by_units] Ce que le parcours sert à calculer :
 ##
-## - **non vide** — un déplacement. On traverse les siens, jamais l'adversaire.
-## - **vide** — une portée d'arme. L'occupation ne compte pas : un arc tire
+## - `true` — un **déplacement**. Toute case occupée arrête la marche.
+## - `false` — une **portée d'arme**. L'occupation ne compte pas : un arc tire
 ##   par-dessus les têtes, et une cible doit rester visée même si quelqu'un se
 ##   tient entre les deux.
-func process_surrounding_tiles(root_tile: TacticsTile, height: float, allies_on_map: Array = []) -> void:
+func process_surrounding_tiles(root_tile: TacticsTile, height: float,
+		blocked_by_units: bool = false) -> void:
 	if not grid or not grid.has_tile(root_tile):
 		return
 	field.expand(grid, grid.coord_of(root_tile), height,
-		func(coord: Vector2i) -> bool: return _passable(coord, allies_on_map))
+		func(coord: Vector2i) -> bool: return _passable(coord, blocked_by_units))
 
 
 ## Une case se traverse-t-elle ? Terrain d'abord, occupation ensuite.
 ##
-## Traverser n'est pas s'arrêter : [method mark_reachable_tiles] refuse toute
-## case occupée comme destination. On peut donc passer derrière son voisin sans
-## pouvoir se poser sur lui — la règle de Fire Emblem.
+## **Un pion en bloque un autre, quel que soit son camp.** On ne traverse ni
+## l'adversaire ni ses propres camarades : une ligne tenue est une ligne tenue,
+## et c'est ce qui donne aux couloirs, aux ponts et aux portes le poids tactique
+## qu'ils n'avaient pas quand une unité pouvait s'écouler à travers la mêlée.
 ##
-## C'est ce que le code d'origine annonçait sans le faire : son test
-## « l'occupant est-il un allié ? » était enfermé dans une branche qui ne
-## s'exécutait que si la liste d'alliés était **vide**, donc il répondait
-## toujours non. Résultat, une unité était arrêtée par ses propres camarades.
-func _passable(coord: Vector2i, allies_on_map: Array) -> bool:
+## Le service traversait les siens jusqu'au 2026-08-12 — et, avant le correctif
+## qui l'avait rétabli, il ne traversait personne par accident. La règle est
+## désormais celle-là, écrite pour elle-même : c'est ce que le joueur a demandé.
+##
+## L'unité qui se déplace ne se bloque pas elle-même : [method PathField.expand]
+## ne soumet jamais son origine à ce test, on part toujours d'où l'on est.
+##
+## Traverser n'est pas s'arrêter, et la distinction survit : [method
+## mark_reachable_tiles] refuse en plus toute case occupée comme **destination**,
+## ce qui couvre le cas d'une case atteinte de justesse par un chemin libre mais
+## déjà prise à l'arrivée.
+func _passable(coord: Vector2i, blocked_by_units: bool) -> bool:
 	var tile: Node = grid.tile_at(coord)
 	if not tile:
 		return false
 	if not MAP_DATA.is_walkable(int(tile.terrain_type)):
 		return false
 
-	if allies_on_map.is_empty():
+	if not blocked_by_units:
 		return true  # Portée d'arme : l'occupation ne compte pas.
 
-	var occupier: Object = grid.occupant_of(tile)
-	return occupier == null or occupier in allies_on_map
+	return grid.occupant_of(tile) == null
 
 
 ## Get the pathfinding tilestack to a target tile

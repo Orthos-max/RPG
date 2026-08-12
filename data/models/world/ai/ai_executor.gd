@@ -89,8 +89,7 @@ static func plan_multi(arena: Node, pawn: Node, allies_node: Node, enemies_nodes
 	var reachable: Array = []
 	if pawn.res.can_move and pawn.get_tile():
 		arena.res.reset_all_tile_markers()
-		arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump,
-			allies_node.get_children() if allies_node else [])
+		arena.process_surrounding_tiles(pawn.get_tile(), pawn.stats.jump, true)
 		arena.mark_reachable_tiles(pawn.get_tile(), pawn.stats.movement)
 		reachable = TacticsGrid.reachable_tiles(arena)
 

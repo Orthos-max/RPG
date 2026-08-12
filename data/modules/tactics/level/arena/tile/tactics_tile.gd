@@ -37,6 +37,14 @@ var terrain_mat: StandardMaterial3D = null
 ## Matériaux de surlignage déjà résolus pour cette case.
 var _highlights: Dictionary = {}
 
+## Calque de transition posé par [TacticsAutoTiler], ou `null` si le terrain de
+## cette case n'en reçoit pas (herbe, montagne, tout ce qui sert de fond).
+var autotile: MeshInstance3D = null
+## Matériau de repos du calque — celui qu'il porte hors surlignage.
+var autotile_mat: StandardMaterial3D = null
+## Teintes du calque déjà résolues, par état.
+var _autotile_highlights: Dictionary = {}
+
 
 func highlight(state: String) -> StandardMaterial3D:
 	# `_process` passe ici à chaque frame, pour chaque tuile : on garde la
@@ -48,6 +56,27 @@ func highlight(state: String) -> StandardMaterial3D:
 	var built: StandardMaterial3D = TacticsScenery.highlight_material(terrain_type, state)
 	_highlights[state] = built
 	return built
+
+
+## Enregistre le calque d'auto-tuilage de cette case.
+##
+## Appelé par [TacticsAutoTiler] à la construction de l'arène. Les teintes déjà
+## calculées sont jetées : elles partaient de l'ancien matériau, et une case qui
+## change de bord (l'éditeur repeint sa voisine) doit changer de lavis avec lui.
+func set_autotile(overlay: MeshInstance3D, base: StandardMaterial3D) -> void:
+	autotile = overlay
+	autotile_mat = base
+	_autotile_highlights.clear()
+
+
+## Le calque de cette case, passé au lavis d'un état.
+func autotile_highlight(state: String) -> StandardMaterial3D:
+	var known: Variant = _autotile_highlights.get(state)
+	if known is StandardMaterial3D:
+		return known
+	var built: StandardMaterial3D = TacticsScenery.tinted(autotile_mat, state)
+	_autotile_highlights[state] = built
+	return built
 #endregion
 
 #region: --- Processing ---
@@ -57,41 +86,52 @@ func _process(_delta: float) -> void:
 	var tile: MeshInstance3D = get_node_or_null("Tile") as MeshInstance3D
 	if not tile:
 		return # If the "Tile" node wasn't found, the function exits early to avoid errors.
-	
-	# Apply terrain base material when no special state is active
-	# Les marques de scénario (point à prendre, case de déploiement) passent avant
-	# le terrain mais derrière tout ce qui dépend du pion en cours : le joueur doit
-	# continuer à voir sa portée de déplacement par-dessus.
-	if not attackable and not reachable and not hover:
-		tile.visible = true
-		# La portée ennemie passe devant les marques de scénario : elle ne s'affiche
-		# que le temps d'une touche tenue, et c'est justement pour la lire que le
-		# joueur la demande. Elle reste derrière tout ce qui dépend du pion en
-		# cours — sa propre portée doit rester lisible par-dessus.
-		if threat:
-			tile.material_override = highlight("threat")
-		elif deploy_point:
-			tile.material_override = highlight("deploy")
-		elif seize_point:
-			tile.material_override = highlight("seize")
-		elif terrain_mat:
-			tile.material_override = terrain_mat
-		return
-	
+
 	tile.visible = true
-	match hover:
-		true: # If hover is true, decide which material to use based on the tile's state
+	var state: String = current_state()
+
+	if state.is_empty():
+		if terrain_mat:
+			tile.material_override = terrain_mat
+	else:
+		tile.material_override = highlight(state)
+
+	# Le calque de transition suit le même état que la case qu'il recouvre : sans
+	# cela, une rive resterait bleu-mer par-dessus une case atteignable, et le
+	# joueur perdrait de vue jusqu'où il peut aller.
+	if autotile and is_instance_valid(autotile):
+		autotile.material_override = autotile_mat if state.is_empty() else autotile_highlight(state)
+
+
+## L'état que cette case doit afficher, ou une chaîne vide pour son terrain nu.
+##
+## L'ordre est celui du jeu, du plus fugace au plus permanent :
+##
+## 1. ce qui dépend du pion en cours — survol, portée de déplacement, portée
+##    d'arme — parce que c'est ce que le joueur est en train de lire ;
+## 2. la portée adverse, montrée le temps d'une touche tenue, et demandée
+##    justement pour être lue ;
+## 3. les marques de scénario — point à prendre, case de déploiement — qui
+##    restent affichées tout un chapitre et peuvent donc céder le pas.
+func current_state() -> String:
+	if attackable or reachable or hover:
+		if hover:
 			if reachable:
-				tile.material_override = highlight("reachable_hover")
-			elif attackable:
-				tile.material_override = highlight("hover_attackable")
-			else:
-				tile.material_override = highlight("hover")
-		false: # If hover is false, this block decides between two materials
-			if reachable:
-				tile.material_override = highlight("reachable")
-			elif attackable:
-				tile.material_override = highlight("attackable")
+				return "reachable_hover"
+			if attackable:
+				return "hover_attackable"
+			return "hover"
+		if reachable:
+			return "reachable"
+		return "attackable"
+
+	if threat:
+		return "threat"
+	if deploy_point:
+		return "deploy"
+	if seize_point:
+		return "seize"
+	return ""
 #endregion
 
 #region: --- Methods ---

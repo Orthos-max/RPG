@@ -388,13 +388,28 @@ static func highlight_material(terrain_type: int, state: String) -> StandardMate
 	if cached is StandardMaterial3D:
 		return cached
 
+	var mat: StandardMaterial3D = tinted(terrain_material(terrain_type), state)
+	_highlight_cache[key] = mat
+	return mat
+
+
+## Le même matériau, passé au lavis d'un état de tuile.
+##
+## Extrait de [method highlight_material] pour que le calque d'auto-tuilage
+## ([TacticsAutoTiler]) se teinte exactement comme le terrain qu'il recouvre.
+## Sans cela, une rive resterait bleu-mer par-dessus une case atteignable bleu
+## clair, et le joueur perdrait de vue jusqu'où il peut aller.
+##
+## Le matériau rendu est un duplicata : l'original sert encore ailleurs.
+static func tinted(base: StandardMaterial3D, state: String) -> StandardMaterial3D:
+	if not base:
+		return null
 	var tint := Color(str(HIGHLIGHT_TINTS.get(state, "#ffffff")))
-	var mat: StandardMaterial3D = terrain_material(terrain_type).duplicate()
+	var mat: StandardMaterial3D = base.duplicate()
 	mat.albedo_color = mat.albedo_color.lerp(tint, HIGHLIGHT_BLEND)
 	mat.emission_enabled = true
 	mat.emission = tint
 	mat.emission_energy_multiplier = HIGHLIGHT_GLOW
-	_highlight_cache[key] = mat
 	return mat
 
 
