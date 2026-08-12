@@ -26,7 +26,7 @@ var deploy_point: bool = false
 ## Terrain type for this tile (from MapData.TerrainType)
 @export var terrain_type: int = 0
 ## Base material for terrain (applied when no special state is active)
-var terrain_mat: StandardMaterial3D = null
+var terrain_mat: Material = null
 
 ## Matériau de surlignage de cette case, pour un état donné.
 ##
@@ -169,10 +169,36 @@ func reset_markers() -> void:
 
 
 ## Initializes tile (disable hover & reset state)
+##
+## Les terrains qui déclinent leur tuile ou qui bougent
+## ([method TacticsScenery.needs_tile_material]) passent par le matériau de leur
+## case, pas par celui — partagé — de leur terrain : sans cela, cette fonction
+## effacerait la variante que [TacticsArena] vient de poser si elle était
+## rappelée en cours de bataille.
+##
+## L'arène reste la source la plus sûre : elle connaît la coordonnée de carte et
+## l'altitude que le [MapData] déclare. Ici on ne dispose que de la position du
+## corps de la tuile — assez pour tirer une variante stable, et c'est ce qui
+## fait qu'une arène posée à la main dans une `.tscn` en profite aussi.
 func configure_tile() -> void:
 	hover = false
 	# Set terrain material
-	if TacticsConfig.terrain_material.has(terrain_type):
+	if TacticsScenery.needs_tile_material(terrain_type):
+		terrain_mat = TacticsScenery.terrain_material_at(terrain_type, tile_coord(), position.y)
+	elif TacticsConfig.terrain_material.has(terrain_type):
 		terrain_mat = TacticsConfig.terrain_material[terrain_type]
 	reset_markers() # Reset tile markers
+
+
+## La coordonnée de damier de cette case, telle que le décor peut la hacher.
+##
+## La grille répond quand elle connaît la tuile. Elle ne la connaît pas encore à
+## la conversion des tuiles — elle se bâtit après —, d'où le repli sur la
+## position : peu importe que la coordonnée soit celle de la carte, il suffit
+## qu'elle soit **stable** et distincte d'une case à l'autre.
+func tile_coord() -> Vector2i:
+	var grid: BattleGrid = BattleGrid.current
+	if grid and grid.has_tile(self):
+		return grid.coord_of(self)
+	return Vector2i(roundi(position.x), roundi(position.z))
 #endregion

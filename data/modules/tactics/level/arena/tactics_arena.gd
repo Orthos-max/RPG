@@ -98,7 +98,17 @@ func _generate_from_map_data() -> void:
 				if tile:
 					tile.terrain_type = md.get_terrain(col, row)
 					# Re-apply terrain material
-					if TacticsConfig.terrain_material.has(tile.terrain_type):
+					#
+					# C'est ici — et seulement ici — que le terrain d'une case est
+					# connu en même temps que sa coordonnée et son altitude : la
+					# conversion en `StaticBody3D` a eu lieu avant que `terrain_type`
+					# ne soit posé. Les terrains qui déclinent leur tuile prennent
+					# donc leur variante maintenant ; les autres gardent le matériau
+					# partagé de [TacticsConfig], un seul objet pour toute la carte.
+					if TacticsScenery.needs_tile_material(tile.terrain_type):
+						tile.terrain_mat = TacticsScenery.terrain_material_at(
+							tile.terrain_type, Vector2i(col, row), md.get_height(col, row))
+					elif TacticsConfig.terrain_material.has(tile.terrain_type):
 						tile.terrain_mat = TacticsConfig.terrain_material[tile.terrain_type]
 			idx += 1
 

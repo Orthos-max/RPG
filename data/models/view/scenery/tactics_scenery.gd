@@ -100,6 +100,54 @@ const TERRAIN_TEXTURES: Dictionary = {
 	MapDataClass.TerrainType.BRIDGE: "res://assets/textures/terrain/terrain_indoor_planks.png",
 }
 
+## Tuile de rechange d'un terrain sur ses cases **hautes**.
+##
+## Une chaîne de montagnes rendue avec une seule roche est un aplat : rien n'y
+## dit qu'une case domine sa voisine, alors que c'est ce qui décide d'un
+## déplacement. La roche sombre part donc aux sommets ([constant HIGH_GROUND]),
+## la claire reste aux contreforts — la carte se lit en relief avant même que la
+## lumière ne s'en mêle.
+const TERRAIN_HIGH_TEXTURES: Dictionary = {
+	MapDataClass.TerrainType.MOUNTAIN: "res://assets/textures/terrain/terrain_mountain_rock_dark.png",
+}
+
+## Terrains dont le sol **bouge**, et le shader qui l'anime.
+##
+## L'eau était le terrain le plus reconnaissable du plateau et le seul à ne rien
+## faire : une flaque gelée. Le shader reprend sa tuile et la fait dériver — rien
+## d'autre ne change, ni la teinte, ni la place dans le cache.
+##
+## Ces matériaux sont bâtis par [method terrain_material_at], pas par
+## [method terrain_material] : le matériau *de base* d'un terrain reste un
+## [StandardMaterial3D] pour tout ce qui en dépend — le surlignage, qui le
+## teinte, et [TacticsConfig], qui en garde un par terrain.
+const TERRAIN_SHADERS: Dictionary = {
+	MapDataClass.TerrainType.WATER: "res://assets/shaders/water.gdshader",
+}
+
+## Altitude, en unités monde, à partir de laquelle une case compte comme haute.
+##
+## Les cartes du jeu montent jusqu'à ~1 unité et l'immense majorité des cases
+## sont à plat : un seuil bas ferait de toute la carte un sommet, un seuil haut
+## n'en désignerait aucun. À 0,45, seules les cases franchement surélevées
+## prennent la roche sombre.
+const HIGH_GROUND: float = 0.45
+
+## Dossier des variantes de tuiles, dérivées par `art/varier-tuiles.py`.
+const VARIANT_DIR: String = "res://assets/textures/terrain/variants/"
+
+## Nombre de variantes cherchées au plus par terrain.
+##
+## La recherche s'arrête au premier trou : `_v1`, `_v2`, `_v3`… Ce plafond n'est
+## qu'un garde-fou contre une boucle infinie si le dossier venait à grossir.
+const MAX_VARIANTS: int = 8
+
+## Rang réservé à la tuile des cases hautes ([constant TERRAIN_HIGH_TEXTURES]).
+##
+## Négatif, donc hors de portée du hachage qui distribue les variantes : les deux
+## mécanismes partagent un espace de rangs sans jamais se marcher dessus.
+const HIGH_VARIANT: int = -1
+
 ## Échelle du bruit en unités monde : le motif se répète tous les 4 tuiles
 const GRAIN_WORLD_SCALE: float = 0.25
 ## Côté des textures de grain (assez pour ne pas pixelliser de près)
@@ -124,6 +172,15 @@ const TEXTURE_TINT_STRENGTH: float = 0.22
 
 ## Tuiles déjà chargées, par type de terrain (valeur nulle = pas de tuile)
 static var _texture_cache: Dictionary = {}
+
+## Nombre de variantes trouvées sur disque, par type de terrain
+static var _variant_count_cache: Dictionary = {}
+## Tuiles de variante déjà chargées, par « terrain:rang »
+static var _variant_texture_cache: Dictionary = {}
+## Matériaux de variante déjà construits, par « terrain:rang »
+static var _variant_material_cache: Dictionary = {}
+## Matériaux animés déjà construits, par type de terrain (nul = pas de shader)
+static var _animated_material_cache: Dictionary = {}
 
 
 #region Décor
@@ -289,6 +346,183 @@ static func terrain_texture(terrain_type: int) -> Texture2D:
 		tile = load(path) as Texture2D
 	_texture_cache[terrain_type] = tile
 	return tile
+
+
+## Chemin de la variante de rang [param rank] d'un terrain (« » s'il n'en a pas).
+##
+## Les variantes sont dérivées de la tuile de base et gardent son nom, suffixé :
+## `terrain_outdoor_grass.png` donne `variants/terrain_outdoor_grass_v2.png`.
+## Un terrain sans tuile du pack n'a rien à décliner et rend une chaîne vide.
+static func variant_path(terrain_type: int, rank: int) -> String:
+	var base: String = str(TERRAIN_TEXTURES.get(terrain_type, ""))
+	if base.is_empty():
+		return ""
+	return "%s%s_v%d.png" % [VARIANT_DIR, base.get_file().get_basename(), rank]
+
+
+## Combien de variantes existent pour un terrain (0 = aucune).
+##
+## La recherche s'arrête au premier trou : trois fichiers `_v1 _v2 _v3` donnent
+## trois variantes, et un `_v5` isolé ne compte pas — ce serait un rang que le
+## hachage désignerait sans qu'il existe. Le compte est mis en cache : c'est
+## une question de disque posée une fois par terrain, pas une par case.
+static func variant_count(terrain_type: int) -> int:
+	if _variant_count_cache.has(terrain_type):
+		return _variant_count_cache[terrain_type]
+
+	var found: int = 0
+	for rank in range(1, MAX_VARIANTS + 1):
+		if not ResourceLoader.exists(variant_path(terrain_type, rank)):
+			break
+		found = rank
+	_variant_count_cache[terrain_type] = found
+	return found
+
+
+## Un terrain a-t-il de quoi changer de tuile d'une case à l'autre ?
+static func has_variants(terrain_type: int) -> bool:
+	return TERRAIN_HIGH_TEXTURES.has(terrain_type) or variant_count(terrain_type) > 0
+
+
+## Ce terrain veut-il un matériau à lui, ou le matériau partagé suffit-il ?
+##
+## Sert de garde aux appelants : sans variante, sans tuile de sommet et sans
+## animation, une case n'a rien à gagner à passer par
+## [method terrain_material_at], et le matériau partagé de [TacticsConfig] —
+## un seul objet pour toute la carte — fait l'affaire.
+static func needs_tile_material(terrain_type: int) -> bool:
+	return has_variants(terrain_type) or TERRAIN_SHADERS.has(terrain_type)
+
+
+## Quelle tuile revient à une case : sommet, variante numérotée, ou tuile de base.
+##
+## Trois réponses possibles :
+##
+## - [constant HIGH_VARIANT] — le terrain a une tuile de sommet et la case est
+##   assez haute ([constant HIGH_GROUND]) : le relief passe avant le grain ;
+## - `1..n` — le rang d'une variante, tiré du hachage de la coordonnée ;
+## - `0` — rien à décliner, la tuile de base convient.
+##
+## Le tirage est **déterministe par coordonnée** : la même case rend la même
+## variante d'une partie à l'autre, sans qu'aucun état n'ait à être sauvegardé.
+## Une carte ne scintille donc pas quand on la recharge, et deux joueurs en
+## réseau voient le même terrain.
+##
+## [param height] est l'altitude de la case en unités monde. Elle vaut zéro par
+## défaut : un appelant qui ne la connaît pas obtient les variantes, jamais la
+## tuile de sommet — le pire cas est une montagne rendue en roche claire, pas un
+## plateau incohérent.
+static func variant_rank(terrain_type: int, coord: Vector2i, height: float = 0.0) -> int:
+	if TERRAIN_HIGH_TEXTURES.has(terrain_type) and height >= HIGH_GROUND:
+		return HIGH_VARIANT
+
+	var count: int = variant_count(terrain_type)
+	if count <= 0:
+		return 0
+	return absi(hash(coord)) % count + 1
+
+
+## La tuile d'une case précise, variantes et sommets compris.
+##
+## Le cache est indexé par **rang**, pas par coordonnée : deux cases qui tirent
+## la même variante partagent la même texture, et une carte de 400 cases ne
+## charge jamais plus d'images qu'il n'y a de fichiers sur le disque.
+##
+## Une variante annoncée mais absente (fichier supprimé, import manqué) retombe
+## sur la tuile de base plutôt que de laisser une case sans texture.
+static func terrain_texture_at(terrain_type: int, coord: Vector2i, height: float = 0.0) -> Texture2D:
+	var rank: int = variant_rank(terrain_type, coord, height)
+	if rank == 0:
+		return terrain_texture(terrain_type)
+
+	var key: String = "%d:%d" % [terrain_type, rank]
+	if _variant_texture_cache.has(key):
+		return _variant_texture_cache[key]
+
+	var path: String = ""
+	if rank == HIGH_VARIANT:
+		path = str(TERRAIN_HIGH_TEXTURES.get(terrain_type, ""))
+	else:
+		path = variant_path(terrain_type, rank)
+
+	var tile: Texture2D = null
+	if not path.is_empty() and ResourceLoader.exists(path):
+		tile = load(path) as Texture2D
+	if not tile:
+		tile = terrain_texture(terrain_type)
+	_variant_texture_cache[key] = tile
+	return tile
+
+
+## Le matériau d'une case précise : celui de son terrain, sur sa propre tuile.
+##
+## Seul l'albédo change. Teinte, relief, rugosité et projection en coordonnées
+## monde restent ceux du terrain : une variante est une autre touffe d'herbe,
+## pas un autre sol.
+##
+## Le matériau de base est **dupliqué** avant d'être retouché. Sans cela, la
+## première case de la carte réécrirait la texture du matériau partagé par
+## [TacticsConfig], et les seize cases d'herbe redeviendraient identiques —
+## celles de la variante tirée en premier.
+##
+## Le surlignage, lui, part toujours du matériau de terrain nu
+## ([method highlight_material]) : sous un lavis à 68 % la variante ne se lit
+## plus, et une case surlignée par rang aurait multiplié les matériaux en cache
+## pour un motif que le joueur ne voit pas.
+static func terrain_material_at(terrain_type: int, coord: Vector2i, height: float = 0.0) -> Material:
+	# Un terrain animé passe avant les variantes : son shader porte déjà son
+	# motif, et l'eau n'a de toute façon rien à décliner d'une case à l'autre.
+	var animated: ShaderMaterial = animated_material(terrain_type)
+	if animated:
+		return animated
+
+	var rank: int = variant_rank(terrain_type, coord, height)
+	var key: String = "%d:%d" % [terrain_type, rank]
+	var cached: Variant = _variant_material_cache.get(key)
+	if cached is StandardMaterial3D:
+		return cached
+
+	var mat: StandardMaterial3D = terrain_material(terrain_type).duplicate()
+	var tile: Texture2D = terrain_texture_at(terrain_type, coord, height)
+	if tile:
+		mat.albedo_texture = tile
+	_variant_material_cache[key] = mat
+	return mat
+
+
+## Matériau animé d'un terrain, ou `null` s'il n'en a pas.
+##
+## Un seul matériau pour toute l'eau de la carte : c'est `TIME` qui fait couler
+## le courant, pas une donnée par case — trente cases d'eau coûtent donc autant
+## qu'une. Les réglages du shader reprennent ceux que le terrain avait déjà en
+## `StandardMaterial3D` (rugosité, métal, trace de teinte), pour que l'eau
+## animée réponde à la lumière comme l'eau figée d'avant.
+##
+## Un shader absent rend `null`, et l'appelant retombe sur le matériau ordinaire.
+## Le résultat est mis en cache, `null` compris.
+static func animated_material(terrain_type: int) -> ShaderMaterial:
+	if _animated_material_cache.has(terrain_type):
+		return _animated_material_cache[terrain_type]
+
+	var mat: ShaderMaterial = null
+	var path: String = str(TERRAIN_SHADERS.get(terrain_type, ""))
+	var tile: Texture2D = terrain_texture(terrain_type)
+	if not path.is_empty() and tile and ResourceLoader.exists(path):
+		var shader: Shader = load(path) as Shader
+		if shader:
+			var grain: Dictionary = TERRAIN_GRAIN.get(
+				terrain_type, TERRAIN_GRAIN[MapDataClass.TerrainType.GRASS])
+			var base_color := Color(str(TERRAIN_COLORS.get(terrain_type, "#4a8c3f")))
+			mat = ShaderMaterial.new()
+			mat.shader = shader
+			mat.set_shader_parameter("tile", tile)
+			mat.set_shader_parameter("tint", base_color.lerp(Color.WHITE, 0.9))
+			mat.set_shader_parameter("pattern_scale", TEXTURE_WORLD_SCALE)
+			mat.set_shader_parameter("surface_roughness", float(grain["roughness"]))
+			mat.set_shader_parameter("surface_metallic", float(grain["metallic"]))
+
+	_animated_material_cache[terrain_type] = mat
+	return mat
 
 
 ## Texture de grain : du bruit ramené à une plage claire, qui module la teinte.
