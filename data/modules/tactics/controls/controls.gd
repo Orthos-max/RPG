@@ -14,6 +14,8 @@ extends Control
 ##   I        Inventaire         (menu d'actions ouvert)
 ##   W        Attendre           (menu d'actions ouvert)
 ##   Échap    Annuler            (retour d'une étape ; sinon, quitte la bataille)
+##   Tab      Unité suivante     (celle qui n'a pas encore joué ; X à la manette)
+##   G        Grille             — [BattleGridOverlay]
 ##   X        Accélérer          — tenue, gérée par [BattleSpeed]
 ##   C        Portée ennemie     — tenue, gérée par [BattleThreatRange]
 ##   M        Carte              — [BattleMinimap]
@@ -40,6 +42,8 @@ const KEY_INVENTORY: Key = KEY_I
 const KEY_WAIT: Key = KEY_W
 ## Touche d'annulation (retour d'une étape).
 const KEY_CANCEL: Key = KEY_ESCAPE
+## Touche « unité suivante » — l'action d'entrée `cycle_unit` de `project.godot`.
+const KEY_CYCLE_UNIT: Key = KEY_TAB
 
 ## Resource containing control-related data and settings
 @export var controls: TacticsControlsResource = load("res://data/models/view/control/tactics/control.tres")
@@ -86,6 +90,16 @@ func _physics_process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	# Handle input events
 	serv.handle_input(event)
+
+	# Tab est aussi la navigation au clavier de Godot : sans cette confiscation,
+	# la même pression promènerait le focus d'un bouton d'action à l'autre en
+	# plus de changer d'unité, et Entrée déclencherait ensuite le bouton mis en
+	# évidence plutôt que la confirmation attendue. La bascule elle-même est lue
+	# par [TacticsControlsSelectionService], qui interroge l'état de l'action et
+	# non l'événement : elle ne dépend donc pas de cette ligne.
+	if InputMap.has_action(TacticsControlsResource.ACTION_CYCLE_UNIT) \
+			and event.is_action_pressed(TacticsControlsResource.ACTION_CYCLE_UNIT):
+		get_viewport().set_input_as_handled()
 #endregion
 
 #region: --- Methods ---

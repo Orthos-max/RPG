@@ -27,6 +27,11 @@ func _init(_participant: TacticsParticipantResource, _arena: TacticsArenaResourc
 
 ## Handles the selection of a pawn.
 func select_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
+	# Tab d'abord : chercher à la souris l'unité qui n'a pas encore joué est le
+	# geste que le raccourci remplace, il ne doit pas avoir à l'attendre.
+	if cycle_to_next_unit(camp, ctrl):
+		return
+
 	arena.reset_all_tile_markers()
 	controls.set_battle_forecast({})
 	if is_instance_valid(ctrl.curr_pawn):
@@ -68,6 +73,9 @@ func _select_hovered_pawn(ctrl: TacticsControls) -> PhysicsBody3D:
 ## seulement à cette étape-ci : au milieu d'un déplacement ou d'un ciblage,
 ## changer d'unité serait une fausse manœuvre plutôt qu'une intention.
 func reselect_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
+	if cycle_to_next_unit(camp, ctrl):
+		return
+
 	var hovered: TacticsPawn = input_service.get_3d_canvas_mouse_position(2, ctrl)
 	if not hovered or not is_instance_valid(hovered):
 		return
@@ -78,17 +86,77 @@ func reselect_pawn(camp: TacticsParticipant, ctrl: TacticsControls) -> void:
 	if not Input.is_action_just_pressed("ui_accept"):
 		return
 
-	if ctrl.curr_pawn and is_instance_valid(ctrl.curr_pawn):
+	_focus_pawn(hovered, ctrl)
+
+
+## Passe à l'unité suivante qui n'a pas encore joué (Tab, ou X à la manette).
+##
+## Le geste que ce raccourci remplace : promener la caméra sur tout le plateau
+## pour retrouver qui n'a pas encore bougé. Il ne fait rien d'autre que ce que
+## ferait un clic sur ce pion-là — même bascule, même menu d'actions — et n'est
+## donc offert qu'aux deux étapes où cliquer une unité a un sens : le choix d'un
+## pion et le menu d'actions ouvert. Au milieu d'un déplacement ou d'un ciblage,
+## changer d'unité serait une fausse manœuvre.
+##
+## [returns] `true` si le tour de garde a effectivement bougé — l'appelant a
+## alors terminé sa frame.
+func cycle_to_next_unit(camp: TacticsParticipant, ctrl: TacticsControls) -> bool:
+	if not InputMap.has_action(TacticsControlsResource.ACTION_CYCLE_UNIT):
+		return false  # Projet sans l'action déclarée : pas de raccourci, pas d'erreur.
+	if not Input.is_action_just_pressed(TacticsControlsResource.ACTION_CYCLE_UNIT):
+		return false
+	var next: Object = next_actionable_pawn(
+		camp.get_children() if camp and is_instance_valid(camp) else [], ctrl.curr_pawn)
+	if not next:
+		return false
+	_focus_pawn(next as TacticsPawn, ctrl)
+	return true
+
+
+## L'unité suivante capable d'agir, en partant de [param from].
+##
+## Le tour se fait dans l'ordre des enfants du camp — celui de la scène, donc
+## stable d'une pression à l'autre — et **boucle** : la dernière unité renvoie à
+## la première. Rien n'est rendu si tout le camp a joué ; si la seule unité qui
+## peut encore agir est celle déjà tenue, c'est elle qui revient, et la caméra se
+## recentre dessus plutôt que de laisser le joueur sans réponse.
+##
+## Fonction pure sur une liste de nœuds — d'où le typage large : elle se vérifie
+## en `--headless`, sans pion ni scène 3D.
+static func next_actionable_pawn(pawns: Array, from: Object) -> Object:
+	var candidates: Array = []
+	for pawn: Variant in pawns:
+		if pawn is Object and is_instance_valid(pawn) and (pawn as Object).has_method("can_act"):
+			candidates.append(pawn)
+	if candidates.is_empty():
+		return null
+
+	var start: int = candidates.find(from) if from and is_instance_valid(from) else -1
+	for step: int in range(1, candidates.size() + 1):
+		var candidate: Object = candidates[(start + step) % candidates.size()]
+		if candidate.can_act():
+			return candidate
+	return null
+
+
+## Donne le pas à un pion : caméra, fiche, menu d'actions — comme un clic dessus.
+##
+## Un seul chemin pour les trois façons d'élire une unité (clic, bascule en
+## cours de menu, Tab) : elles doivent laisser le jeu dans exactement le même
+## état, sans quoi l'une des trois finirait par oublier d'éteindre le HUD de la
+## précédente ou de vider la prévision de combat.
+func _focus_pawn(pawn: TacticsPawn, ctrl: TacticsControls) -> void:
+	if ctrl.curr_pawn and is_instance_valid(ctrl.curr_pawn) and ctrl.curr_pawn != pawn:
 		ctrl.curr_pawn.show_pawn_stats(false)
 	arena.reset_all_tile_markers()
 	controls.set_battle_forecast({})
 
-	ctrl.curr_pawn = hovered
-	_update_unit_sheet(hovered)
-	hovered.show_pawn_stats(true)
-	t_cam.target = hovered
-	participant.curr_pawn = hovered
-	controls.set_actions_menu_visibility(true, hovered)
+	ctrl.curr_pawn = pawn
+	_update_unit_sheet(pawn)
+	pawn.show_pawn_stats(true)
+	t_cam.target = pawn
+	participant.curr_pawn = pawn
+	controls.set_actions_menu_visibility(true, pawn)
 	participant.stage = participant.STAGE_SHOW_ACTIONS
 
 

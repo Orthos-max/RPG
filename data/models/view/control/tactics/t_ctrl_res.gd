@@ -59,10 +59,34 @@ var action_labels: Dictionary = {
 ## Libellé du bouton d'attaque quand l'unité porte un bâton : elle soigne.
 const LABEL_HEAL: String = "Soigner"
 
+## Nom de l'action d'entrée qui passe à l'unité suivante (voir `project.godot`).
+const ACTION_CYCLE_UNIT: String = "cycle_unit"
+
+## Raccourcis qui n'ont **pas** de bouton dans le menu d'actions.
+##
+## [member actions] habille les boutons : chaque clé y désigne un nœud de
+## `controls.tscn`, et en ajouter une sans bouton casserait le montage. Ceux-ci
+## ne se jouent qu'à la touche ; ils sont listés ici pour que le mapping reste
+## l'endroit unique où l'on lit ce que le joueur peut faire.
+##
+## La clé est l'identifiant de l'action, la valeur ce qui s'affiche.
+var shortcut_actions: Dictionary = {
+	"CycleUnit": "Unité suivante",
+	"ToggleGrid": "Grille",
+}
+
+## Touche par défaut de chaque raccourci, telle qu'elle se dit au joueur.
+var shortcut_keys: Dictionary = {
+	"CycleUnit": "Tab",
+	"ToggleGrid": "G",
+}
+
 
 ## Libellé affichable d'une action. Retombe sur la clé si la table l'ignore —
 ## un bouton sans traduction reste lisible plutôt que vide.
 func label_for(action: String) -> String:
+	if shortcut_actions.has(action):
+		return "%s (%s)" % [shortcut_actions[action], shortcut_keys.get(action, "")]
 	return str(action_labels.get(action, action))
 
 
