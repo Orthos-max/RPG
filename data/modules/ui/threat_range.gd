@@ -125,7 +125,10 @@ static func _threat_of(grid: BattleGrid, pawn: TacticsPawn) -> Array:
 	# Un parcours à soi : celui de l'arène porte le déplacement du joueur en cours.
 	var field := PathField.new()
 	field.expand(grid, origin, pawn.stats.jump,
-		func(coord: Vector2i) -> bool: return _passable(grid, coord, allies))
+		func(coord: Vector2i) -> bool: return _passable(grid, coord, allies),
+		# Même tarif que le déplacement du joueur, sans quoi l'aperçu promettrait
+		# une charge par la montagne que l'ennemi ne peut pas payer.
+		func(coord: Vector2i) -> float: return _step_cost(grid, coord))
 
 	var stands: Array[Vector2i] = [origin]
 	var movement: float = float(pawn.stats.movement)
@@ -148,6 +151,15 @@ static func _passable(grid: BattleGrid, coord: Vector2i, allies: Array) -> bool:
 		return false
 	var occupier: Object = grid.occupant_of(tile)
 	return occupier == null or occupier in allies
+
+
+## Ce que coûte l'entrée sur une case — même tarif que [method
+## TacticsArenaService._step_cost].
+static func _step_cost(grid: BattleGrid, coord: Vector2i) -> float:
+	var tile: Node = grid.tile_at(coord)
+	if not tile:
+		return 1.0
+	return MapDataClass.move_cost(int(tile.terrain_type))
 
 
 ## Toutes les cases à [param reach] pas des cases de départ, celles-ci comprises.

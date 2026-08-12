@@ -67,7 +67,7 @@ func _test_map_data() -> bool:
 	if not md.is_walkable(TERRAIN.FOREST):   ok = false; print_rich("[color=red]  FAIL: FOREST walkable[/color]")
 	if not md.is_walkable(TERRAIN.PATH):     ok = false; print_rich("[color=red]  FAIL: PATH walkable[/color]")
 	if md.is_walkable(TERRAIN.WATER):        ok = false; print_rich("[color=red]  FAIL: WATER should be blocked[/color]")
-	if md.is_walkable(TERRAIN.MOUNTAIN):     ok = false; print_rich("[color=red]  FAIL: MOUNTAIN should be blocked[/color]")
+	if md.is_walkable(TERRAIN.MOUNTAIN):    ok = true;  print_rich("[color=green]  OK: MOUNTAIN walkable (coût 2)[/color]")
 	if md.is_walkable(TERRAIN.WALL):         ok = false; print_rich("[color=red]  FAIL: WALL should be blocked[/color]")
 	if md.is_walkable(TERRAIN.PIT):          ok = false; print_rich("[color=red]  FAIL: PIT should be blocked[/color]")
 	print_rich("  OK: Walkable checks passed")
@@ -166,7 +166,7 @@ func _test_terrain_summary() -> bool:
 		_MD.TerrainType.GRASS: "Plaine",
 		_MD.TerrainType.FOREST: "Forêt · 🛡 +1 DÉF",
 		_MD.TerrainType.FORT: "Fortin · 🛡 +2 DÉF",
-		_MD.TerrainType.MOUNTAIN: "Montagne · infranchissable · 🛡 +3 DÉF",
+		_MD.TerrainType.MOUNTAIN: "Montagne · 🥾 2 Mvt · 🛡 +3 DÉF",
 		_MD.TerrainType.WATER: "Eau · infranchissable",
 	}
 	for terrain: int in cases:

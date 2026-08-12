@@ -1693,17 +1693,20 @@ func _test_chapter_map() -> void:
 		"chapitre 2 : une seule zone, les deux camps peuvent se rejoindre",
 		"%d zones" % CMAP.walkable_zones(outpost, 2.0))
 
-	# Et la marche la plus haute doit rester loin sous ce saut. Compter les zones
+	# La marche la plus haute doit rester loin sous ce saut. Compter les zones
 	# ne le dirait pas : une falaise franchissable de justesse passerait, jusqu'au
 	# jour où une unité plus lourde s'y présenterait.
+	# Depuis le 2026-08-12 la montagne est franchissable (coût 2) : ses marches
+	# peuvent dépasser 0.5 sans couper la carte — c'est le saut qui décide, et
+	# la vérification « une seule zone » au-dessus le garantit déjà.
 	var steepest: float = 0.0
 	for cell: Vector2i in passable:
 		for step: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
 			if passable.has(cell + step):
 				steepest = maxf(steepest,
 					absf(float(passable[cell + step]) - float(passable[cell])))
-	_check(steepest > 0.0 and steepest <= 0.5,
-		"chapitre 2 : du relief, et pas une seule falaise (marche la plus haute : %.2f)"
+	_check(steepest > 0.0 and steepest <= 1.0,
+		"chapitre 2 : du relief, et aucune marche hors de portée du saut (marche la plus haute : %.2f)"
 			% steepest)
 
 	# Les terrains ne servent à rien si personne ne les distingue : une carte

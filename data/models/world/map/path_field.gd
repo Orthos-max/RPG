@@ -10,11 +10,18 @@ extends RefCounted
 ## Ici, tout est indexé par coordonnée de grille. Une tuile n'est plus qu'une
 ## chose à regarder ; le chemin, lui, se calcule et se vérifie sans elle.
 ##
-## Ce que la classe ne fait pas : décider si une case se franchit. Cette
-## question mêle terrain, occupation et camp — elle arrive par un `Callable`,
-## ce qui garde ce parcours-ci indifférent aux règles du jour.
+## Ce que la classe ne fait pas : décider si une case se franchit, ni ce qu'elle
+## coûte. Ces questions mêlent terrain, occupation et camp — elles arrivent par
+## des `Callable`, ce qui garde ce parcours-ci indifférent aux règles du jour.
 
-## Ce que le parcours a atteint : Vector2i → nombre de pas depuis l'origine.
+## Tolérance sur une distance déjà atteinte.
+##
+## Les coûts sont des flottants, et un chemin retrouvé à un milliardième près
+## n'est pas un chemin plus court : sans ce seuil, deux cases pourraient
+## s'améliorer l'une l'autre indéfiniment sur du bruit de virgule.
+const EPSILON: float = 0.0001
+
+## Ce que le parcours a atteint : Vector2i → coût cumulé depuis l'origine.
 var _distance: Dictionary = {}
 ## D'où l'on vient : Vector2i → Vector2i. L'origine n'y figure pas.
 var _root: Dictionary = {}
@@ -34,25 +41,46 @@ func clear() -> void:
 ## [param max_step] Dénivelé franchissable d'une case à l'autre (le saut).
 ## [param passable] `func(coord: Vector2i) -> bool` — la case se traverse-t-elle ?
 ## L'origine n'y est jamais soumise : on part toujours d'où l'on est.
-func expand(grid: BattleGrid, origin: Vector2i, max_step: float, passable: Callable) -> void:
+## [param cost] `func(coord: Vector2i) -> float` — ce qu'il en coûte d'**entrer**
+## sur cette case. Absent, chaque case vaut un pas : c'est ce que veut une portée
+## d'arme, qui compte des cases et non des enjambées.
+##
+## ## Pourquoi la file n'est plus un simple parcours en largeur
+##
+## Tant que toute case valait un pas, la première visite était la meilleure : on
+## posait la provenance et on n'y revenait jamais. Une montagne à deux points de
+## mouvement casse cette garantie — le chemin trouvé en premier (celui qui a le
+## moins de cases) peut coûter plus cher que le détour qui en a une de plus.
+##
+## On accepte donc de repasser sur une case dès qu'on l'atteint pour moins cher,
+## et on la remet dans la file pour que ses voisines profitent de l'économie.
+## Le tour se termine parce que chaque remise en file abaisse strictement un
+## coût, et que les coûts sont minorés par [constant MapData.move_cost] — qui ne
+## rend jamais moins d'un pas.
+func expand(grid: BattleGrid, origin: Vector2i, max_step: float, passable: Callable,
+		cost: Callable = Callable()) -> void:
 	var queue: Array[Vector2i] = [origin]
 	while not queue.is_empty():
 		var current: Vector2i = queue.pop_front()
-		var next_distance: float = distance_at(current) + 1.0
+		var walked: float = distance_at(current)
 		for neighbor: Vector2i in grid.neighbor_coords(current, max_step):
-			# Une case déjà pourvue d'une provenance a été atteinte par un chemin
-			# au moins aussi court : la revisiter ne peut que l'allonger. Et
-			# l'origine n'en reçoit jamais, sans quoi le chemin bouclerait.
-			if neighbor == origin or _root.has(neighbor):
+			# L'origine ne reçoit jamais de provenance, sans quoi le chemin
+			# bouclerait — et elle est atteinte à coût nul par définition.
+			if neighbor == origin:
 				continue
 			if not passable.call(neighbor):
 				continue
+			var step: float = float(cost.call(neighbor)) if cost.is_valid() else 1.0
+			var reached_at: float = walked + maxf(step, EPSILON)
+			if _root.has(neighbor) and distance_at(neighbor) <= reached_at + EPSILON:
+				continue
 			_root[neighbor] = current
-			_distance[neighbor] = next_distance
+			_distance[neighbor] = reached_at
 			queue.push_back(neighbor)
 
 
-## Nombre de pas jusqu'à une case. Zéro si le parcours ne l'a pas atteinte —
+## Ce que coûte la marche jusqu'à une case — un pas par case tant que rien ne
+## renchérit, davantage dès qu'on a grimpé. Zéro si le parcours ne l'a pas atteinte —
 ## c'est aussi la valeur de l'origine, que les appelants distinguent par
 ## [method has_root].
 func distance_at(coord: Vector2i) -> float:

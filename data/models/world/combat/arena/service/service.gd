@@ -66,16 +66,27 @@ func configure_tiles(arena: TacticsArena) -> void:
 ## [param height] Le dénivelé franchissable d'une case à l'autre (le saut).
 ## [param blocked_by_units] Ce que le parcours sert à calculer :
 ##
-## - `true` — un **déplacement**. Toute case occupée arrête la marche.
+## - `true` — un **déplacement**. Toute case occupée arrête la marche, et chaque
+##   case coûte ce que son terrain demande : une montagne vaut deux pas.
 ## - `false` — une **portée d'arme**. L'occupation ne compte pas : un arc tire
 ##   par-dessus les têtes, et une cible doit rester visée même si quelqu'un se
-##   tient entre les deux.
+##   tient entre les deux. Le terrain ne coûte rien non plus — une portée se
+##   compte en cases, pas en enjambées, et un archer ne peine pas à viser
+##   une montagne parce qu'elle est en pente.
+##
+## Le même drapeau répond donc aux deux questions parce que c'est la même : ceci
+## est-il une marche ? Marcher se paie et se laisse barrer ; viser, ni l'un ni
+## l'autre.
 func process_surrounding_tiles(root_tile: TacticsTile, height: float,
 		blocked_by_units: bool = false) -> void:
 	if not grid or not grid.has_tile(root_tile):
 		return
+	var toll: Callable = Callable()
+	if blocked_by_units:
+		toll = func(coord: Vector2i) -> float: return _step_cost(coord)
 	field.expand(grid, grid.coord_of(root_tile), height,
-		func(coord: Vector2i) -> bool: return _passable(coord, blocked_by_units))
+		func(coord: Vector2i) -> bool: return _passable(coord, blocked_by_units),
+		toll)
 
 
 ## Une case se traverse-t-elle ? Terrain d'abord, occupation ensuite.
@@ -107,6 +118,18 @@ func _passable(coord: Vector2i, blocked_by_units: bool) -> bool:
 		return true  # Portée d'arme : l'occupation ne compte pas.
 
 	return grid.occupant_of(tile) == null
+
+
+## Ce que coûte l'entrée sur une case, selon son terrain.
+##
+## Une case hors grille coûte un pas : elle ne sera de toute façon pas franchie
+## ([method _passable] l'a déjà refusée), et rendre zéro ferait croire au
+## parcours qu'elle est gratuite.
+func _step_cost(coord: Vector2i) -> float:
+	var tile: Node = grid.tile_at(coord)
+	if not tile:
+		return 1.0
+	return MAP_DATA.move_cost(int(tile.terrain_type))
 
 
 ## Get the pathfinding tilestack to a target tile

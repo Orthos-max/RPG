@@ -6,7 +6,7 @@ extends Resource
 enum TerrainType {
 	GRASS = 0,   ## Walkable plain, green
 	FOREST = 1,  ## Walkable forest, dark green, +1 DEF bonus
-	MOUNTAIN = 2,## Impassable mountain peak, brown/rock
+	MOUNTAIN = 2,## Walkable mountain peak, brown/rock — 2 points de mouvement, +3 DEF
 	WATER = 3,   ## Impassable water, blue
 	PATH = 4,    ## Walkable dirt path, beige
 	WALL = 5,    ## Impassable wall, dark grey
@@ -36,23 +36,27 @@ enum TerrainType {
 ##   avec `pit`, alors que la légende annonçait des lettres distinctes.
 ## - `walk` : la case se traverse-t-elle.
 ## - `def` : bonus de défense pour qui s'y tient.
+## - `cost` : points de mouvement dépensés pour **entrer** sur la case. Un partout,
+##   sauf la montagne : y grimper coûte le double, et c'est tout le choix qu'elle
+##   pose — la contourner, ou payer le prix pour tenir ses +3 DÉF. Sans objet
+##   quand `walk` est faux : on n'entre pas.
 const TERRAINS: Dictionary = {
-	TerrainType.GRASS:    {"key": "grass",    "label": "Plaine",   "code": "g", "walk": true,  "def": 0},
-	TerrainType.FOREST:   {"key": "forest",   "label": "Forêt",    "code": "f", "walk": true,  "def": 1},
-	TerrainType.MOUNTAIN: {"key": "mountain", "label": "Montagne", "code": "m", "walk": false, "def": 3},
-	TerrainType.WATER:    {"key": "water",    "label": "Eau",      "code": "w", "walk": false, "def": 0},
-	TerrainType.PATH:     {"key": "path",     "label": "Chemin",   "code": "p", "walk": true,  "def": 0},
-	TerrainType.WALL:     {"key": "wall",     "label": "Mur",      "code": "#", "walk": false, "def": 0},
-	TerrainType.PIT:      {"key": "pit",      "label": "Fosse",    "code": "x", "walk": false, "def": 0},
-	TerrainType.VILLAGE:  {"key": "village",  "label": "Village",  "code": "v", "walk": true,  "def": 1},
-	TerrainType.FORT:     {"key": "fort",     "label": "Fortin",   "code": "F", "walk": true,  "def": 2},
-	TerrainType.GATE:     {"key": "gate",     "label": "Porte",    "code": "G", "walk": true,  "def": 1},
-	TerrainType.RUINS:    {"key": "ruins",    "label": "Ruines",   "code": "r", "walk": true,  "def": 1},
-	TerrainType.TOWER:    {"key": "tower",    "label": "Tour",     "code": "T", "walk": false, "def": 0},
-	TerrainType.BRIDGE:   {"key": "bridge",   "label": "Pont",     "code": "b", "walk": true,  "def": 0},
-	TerrainType.SAND:     {"key": "sand",     "label": "Sable",    "code": "s", "walk": true,  "def": 0},
-	TerrainType.SNOW:     {"key": "snow",     "label": "Neige",    "code": "n", "walk": true,  "def": 0},
-	TerrainType.SWAMP:    {"key": "swamp",    "label": "Marais",   "code": "~", "walk": true,  "def": 0},
+	TerrainType.GRASS:    {"key": "grass",    "label": "Plaine",   "code": "g", "walk": true,  "def": 0, "cost": 1},
+	TerrainType.FOREST:   {"key": "forest",   "label": "Forêt",    "code": "f", "walk": true,  "def": 1, "cost": 1},
+	TerrainType.MOUNTAIN: {"key": "mountain", "label": "Montagne", "code": "m", "walk": true,  "def": 3, "cost": 2},
+	TerrainType.WATER:    {"key": "water",    "label": "Eau",      "code": "w", "walk": false, "def": 0, "cost": 1},
+	TerrainType.PATH:     {"key": "path",     "label": "Chemin",   "code": "p", "walk": true,  "def": 0, "cost": 1},
+	TerrainType.WALL:     {"key": "wall",     "label": "Mur",      "code": "#", "walk": false, "def": 0, "cost": 1},
+	TerrainType.PIT:      {"key": "pit",      "label": "Fosse",    "code": "x", "walk": false, "def": 0, "cost": 1},
+	TerrainType.VILLAGE:  {"key": "village",  "label": "Village",  "code": "v", "walk": true,  "def": 1, "cost": 1},
+	TerrainType.FORT:     {"key": "fort",     "label": "Fortin",   "code": "F", "walk": true,  "def": 2, "cost": 1},
+	TerrainType.GATE:     {"key": "gate",     "label": "Porte",    "code": "G", "walk": true,  "def": 1, "cost": 1},
+	TerrainType.RUINS:    {"key": "ruins",    "label": "Ruines",   "code": "r", "walk": true,  "def": 1, "cost": 1},
+	TerrainType.TOWER:    {"key": "tower",    "label": "Tour",     "code": "T", "walk": false, "def": 0, "cost": 1},
+	TerrainType.BRIDGE:   {"key": "bridge",   "label": "Pont",     "code": "b", "walk": true,  "def": 0, "cost": 1},
+	TerrainType.SAND:     {"key": "sand",     "label": "Sable",    "code": "s", "walk": true,  "def": 0, "cost": 1},
+	TerrainType.SNOW:     {"key": "snow",     "label": "Neige",    "code": "n", "walk": true,  "def": 0, "cost": 1},
+	TerrainType.SWAMP:    {"key": "swamp",    "label": "Marais",   "code": "~", "walk": true,  "def": 0, "cost": 1},
 }
 
 ## Grid dimensions (columns × rows)
@@ -126,6 +130,18 @@ static func get_defense_bonus(terrain: int) -> int:
 	return int(traits_of(terrain).get("def", 0))
 
 
+## Points de mouvement dépensés pour entrer sur cette case.
+##
+## Un terrain inconnu coûte un pas, pour la même raison qu'il se traverse : une
+## carte écrite par une version plus récente du jeu doit rester jouable.
+##
+## Le plancher à 1 n'est pas décoratif — [method PathField.expand] avance de
+## proche en proche, et une case gratuite (ou négative) y ferait tourner le
+## parcours en rond au lieu de le terminer.
+static func move_cost(terrain: int) -> float:
+	return maxf(1.0, float(traits_of(terrain).get("cost", 1)))
+
+
 ## Nom technique d'un terrain (`grass`, `forest`, …).
 static func type_key(terrain: int) -> String:
 	return str(traits_of(terrain).get("key", "unknown"))
@@ -143,13 +159,18 @@ static func type_code(terrain: int) -> String:
 
 ## Ce qu'une case vaut, en une ligne : son nom, ce qu'elle donne, ce qu'elle interdit.
 ##
-## « Forêt · 🛡 +1 DÉF », « Montagne · infranchissable · 🛡 +3 DÉF », « Plaine ».
+## « Forêt · 🛡 +1 DÉF », « Montagne · 🥾 2 Mvt · 🛡 +3 DÉF », « Plaine ».
 ## Un seul endroit pour le dire, que la question vienne du survol en bataille ou
 ## d'une infobulle de l'éditeur : le joueur doit lire la même chose des deux côtés.
+##
+## Le coût ne s'affiche que s'il dépasse le pas ordinaire : écrire « 1 Mvt » sur
+## les quinze autres terrains n'apprendrait rien et noierait le seul qui compte.
 static func type_summary(terrain: int) -> String:
 	var parts: Array[String] = [type_label(terrain)]
 	if not is_walkable(terrain):
 		parts.append("infranchissable")
+	elif move_cost(terrain) > 1.0:
+		parts.append("🥾 %d Mvt" % int(move_cost(terrain)))
 	var bonus: int = get_defense_bonus(terrain)
 	if bonus > 0:
 		parts.append("🛡 +%d DÉF" % bonus)
@@ -182,6 +203,11 @@ static func legend() -> Dictionary:
 			line += " (+%d DEF)" % int(t["def"])
 		if not bool(t["walk"]):
 			line += " (bloqué)"
+		elif move_cost(terrain) > 1.0:
+			# Ciel planifie ses déplacements sur cette légende : sans le coût, elle
+			# compterait la montagne comme un pas et promettrait des marches qu'elle
+			# ne peut pas faire.
+			line += " (coût %d)" % int(move_cost(terrain))
 		out[str(t["code"])] = line
 	return out
 
