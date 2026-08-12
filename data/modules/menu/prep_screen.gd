@@ -628,7 +628,7 @@ func _fill_detail(host: VBoxContainer, unit: Dictionary) -> void:
 	# réduction jette des pixels au lieu de les moyenner. Le linéaire tient le
 	# rôle ici ; le « nearest » est réservé au pion, qui lui est agrandi.
 	look.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	look.texture = _front_of(str(unit.get("sprite", "")))
+	look.texture = _unit_front(unit)
 	header.add_child(look)
 
 	var who := Label.new()
@@ -838,6 +838,25 @@ func _front_of(sheet_path: String) -> Texture2D:
 	half.atlas = sheet
 	half.region = Rect2(0, 0, sheet.get_width(), sheet.get_height() / 2.0)
 	return half
+
+
+## La figurine de fiche d'une unité, avec repli sur celle de sa classe.
+##
+## Une recrue écrite dans l'éditeur n'a pas de `.tres` et donc pas de planche :
+## `unit.sprite` est vide et [method _front_of] répond `null`, ce qui affichait
+## l'icône Godot par défaut dans le roster. On retombe alors sur la figurine de
+## la classe via [PawnLook], exactement comme le fait l'éditeur — jamais le
+## placeholder du moteur.
+func _unit_front(unit: Dictionary) -> Texture2D:
+	var sheet_path := str(unit.get("sprite", ""))
+	var direct: Texture2D = _front_of(sheet_path)
+	if direct:
+		return direct
+	var probe := Stats.new()
+	probe.character_class = int(unit.get("class_id", 0))
+	var still: Texture2D = PawnLook.still_for_stats(probe, TeamData.Side.PLAYER)
+	probe.free()
+	return still
 
 
 func _note(text: String) -> Control:

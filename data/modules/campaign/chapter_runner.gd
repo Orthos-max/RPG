@@ -12,8 +12,16 @@ signal chapter_finished(victory: bool, bonuses: Array, reason: String)
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const EXECUTOR = preload("res://data/models/world/ai/ai_executor.gd")
 const DEPLOYMENT = preload("res://data/modules/campaign/deployment_phase.gd")
+const DEPLOYMENT_PLAN = preload("res://data/models/campaign/deployment_plan.gd")
+const MapDataRef = preload("res://data/models/world/map/map_data.gd")
 const PAWN_SCENE = preload("res://data/modules/tactics/level/pawn/pawn.tscn")
 const EXPERTISE_SCENE = preload("res://data/modules/stats/expertise/expertise.tscn")
+
+## Rayon de la zone de déploiement improvisée autour de la ligne alliée.
+##
+## La même valeur que [DeploymentPhase] et [ChapterMap] : les cases où une
+## recrue entre d'elle-même sont celles que le joueur verra s'ouvrir juste après.
+const DEPLOY_RADIUS: int = 2
 
 ## Fiche prêtée à une recrue qui n'a pas de `.tres` — un personnage écrit dans
 ## l'éditeur n'est pas une ressource. Tout y est réécrit par
@@ -288,6 +296,10 @@ func _apply_roster() -> void:
 		return
 
 	_deployed_names.clear()
+	# La ligne de départ que la carte dessine, relevée **avant** d'en retirer les
+	# non-déployés : c'est la zone alliée du chapitre, et elle doit rester la même
+	# que le joueur emmène toute son armée ou une seule unité écrite à la main.
+	var starts: Array[Vector2i] = _ally_cells()
 	# Les identifiants déjà représentés par un pion de la carte : ce qui manque
 	# à l'appel une fois cette boucle finie doit être monté de toutes pièces.
 	var present: Dictionary = {}
@@ -316,7 +328,7 @@ func _apply_roster() -> void:
 		_deployed_names.append(unit_name)
 		apply_roster_unit(p.stats, unit)
 
-	_spawn_missing_units(campaign, present)
+	_spawn_missing_units(campaign, present, starts)
 
 	print_rich("[color=cyan]📋 Déploiement : %s[/color]" % (
 		", ".join(_deployed_names) if not _deployed_names.is_empty() else "roster par défaut du niveau"
@@ -337,9 +349,13 @@ func _apply_roster() -> void:
 ## un personnage écrit à la main emprunte [constant FALLBACK_SHEET], entièrement
 ## réécrite ensuite. C'est le même détour que [CustomBattle] prend pour l'éditeur
 ## de cartes.
-func _spawn_missing_units(campaign: Node, present: Dictionary) -> void:
+## [param starts] Ligne de départ alliée, relevée avant le retrait des
+## non-déployés ([method _ally_cells]).
+func _spawn_missing_units(campaign: Node, present: Dictionary,
+		starts: Array[Vector2i]) -> void:
 	var camp: Node = level.player
 	var occupied: Array[Vector2i] = _occupied_cells()
+	var anchors: Array[Vector2i] = starts.duplicate()
 	var index: int = _highest_pawn_index(camp)
 
 	for raw in campaign.deployment:
@@ -355,13 +371,18 @@ func _spawn_missing_units(campaign: Node, present: Dictionary) -> void:
 		if not pawn:
 			continue
 
-		var cell: Vector2i = _free_cell(campaign, id, occupied)
+		var cell: Vector2i = _free_cell(campaign, id, occupied, anchors)
 		# Dans l'arbre d'abord : le pion passe son `_ready` ici, donc c'est
 		# seulement après cet appel qu'il a des statistiques à recevoir — et une
 		# `global_position` qui veuille dire quelque chose.
 		camp.add_child(pawn)
 		if cell.x >= 0:
 			occupied.append(cell)
+			# Aucun allié sur la carte : la première unité posée devient elle-même
+			# la ligne de départ, pour que les suivantes se rangent à côté d'elle
+			# au lieu de repartir chacune du coin de la carte.
+			if anchors.is_empty():
+				anchors.append(cell)
 			_place_on_cell(pawn, cell)
 		if pawn.get("stats"):
 			apply_roster_unit(pawn.stats, unit)
@@ -419,33 +440,117 @@ func _occupied_cells() -> Array[Vector2i]:
 	return cells
 
 
+## Cases tenues par les unités **alliées** déjà posées par la carte.
+##
+## La ligne de départ du joueur, telle que la scène du chapitre l'a dessinée :
+## c'est le seul repère dont on dispose quand le chapitre ne déclare aucune case
+## de déploiement — ce qui est le cas de tous ceux de [CampaignDB].
+func _ally_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if not level or not level.player or not is_instance_valid(level.player):
+		return cells
+	for p in level.player.get_children():
+		if not (p is TacticsPawn) or not is_instance_valid(p) or p.is_queued_for_deletion():
+			continue
+		var tile: Node = p.get_tile()
+		if not tile:
+			continue
+		var cell: Vector2i = TacticsGrid.tile_to_grid(level.arena, tile)
+		if cell.x >= 0 and not cell in cells:
+			cells.append(cell)
+	return cells
+
+
 ## Où poser une unité qui n'a pas de pion sur la carte — (-1,-1) si nulle part.
 ##
-## Trois recours, du plus intentionnel au plus mécanique : la case choisie par le
-## joueur à l'écran de préparation, une case de déploiement déclarée par le
-## chapitre, puis n'importe quelle case libre de la carte. La dernière n'est pas
-## un beau placement, mais une unité mal posée reste jouable — et déplaçable dès
-## la phase de déploiement — là où une unité absente ne l'est pas.
-func _free_cell(campaign: Node, unit_id: String, occupied: Array[Vector2i]) -> Vector2i:
+## Quatre recours, du plus intentionnel au plus mécanique : la case choisie par
+## le joueur à l'écran de préparation, une case de déploiement déclarée par le
+## chapitre, le voisinage de la ligne alliée, puis n'importe quelle case libre.
+##
+## Le troisième recours manquait, et c'est ce qui exilait les unités enrôlées
+## dans l'éditeur de personnages : aucun chapitre de [CampaignDB] ne déclare de
+## `deploy_tiles`, et le balayage de secours partait de (0, 0) — les recrues
+## entraient donc en bataille dans le coin haut-gauche de la carte, à l'autre
+## bout du plateau, séparées du reste de l'armée. La zone ouverte ici est
+## **exactement** celle que [DeploymentPhase] proposera ensuite au joueur
+## ([method DeploymentPlan.default_slots], même rayon) : une recrue entre là où
+## le joueur aurait pu la poser lui-même.
+##
+## [param anchors] Ligne de départ alliée ([method _ally_cells]).
+func _free_cell(campaign: Node, unit_id: String, occupied: Array[Vector2i],
+		anchors: Array[Vector2i]) -> Vector2i:
 	var chosen: Vector2i = campaign.deployment_tile(unit_id)
 	if chosen.x >= 0 and not chosen in occupied:
 		return chosen
 
+	var declared: Array[Vector2i] = []
 	for raw: Variant in (chapter.deploy_tiles if chapter else []):
-		var pos: Vector2i = raw if raw is Vector2i else Vector2i(int(raw[0]), int(raw[1]))
-		if not pos in occupied and TacticsGrid.find_tile(level.arena, pos.x, pos.y):
-			return pos
+		declared.append(raw if raw is Vector2i else Vector2i(int(raw[0]), int(raw[1])))
+	var cell: Vector2i = _nearest_free(declared, occupied, anchors)
+	if cell.x >= 0:
+		return cell
 
 	var size: Vector2i = TacticsGrid.grid_size(level.arena)
+	cell = _nearest_free(DEPLOYMENT_PLAN.default_slots(anchors, size, DEPLOY_RADIUS),
+		occupied, anchors)
+	if cell.x >= 0:
+		return cell
+
+	# Dernier recours : toute la carte, mais toujours au plus près des alliés —
+	# une unité mal posée reste jouable, une unité posée à l'autre bout du
+	# plateau est perdue pour la bataille.
+	var everywhere: Array[Vector2i] = []
 	for row: int in size.y:
 		for col: int in size.x:
-			var pos := Vector2i(col, row)
-			if not pos in occupied and TacticsGrid.find_tile(level.arena, col, row):
-				return pos
+			everywhere.append(Vector2i(col, row))
+	cell = _nearest_free(everywhere, occupied, anchors)
+	if cell.x >= 0:
+		return cell
 
 	push_warning("[ChapterRunner] Aucune case libre pour %s : elle entre là où la scène l'a posée."
 		% unit_id)
 	return Vector2i(-1, -1)
+
+
+## La case libre la plus proche de la ligne alliée, parmi des candidates.
+##
+## « Libre » veut dire : la case existe sur la carte, elle se franchit (déployer
+## dans un lac n'a jamais été une option, [DeploymentPhase] l'interdit déjà), et
+## personne ne s'y tient. Sans repère allié, l'ordre des candidates fait foi.
+func _nearest_free(candidates: Array[Vector2i], occupied: Array[Vector2i],
+		anchors: Array[Vector2i]) -> Vector2i:
+	var free: Array[Vector2i] = []
+	for pos: Vector2i in candidates:
+		if pos in occupied or pos in free:
+			continue
+		var tile: Node = TacticsGrid.find_tile(level.arena, pos.x, pos.y)
+		if not tile:
+			continue
+		var terrain: Variant = tile.get("terrain_type")
+		if terrain != null and not MapDataRef.is_walkable(int(terrain)):
+			continue
+		free.append(pos)
+
+	if free.is_empty():
+		return Vector2i(-1, -1)
+	if anchors.is_empty():
+		return free[0]
+
+	free.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da: int = _distance_to(a, anchors)
+		var db: int = _distance_to(b, anchors)
+		if da != db:
+			return da < db
+		return a.y < b.y if a.y != b.y else a.x < b.x)
+	return free[0]
+
+
+## Distance de Manhattan d'une case au plus proche des repères.
+func _distance_to(pos: Vector2i, anchors: Array[Vector2i]) -> int:
+	var best: int = 1 << 30
+	for a: Vector2i in anchors:
+		best = mini(best, absi(pos.x - a.x) + absi(pos.y - a.y))
+	return best
 
 
 ## Pose un pion sur une case de la grille.
