@@ -31,6 +31,12 @@ const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 const HOLD_KEY: Key = KEY_C
 ## Son nom, tel qu'il s'affiche.
 const HOLD_KEY_LABEL: String = "C"
+## L'action d'entrée correspondante, telle que `project.godot` la déclare.
+##
+## L'action lit la touche **physique** : sur un clavier AZERTY, `keycode` rend la
+## lettre imprimée et non la position. C'est aussi ce qui rendra la touche
+## remappable.
+const HOLD_ACTION: String = "enemy_range"
 
 ## Sous l'accélérateur (11) et le journal (12), au-dessus de la minimap (9).
 const LAYER: int = 10
@@ -231,12 +237,19 @@ func _build() -> void:
 ## Les répétitions clavier (`echo`) sont ignorées : une touche maintenue en
 ## produit des dizaines, et chacune aurait relancé le calcul de toute l'armée.
 func _unhandled_input(event: InputEvent) -> void:
-	if not event is InputEventKey:
-		return
-	var key := event as InputEventKey
-	if key.keycode != HOLD_KEY or key.echo:
-		return
-	if key.pressed:
+	var pressed: bool = false
+	if InputMap.has_action(HOLD_ACTION):
+		if not event.is_action(HOLD_ACTION) or event.is_echo():
+			return
+		pressed = event.is_pressed()
+	else:
+		# Repli, si la carte d'entrées ne déclare pas l'action : le code de touche.
+		var key := event as InputEventKey
+		if not key or key.keycode != HOLD_KEY or key.echo:
+			return
+		pressed = key.pressed
+
+	if pressed:
 		engage()
 	else:
 		release()

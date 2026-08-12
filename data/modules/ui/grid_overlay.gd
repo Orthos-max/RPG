@@ -24,6 +24,13 @@ extends Node3D
 
 ## La touche qui montre et masque le quadrillage.
 const TOGGLE_KEY: Key = KEY_G
+## L'action d'entrée correspondante, telle que `project.godot` la déclare.
+##
+## Passer par l'action plutôt que par le code de touche brut, c'est lire la
+## touche **physique** : sur un clavier AZERTY, `keycode` rend la lettre imprimée
+## et non la position, et le G du quadrillage n'aurait pas été le même selon la
+## disposition. C'est aussi ce qui rendra la touche remappable.
+const TOGGLE_ACTION: String = "toggle_grid"
 
 ## Hauteur du liseré au-dessus de la surface de la case, en unités de monde.
 ## Assez pour ne pas lutter avec le sol (z-fighting), assez peu pour rester posé
@@ -123,11 +130,11 @@ func _build() -> void:
 		_mesh.queue_free()
 		_mesh = null
 
-	_drawn = 0
 	var tiles: Node = arena.get_node_or_null("Tiles") if arena and is_instance_valid(arena) else null
 	if not tiles:
 		return
 
+	var drawn: int = 0
 	var points := PackedVector3Array()
 	for tile: Node in tiles.get_children():
 		if not tile is Node3D:
@@ -136,8 +143,8 @@ func _build() -> void:
 		if shape.is_empty():
 			continue
 		points.append_array(tile_outline(shape["center"], float(shape["side"])))
-		_drawn += 1
-	if _drawn == 0:
+		drawn += 1
+	if drawn == 0:
 		return
 
 	var mesh := ImmediateMesh.new()
@@ -188,11 +195,14 @@ func outlined_count() -> int:
 ## Les répétitions clavier sont ignorées : une touche laissée enfoncée en produit
 ## des dizaines, et le quadrillage clignoterait.
 func _unhandled_input(event: InputEvent) -> void:
-	if not event is InputEventKey:
-		return
-	var key := event as InputEventKey
-	if key.keycode != TOGGLE_KEY or key.echo or not key.pressed:
-		return
+	if InputMap.has_action(TOGGLE_ACTION):
+		if not event.is_action_pressed(TOGGLE_ACTION):
+			return
+	else:
+		# Repli, si la carte d'entrées ne déclare pas l'action : le code de touche.
+		var key := event as InputEventKey
+		if not key or key.keycode != TOGGLE_KEY or key.echo or not key.pressed:
+			return
 	toggle()
 	get_viewport().set_input_as_handled()
 

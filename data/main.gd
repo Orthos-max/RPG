@@ -18,6 +18,8 @@ const ScreenFaderClass = preload("res://data/modules/ui/fader.gd")
 const MinimapClass = preload("res://data/modules/ui/minimap.gd")
 const BattleHistoryClass = preload("res://data/modules/ui/battle_history.gd")
 const BattleSpeedClass = preload("res://data/modules/ui/battle_speed.gd")
+const ThreatRangeClass = preload("res://data/modules/ui/threat_range.gd")
+const GridOverlayClass = preload("res://data/modules/ui/grid_overlay.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
 const MapEditorScene = preload("res://assets/maps/level/map_editor_level.tscn")
@@ -601,6 +603,23 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		var speed: CanvasLayer = BattleSpeedClass.new()
 		speed.name = "BattleSpeed"
 		_level.add_child(speed)
+
+	# Portée des ennemis (touche C maintenue). Enfant du niveau, donc libéré avec
+	# lui : c'est ce qui garantit qu'aucune case ne reste teintée en rouge une fois
+	# la bataille finie (voir [BattleThreatRange._exit_tree]).
+	if _level is TacticsLevel and ThreatRangeClass.available():
+		var threat: CanvasLayer = ThreatRangeClass.new()
+		threat.name = "BattleThreatRange"
+		threat.level = _level
+		_level.add_child(threat)
+
+	# Quadrillage du plateau (touche G). Enfant du niveau lui aussi : il bâtit son
+	# maillage sur les tuiles de CETTE arène. L'état, lui, survit d'une bataille à
+	# l'autre — il vit dans un statique de la classe, pas dans le nœud.
+	if _level is TacticsLevel and GridOverlayClass.available():
+		var grid_overlay: Node3D = GridOverlayClass.new()
+		grid_overlay.name = "BattleGridOverlay"
+		_level.add_child(grid_overlay)
 
 	# En campagne, le runner applique le roster et surveille l'objectif.
 	if _chapter and _level is TacticsLevel:

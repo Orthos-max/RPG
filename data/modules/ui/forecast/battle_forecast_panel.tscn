@@ -18,17 +18,25 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
+; Bas-droite, et non haut-droite : la minimap ([BattleMinimap], calque 9) occupe
+; le coin haut-droit et passe par-dessus les contrôles — la prévision s'affichait
+; dessous, tronquée à droite. Le bas de la colonne de droite est libre : seul le
+; bouton « Journal (H) » y tient, d'où les 56 px gardés sous le panneau.
 [node name="BattleForecast" type="PanelContainer"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 1
+anchors_preset = 3
 anchor_left = 1.0
+anchor_top = 1.0
 anchor_right = 1.0
-offset_left = -348.0
-offset_top = 16.0
+anchor_bottom = 1.0
+offset_left = -396.0
+offset_top = -56.0
 offset_right = -16.0
+offset_bottom = -56.0
 grow_horizontal = 0
-custom_minimum_size = Vector2(332, 0)
+grow_vertical = 0
+custom_minimum_size = Vector2(380, 0)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frcst")
 script = ExtResource("1_frcst")
@@ -56,6 +64,7 @@ theme_override_font_sizes/font_size = 15
 [node name="Damage" type="Label" parent="Margin/VBox"]
 layout_mode = 2
 mouse_filter = 2
+autowrap_mode = 3
 theme_override_font_sizes/font_size = 21
 
 [node name="Rates" type="Label" parent="Margin/VBox"]
@@ -71,6 +80,7 @@ theme_override_font_sizes/font_size = 15
 [node name="Counter" type="Label" parent="Margin/VBox"]
 layout_mode = 2
 mouse_filter = 2
+autowrap_mode = 3
 theme_override_font_sizes/font_size = 15
 
 [node name="CounterHealth" type="Label" parent="Margin/VBox"]
