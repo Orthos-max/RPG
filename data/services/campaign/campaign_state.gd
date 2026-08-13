@@ -160,7 +160,11 @@ func unit_from_resource(path: String) -> Dictionary:
 		"weapon_might": res.weapon_might,
 		"is_promoted": res.is_promoted,
 		"alive": true,
-		"items": [],
+		# Le sac de la fiche, et non un sac vide : c'est déjà celui-là que le pion
+		# emportait au combat ([method Stats.setup]). Le laisser vide ici faisait
+		# mentir l'intendance, qui affiche le sac du roster — une unité y paraissait
+		# les mains vides et sortait pourtant sa potion en bataille.
+		"items": _items_of(res),
 		"weapons": _weapons_of(res),
 		"weapon": _equipped_of(res),
 		# Cette unité est-elle gérée par le catalogue d'armes ? Sans ce marqueur,
@@ -169,6 +173,18 @@ func unit_from_resource(path: String) -> Dictionary:
 		# avec l'arme écrite dans son `.tres`.
 		"uses_arsenal": not _weapons_of(res).is_empty(),
 	}
+
+
+## Consommables déclarés par une fiche, filtrés sur ceux que le catalogue connaît.
+func _items_of(res: Resource) -> Array:
+	var out: Array = []
+	var declared: Variant = res.get("items")
+	if declared is Array:
+		for i in declared:
+			var key: String = ITEMS.canonical_name(str(i))
+			if not key.is_empty() and out.size() < ITEMS.MAX_ITEMS:
+				out.append(key)
+	return out
 
 
 ## Armes déclarées par une fiche, filtrées sur celles que le catalogue connaît.
@@ -302,6 +318,14 @@ func apply_battle_result(snapshot: Dictionary) -> void:
 		for stat in ["max_hp", "str", "mag", "skl", "spd", "lck", "def", "res", "movement"]:
 			if snapshot.has(stat):
 				u[stat] = int(snapshot[stat])
+		# Le sac tel qu'il sort de la bataille : ce qui a été bu ne se retrouve pas
+		# à l'intendance. La clé manque pour un instantané d'avant le sac
+		# persistant — celui-là ne doit rien effacer.
+		if snapshot.get("items") is Array:
+			var bag: Array = []
+			for item in snapshot["items"]:
+				bag.append(str(item))
+			u["items"] = bag
 		if hp <= 0:
 			if permadeath:
 				u["alive"] = false

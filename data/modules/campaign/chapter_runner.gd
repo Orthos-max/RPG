@@ -235,6 +235,9 @@ func _snapshot_of(p: TacticsPawn) -> Dictionary:
 		"class_id": s.character_class, "is_promoted": s.is_promoted,
 		"str": s.str, "mag": s.mag, "skl": s.skl, "spd": s.spd,
 		"lck": s.lck, "def": s.def, "res": s.res, "movement": s.movement,
+		# Ce qu'il reste dans le sac : une potion bue en bataille est bue pour de
+		# bon, et c'est ce qui donne son prix à « recommencer le chapitre ».
+		"items": s.items.duplicate(),
 	}
 
 
@@ -675,6 +678,7 @@ static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	stats.movement = int(unit.get("movement", stats.movement))
 	stats.apply_class_growths(stats.character_class)
 	_apply_arsenal(stats, unit)
+	_apply_bag(stats, unit)
 	# Les compétences ne sont imposées que si le roster en porte une liste : une
 	# unité de campagne ordinaire n'en a pas, et garde donc celles de sa classe.
 	if unit.get("skills") is Array:
@@ -708,6 +712,24 @@ static func _refresh_look(stats: Stats) -> void:
 		pawn = pawn.get_parent()
 	if pawn and pawn.character and pawn.character.has_method("setup"):
 		pawn.character.setup(stats, pawn.expertise)
+
+
+## Reporte le sac du roster sur le pion.
+##
+## Sans cela, la potion achetée à l'intendance restait dans la sauvegarde et le
+## pion entrait en scène avec le sac écrit dans son `.tres` — même symptôme que
+## l'arsenal ci-dessous, et même remède. Les unités écrites par le joueur en
+## souffraient aussi : leur inventaire voyage bien jusqu'au roster
+## ([method UnitDocument.to_roster_unit]) mais s'arrêtait là.
+##
+## La clé absente veut dire « fiche d'avant le sac persistant, ses valeurs brutes
+## font foi » ; un sac vide veut dire « elle a tout bu, elle part sans rien ».
+static func _apply_bag(stats: Stats, unit: Dictionary) -> void:
+	if not unit.get("items") is Array:
+		return
+	stats.items = []
+	for item in unit["items"]:
+		stats.add_item(str(item))
 
 
 ## Reporte l'arsenal du roster sur le pion : sans cela, l'arme achetée et

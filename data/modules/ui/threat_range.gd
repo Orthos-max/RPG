@@ -72,7 +72,7 @@ static func available() -> bool:
 ##
 ## [returns] un tableau de [Vector2i], sans doublon, dans un ordre quelconque.
 static func threat_cells(from_level: Node) -> Array:
-	var grid: BattleGrid = _grid_of(from_level)
+	var grid: BattleGrid = grid_of(from_level)
 	if not grid:
 		return []
 
@@ -110,8 +110,26 @@ static func enemy_pawns(from_level: Node) -> Array:
 	return out
 
 
+## Les cases qu'un seul adversaire peut frapper au tour prochain.
+##
+## Même calcul que [method threat_cells] — où il peut aller, puis ce qu'il y
+## frappe — mais borné à un pion. C'est ce que montre l'aperçu au survol
+## ([EnemyPeekPanel]) : la touche C répond « qui peut m'atteindre ici ? », le
+## survol répond « et celui-là, jusqu'où va-t-il ? ».
+##
+## [param from_level] sert à retrouver la grille ; `null` prend celle en cours.
+## [returns] un tableau de [Vector2i], sans doublon, dans un ordre quelconque.
+static func cells_for(pawn: TacticsPawn, from_level: Node = null) -> Array:
+	if not pawn or not is_instance_valid(pawn) or not pawn.stats or not pawn.is_alive():
+		return []
+	var grid: BattleGrid = grid_of(from_level)
+	if not grid:
+		return []
+	return _threat_of(grid, pawn)
+
+
 ## L'index de grille de ce niveau — le sien s'il l'expose, celui en cours sinon.
-static func _grid_of(from_level: Node) -> BattleGrid:
+static func grid_of(from_level: Node) -> BattleGrid:
 	if from_level is TacticsLevel:
 		var arena: TacticsArena = (from_level as TacticsLevel).arena
 		if arena and arena.grid:
@@ -288,7 +306,7 @@ func _paint() -> void:
 	_erase()
 	if not level or not is_instance_valid(level):
 		return
-	var grid: BattleGrid = _grid_of(level)
+	var grid: BattleGrid = grid_of(level)
 	if not grid:
 		return
 	for coord: Vector2i in threat_cells(level):

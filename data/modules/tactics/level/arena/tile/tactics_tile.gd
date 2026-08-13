@@ -18,6 +18,11 @@ var hover: bool = false
 ## participe à aucune règle, et [method reset_markers] ne le touche pas — c'est
 ## le nœud qui l'a allumé qui l'éteint, au relâchement de la touche.
 var threat: bool = false
+## Case à portée de l'ennemi actuellement survolé à la souris (voir
+## [EnemyPeekPanel]). Même nature que [member threat] — un drapeau d'affichage,
+## posé et retiré par le nœud qui l'allume, ignoré de [method reset_markers] et
+## de toute règle.
+var peek: bool = false
 ## Point de commandement à prendre (objectif « prise de point » du chapitre)
 var seize_point: bool = false
 ## Case où le joueur peut poser une unité avant la bataille
@@ -109,10 +114,15 @@ func _process(_delta: float) -> void:
 ##
 ## 1. ce qui dépend du pion en cours — survol, portée de déplacement, portée
 ##    d'arme — parce que c'est ce que le joueur est en train de lire ;
-## 2. la portée adverse, montrée le temps d'une touche tenue, et demandée
+## 2. la portée de l'ennemi sous la souris, qui ne dure que le survol ;
+## 3. la portée adverse entière, montrée le temps d'une touche tenue, et demandée
 ##    justement pour être lue ;
-## 3. les marques de scénario — point à prendre, case de déploiement — qui
+## 4. les marques de scénario — point à prendre, case de déploiement — qui
 ##    restent affichées tout un chapitre et peuvent donc céder le pas.
+##
+## Le survol passe avant la touche C, et non l'inverse : quand les deux sont
+## affichés, l'orange découpe dans le rose la part d'un seul adversaire — c'est
+## précisément la question qu'on pose en pointant un ennemi.
 func current_state() -> String:
 	if attackable or reachable or hover:
 		if hover:
@@ -125,6 +135,8 @@ func current_state() -> String:
 			return "reachable"
 		return "attackable"
 
+	if peek:
+		return "peek"
 	if threat:
 		return "threat"
 	if deploy_point:

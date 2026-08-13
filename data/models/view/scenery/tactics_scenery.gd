@@ -594,6 +594,14 @@ const HIGHLIGHT_TINTS: Dictionary = {
 	## Portée adverse (touche C) — un rose franc, qui ne se confond ni avec le
 	## bleu de son propre déplacement ni avec le rouge de sa propre portée d'arme.
 	"threat": "#e0559c",
+	## Portée du seul ennemi survolé ([EnemyPeekPanel]) — un orange chaud.
+	##
+	## Il partage la question du rose (« qui peut me frapper ici ? ») mais pas la
+	## portée de la réponse : le rose, c'est toute l'armée adverse, l'orange c'est
+	## cet adversaire-ci. Deux nuances d'un même ton auraient demandé de comparer
+	## des cases côte à côte pour trancher ; un ton franchement autre se lit d'un
+	## coup d'œil, y compris quand les deux s'affichent ensemble.
+	"peek": "#ff9a3c",
 }
 
 ## Part de la teinte dans le mélange avec la couleur du terrain (0 = terrain nu).

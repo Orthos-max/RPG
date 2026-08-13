@@ -9,16 +9,25 @@ extends CanvasLayer
 ## le curseur et répond tout de suite : PV, les cinq stats qui décident d'un
 ## échange, et l'arme en main.
 ##
+## [b]Elle montre aussi la portée de l'unité pointée[/b] : les cases qu'elle peut
+## atteindre au tour prochain s'allument en orange le temps du survol
+## ([method BattleThreatRange.cells_for], le même calcul que la touche C mais
+## borné à ce pion-ci). Les chiffres disent ce que coûte un échange, l'orange dit
+## s'il aura seulement lieu.
+##
 ## [b]Elle ne touche à rien.[/b] Le survol se lit par un rayon à elle, tiré
 ## depuis la caméra sur le calque des pions — aucun état de sélection n'est
 ## consulté ni modifié, et le jeu se joue exactement pareil qu'elle soit là ou
-## non.
+## non. La portée n'allume que [member TacticsTile.peek], un drapeau
+## d'affichage qui cède le pas aux marques du déplacement en cours : pointer un
+## ennemi pendant qu'on trace un trajet n'efface rien de ce trajet.
 ##
 ## [b]Rien ne tourne sans écran.[/b] [method available] rend `false` en
 ## `--headless`, où il n'y a ni souris ni caméra : [Main] ne monte alors pas le
 ## nœud. Les lignes, elles, se construisent sans nœud ([method lines_for]).
 
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
+const ThreatRangeClass = preload("res://data/modules/ui/threat_range.gd")
 
 ## Calque de collision des pions — le même que celui du clic de sélection.
 const PAWN_MASK: int = 2
@@ -47,6 +56,9 @@ const C_DIM := Color(0.72, 0.74, 0.8)
 ## Les stats montrées, dans l'ordre — celles qui décident d'un échange.
 const SHOWN_STATS: Array[String] = ["FOR", "MAG", "VIT", "DÉF", "RÉS"]
 
+## Le niveau observé — sert à retrouver la grille où teinter la portée.
+var level: Node = null
+
 var _root: Control = null
 var _frame: PanelContainer = null
 var _title: Label = null
@@ -56,6 +68,16 @@ var _weapon: Label = null
 
 var _since_refresh: float = 0.0
 var _shown: TacticsPawn = null
+
+## Les cases teintées pour l'unité survolée — gardées pour savoir quoi éteindre.
+var _range_tiles: Array = []
+## L'unité dont la portée est affichée, et la case d'où elle a été calculée.
+##
+## Le couple sert de cache : tant que ni l'une ni l'autre ne change, le parcours
+## n'est pas refait. Sans lui, le survol relancerait un calcul de portée dix fois
+## par seconde sur une scène qui n'a pas bougé.
+var _range_of: TacticsPawn = null
+var _range_from: Object = null
 
 
 ## Y a-t-il un écran, et donc une souris pour survoler ?
@@ -192,6 +214,10 @@ func _pawn_under_cursor() -> Object:
 func show_for(pawn: TacticsPawn) -> void:
 	if not _frame:
 		return
+	# La portée se rafraîchit même quand l'étiquette ne bouge pas : l'unité
+	# pointée peut avoir changé de case entre-temps — au tour adverse, par
+	# exemple, souris immobile.
+	_show_range(pawn)
 	if pawn == _shown and _frame.visible:
 		return
 	_shown = pawn
@@ -209,11 +235,57 @@ func clear_peek() -> void:
 	_shown = null
 	if _frame:
 		_frame.visible = false
+	_hide_range()
 
 
 ## L'unité actuellement montrée, ou `null`.
 func shown_pawn() -> TacticsPawn:
 	return _shown
+
+
+## Nombre de cases actuellement teintées par le survol.
+func range_count() -> int:
+	return _range_tiles.size()
+
+
+## Teinte les cases que l'unité pointée peut frapper au tour prochain.
+##
+## Le calcul est celui de la touche C, borné à ce pion
+## ([method BattleThreatRange.cells_for]), et il ne se refait que si l'unité ou
+## sa case change — c'est le même parti pris que l'étiquette, qui ne reconstruit
+## ses lignes que sur changement.
+func _show_range(pawn: TacticsPawn) -> void:
+	var tile: Object = pawn.get_tile()
+	if pawn == _range_of and tile == _range_from and not _range_tiles.is_empty():
+		return
+	_hide_range()
+
+	var grid: BattleGrid = ThreatRangeClass.grid_of(level)
+	if not grid:
+		return
+	_range_of = pawn
+	_range_from = tile
+
+	for coord: Vector2i in ThreatRangeClass.cells_for(pawn, level):
+		var cell: Node = grid.tile_at(coord)
+		if cell is TacticsTile:
+			(cell as TacticsTile).peek = true
+			_range_tiles.append(cell)
+
+
+## Éteint les cases teintées. Sans effet si rien n'était affiché.
+func _hide_range() -> void:
+	for cell: Variant in _range_tiles:
+		if is_instance_valid(cell):
+			(cell as TacticsTile).peek = false
+	_range_tiles.clear()
+	_range_of = null
+	_range_from = null
+
+
+## La bataille se décharge : aucune case ne doit rester orange.
+func _exit_tree() -> void:
+	_hide_range()
 
 
 ## Pose l'étiquette près du curseur, sans la laisser déborder de l'écran.

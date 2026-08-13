@@ -19,6 +19,7 @@ const MinimapClass = preload("res://data/modules/ui/minimap.gd")
 const BattleHistoryClass = preload("res://data/modules/ui/battle_history.gd")
 const BattleSpeedClass = preload("res://data/modules/ui/battle_speed.gd")
 const ThreatRangeClass = preload("res://data/modules/ui/threat_range.gd")
+const EnemyPeekClass = preload("res://data/modules/ui/enemy_peek.gd")
 const GridOverlayClass = preload("res://data/modules/ui/grid_overlay.gd")
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 
@@ -612,6 +613,15 @@ func _load_level(scene_path: String, prebuilt: Node = null) -> void:
 		threat.name = "BattleThreatRange"
 		threat.level = _level
 		_level.add_child(threat)
+
+	# Aperçu d'une unité adverse au survol de la souris — ses stats, et les cases
+	# qu'elle peut frapper. Enfant du niveau pour la même raison que la portée
+	# ci-dessus : il teinte des cases, et les rend en partant.
+	if _level is TacticsLevel and EnemyPeekClass.available():
+		var peek: CanvasLayer = EnemyPeekClass.new()
+		peek.name = "EnemyPeekPanel"
+		peek.level = _level
+		_level.add_child(peek)
 
 	# Quadrillage du plateau (touche G). Enfant du niveau lui aussi : il bâtit son
 	# maillage sur les tuiles de CETTE arène. L'état, lui, survit d'une bataille à
