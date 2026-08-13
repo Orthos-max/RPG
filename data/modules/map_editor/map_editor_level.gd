@@ -201,10 +201,11 @@ func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
 
 	body.position = _tile_center(pos, height)
 
-	# Matériau partagé du terrain (grain compris) : celui de la bataille.
+	# Matériau partagé du terrain (grain compris) : celui de la bataille,
+	# variante de case comprise — ce qu'on dessine ici est ce qu'on jouera.
 	var terrain: int = doc.terrain_at(pos)
-	mesh_instance.material_override = TacticsConfig.terrain_material.get(
-		terrain, TacticsConfig.terrain_material[MapDataClass.TerrainType.GRASS])
+	mesh_instance.material_override = TacticsScenery.terrain_material_at(
+		terrain, pos, height)
 
 
 ## Redessine le décor : arbres, rochers, créneaux, comme en bataille.
@@ -226,6 +227,7 @@ func _rebuild_props() -> void:
 				"top": Vector3(center.x, center.y + thickness / 2.0, center.z),
 			})
 	TacticsProps.build(self, cells, doc.tile_size)
+	TacticsDecor.build(self, cells, doc.tile_size)
 
 
 ## Redessine les repères posés sur la carte : unités, zone de départ, point à prendre.
