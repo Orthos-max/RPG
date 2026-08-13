@@ -85,7 +85,7 @@ const CHAPTERS: Array[Dictionary] = [
 			"Le premier rayon de soleil balaie la cour.",
 			"Les morts se figent, puis tombent.",
 		],
-		"scene_path": "res://assets/maps/level/map_level.tscn",
+		"scene_path": "res://assets/maps/level/ch03_level.tscn",
 		"objective": {"kind": OBJ.Kind.SURVIVE, "turns": 8},
 		"bonus_objectives": [
 			{"kind": OBJ.Bonus.NO_LOSSES},
@@ -110,9 +110,10 @@ const CHAPTERS: Array[Dictionary] = [
 			"quelqu'un mesure la Surcharge depuis des années, jour après jour.",
 			"Ce ne sont pas les notes d'un pillard.",
 		],
-		"scene_path": "res://assets/maps/level/map_level.tscn",
+		"scene_path": "res://assets/maps/level/ch04_level.tscn",
 		# Prise de point : la case (3, 8) est à l'autre bout de la carte, côté
-		# adverse. Il faut traverser, pas seulement survivre.
+		# adverse. Il faut traverser, pas seulement survivre — la rivière ne se
+		# franchit que par ses deux ponts, (8, 2) au nord et (8, 7) au sud.
 		"objective": {"kind": OBJ.Kind.SEIZE, "col": 3, "row": 8},
 		"bonus_objectives": [
 			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 12},
@@ -138,7 +139,9 @@ const CHAPTERS: Array[Dictionary] = [
 			"comme s'il avait reçu un ordre que personne n'a entendu.",
 			"Loin devant, une silhouette bleue s'éloigne sans se retourner.",
 		],
-		"scene_path": "res://assets/maps/level/map_level.tscn",
+		"scene_path": "res://assets/maps/level/ch05_level.tscn",
+		# Le seuil est la porte (13, 9), au fond de la troisième salle. La roche
+		# ferme le flanc droit : il n'y a pas de chemin qui en fasse le tour.
 		"objective": {"kind": OBJ.Kind.SEIZE, "col": 13, "row": 9},
 		"bonus_objectives": [
 			{"kind": OBJ.Bonus.FULL_ROUT},

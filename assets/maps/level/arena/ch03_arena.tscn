@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3 uid="uid://bmapch03s01"]
+
+[ext_resource type="Script" path="res://data/modules/tactics/level/arena/tactics_arena.gd" id="1"]
+[ext_resource type="Resource" path="res://data/models/world/combat/arena/ch03_arena.tres" id="2"]
+
+[node name="TacticsArena" type="Node3D"]
+script = ExtResource("1")
+res = ExtResource("2")
