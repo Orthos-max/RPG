@@ -167,7 +167,7 @@ const CHAPTERS: Array[Dictionary] = [
 			"— Ces courbes… ce n'est pas une réserve qu'on vide. C'est un cœur qui s'emballe.",
 			"Personne n'ose demander ce qui arrive quand il s'arrête.",
 		],
-		"scene_path": "res://assets/maps/level/map_level.tscn",
+		"scene_path": "res://assets/maps/level/ch06_level.tscn",
 		# Protéger : la cible doit correspondre au nom affiché d'un pion du joueur.
 		# `required_units` l'impose au déploiement — sans quoi le joueur pourrait
 		# la laisser au camp et perdre au premier tour.
