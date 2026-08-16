@@ -112,3 +112,8 @@ jobs:
             build/dist/*.exe
             build/dist/*.zip
           if-no-files-found: error
+          # Rétention courte : chaque build pèse ~63 Mo et le quota gratuit
+          # d'Actions est de 0,5 Go — sans cela, les artefacts s'accumulent
+          # et le stockage est saturé en quelques jours (45 artefacts / 2,5 Go
+          # en août 2026). La release GitHub garde l'installeur officiel.
+          retention-days: 7
