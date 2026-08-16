@@ -163,7 +163,7 @@ func _show_terrains(main: Node) -> void:
 	doc.set_terrain_at(Vector2i(14, 8), T.TOWER)
 	paint.call(Rect2i(16, 4, 2, 3), T.FORT)
 	paint.call(Rect2i(12, 8, 2, 2), T.RUINS)
-	doc.set_terrain_at(Vector2i(19, 11), T.PIT)
+	doc.set_terrain_at(Vector2i(19, 11), T.WATER)
 
 	editor.doc = doc
 	editor._forget_history()

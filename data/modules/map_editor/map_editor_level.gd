@@ -19,8 +19,8 @@ const UI = preload("res://data/modules/map_editor/map_editor_ui.gd")
 const LIBRARY = preload("res://data/services/campaign/map_library.gd")
 const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 
-## Nom du nœud de calque de transition posé sur chaque tuile (même convention
-## que [constant TacticsAutoTiler.OVERLAY_NODE]).
+## Préfixe des nœuds de bande de transition posés sur chaque tuile, un par côté
+## bordé (même convention que [constant TacticsAutoTiler.OVERLAY_NODE]).
 const AUTOTILE_NODE: String = "AutoTile"
 
 ## Épaisseur minimale d'une tuile plate, pour qu'elle reste visible
@@ -218,32 +218,44 @@ func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
 	_apply_autotile(body, pos, terrain, thickness)
 
 
-## Pose (ou met à jour) le calque de transition d'une case, comme la bataille.
+## Pose (ou met à jour) les bandes de transition d'une case, comme la bataille.
 ##
 ## Réplique [method TacticsAutoTiler.apply_to_tile] pour les tuiles nues de
-## l'éditeur : le masque se calcule depuis [member doc] au lieu du
-## [BattleGrid], le reste — matériau, quad, hauteur — est identique.
+## l'éditeur : le masque et les voisins se calculent depuis [member doc] au lieu
+## du [BattleGrid], le reste — matériau, bande par côté, hauteur — est
+## identique. Une case y montre donc la mer à droite et le bois à gauche, comme
+## en bataille : dessiner une carte qui ne se joue pas telle qu'elle se dessine
+## n'aurait aucun intérêt.
 func _apply_autotile(body: StaticBody3D, pos: Vector2i, terrain: int, thickness: float) -> void:
-	var overlay: MeshInstance3D = body.get_node_or_null(AUTOTILE_NODE) as MeshInstance3D
-
-	var material: StandardMaterial3D = TacticsAutoTiler.overlay_material(
-		terrain, _editor_mask(pos, terrain), _editor_neighbor(pos, terrain))
-	if not material:
-		if overlay:
-			body.remove_child(overlay)
-			overlay.queue_free()
-		return
-
-	if not overlay:
-		overlay = MeshInstance3D.new()
-		overlay.name = AUTOTILE_NODE
-		overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		body.add_child(overlay)
-
+	var mask: String = _editor_mask(pos, terrain)
+	var backgrounds: Dictionary = _editor_neighbors(pos, terrain)
 	var size: float = doc.tile_size * 0.98
-	overlay.mesh = TacticsAutoTiler.quad_mesh(size, size)
-	overlay.position = Vector3(0.0, thickness / 2.0 + 0.006, 0.0)
-	overlay.material_override = material
+
+	for rank: int in TacticsAutoTiler.SIDES.size():
+		var side: String = str(TacticsAutoTiler.SIDES[rank][0])
+		var node_name: String = "%s_%s" % [AUTOTILE_NODE, side]
+		var overlay: MeshInstance3D = body.get_node_or_null(node_name) as MeshInstance3D
+
+		var material: StandardMaterial3D = null
+		if mask.contains(side):
+			material = TacticsAutoTiler.overlay_material(
+				terrain, side, int(backgrounds.get(side, -1)))
+		if not material:
+			if overlay:
+				body.remove_child(overlay)
+				overlay.queue_free()
+			continue
+
+		if not overlay:
+			overlay = MeshInstance3D.new()
+			overlay.name = node_name
+			overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			body.add_child(overlay)
+
+		overlay.mesh = TacticsAutoTiler.band_mesh(size, size, side)
+		overlay.position = Vector3(0.0, thickness / 2.0 + TacticsAutoTiler.OVERLAY_LIFT
+			+ float(rank) * TacticsAutoTiler.SIDE_LIFT, 0.0)
+		overlay.material_override = material
 
 
 ## Le masque d'une case dans la grille du document, dans l'ordre n, e, s, w.
@@ -261,29 +273,24 @@ func _editor_mask(pos: Vector2i, terrain: int) -> String:
 	return mask if not mask.is_empty() else "fill"
 
 
-## Le terrain qui borde une case, sur lequel sa transition se dessinera.
+## Ce qui borde une case, côté par côté, sur la grille du document.
 ##
-## Réplique de [method TacticsAutoTiler.neighbor_at] pour la grille du
-## document, comme [method _editor_mask] l'est de `mask_at` : sans lui,
-## l'éditeur montrerait ses rives sur de l'herbe et la carte peinte ne
-## ressemblerait plus à la carte jouée.
-func _editor_neighbor(pos: Vector2i, terrain: int) -> int:
+## Réplique de [method TacticsAutoTiler.neighbors_at], comme [method
+## _editor_mask] l'est de `mask_at` : sans elle, l'éditeur montrerait ses rives
+## sur de l'herbe et la carte peinte ne ressemblerait plus à la carte jouée.
+func _editor_neighbors(pos: Vector2i, terrain: int) -> Dictionary:
+	var found: Dictionary = {}
 	if not TacticsAutoTiler.EDGE_SETS.has(terrain):
-		return -1
+		return found
 
-	var tally: Dictionary = {}
-	var best: int = -1
 	for side: Array in TacticsAutoTiler.SIDES:
 		var neighbor: Vector2i = pos + (side[1] as Vector2i)
 		if not doc.in_bounds(neighbor):
 			continue
 		var other: int = doc.terrain_at(neighbor)
-		if other == terrain or not TacticsAutoTiler.BACKGROUND_SETS.has(other):
-			continue
-		tally[other] = int(tally.get(other, 0)) + 1
-		if best < 0 or int(tally[other]) > int(tally[best]):
-			best = other
-	return best
+		if other != terrain:
+			found[str(side[0])] = other
+	return found
 
 
 ## Redessine le décor : arbres, rochers, créneaux, comme en bataille.

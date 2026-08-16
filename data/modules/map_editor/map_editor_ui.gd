@@ -53,6 +53,12 @@ const C_DIM: Color = Color(1, 1, 1, 0.5)
 ## permet à l'éditeur de le poser sans table de correspondance. Les autres outils
 ## commencent à 100 : la place est donc libre pour les terrains à venir, sans
 ## renuméroter ni rendre illisibles les cartes déjà enregistrées.
+##
+## La fosse n'y est plus depuis le 2026-08-16 : un trou noir infranchissable que
+## rien ne distinguait d'un mur au jeu, et que le gouffre d'eau dit mieux. Le
+## terrain existe toujours dans [MapData] — les numéros ne bougent pas, sans quoi
+## toute carte enregistrée changerait de sens —, il n'est simplement plus
+## proposé au pinceau.
 enum Tool {
 	GRASS = MapData.TerrainType.GRASS,
 	FOREST = MapData.TerrainType.FOREST,
@@ -60,7 +66,6 @@ enum Tool {
 	WATER = MapData.TerrainType.WATER,
 	PATH = MapData.TerrainType.PATH,
 	WALL = MapData.TerrainType.WALL,
-	PIT = MapData.TerrainType.PIT,
 	VILLAGE = MapData.TerrainType.VILLAGE,
 	FORT = MapData.TerrainType.FORT,
 	GATE = MapData.TerrainType.GATE,
@@ -90,7 +95,6 @@ const TERRAIN_ICONS: Dictionary = {
 	MapData.TerrainType.WATER: "💧",
 	MapData.TerrainType.PATH: "🛤️",
 	MapData.TerrainType.WALL: "🧱",
-	MapData.TerrainType.PIT: "🕳️",
 	MapData.TerrainType.VILLAGE: "🏘️",
 	MapData.TerrainType.FORT: "🏰",
 	MapData.TerrainType.GATE: "🚪",
@@ -105,7 +109,7 @@ const TERRAIN_ICONS: Dictionary = {
 ## Première ligne de la palette : ce que personne n'a bâti.
 const NATURE_TOOLS: Array[int] = [
 	Tool.GRASS, Tool.FOREST, Tool.SWAMP, Tool.WATER,
-	Tool.SAND, Tool.SNOW, Tool.MOUNTAIN, Tool.PIT,
+	Tool.SAND, Tool.SNOW, Tool.MOUNTAIN,
 ]
 
 ## Deuxième ligne : ce qui se construit — l'héroïc fantasy tient là-dedans.

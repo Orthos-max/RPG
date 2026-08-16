@@ -42,12 +42,16 @@ var terrain_mat: Material = null
 ## Matériaux de surlignage déjà résolus pour cette case.
 var _highlights: Dictionary = {}
 
-## Calque de transition posé par [TacticsAutoTiler], ou `null` si le terrain de
-## cette case n'en reçoit pas (herbe, montagne, tout ce qui sert de fond).
-var autotile: MeshInstance3D = null
-## Matériau de repos du calque — celui qu'il porte hors surlignage.
-var autotile_mat: StandardMaterial3D = null
-## Teintes du calque déjà résolues, par état.
+## Bandes de transition posées par [TacticsAutoTiler], une par côté bordé.
+##
+## Vide quand le terrain de cette case n'en reçoit pas, ou qu'aucun de ses côtés
+## ne borde autre chose. Il y en avait une seule tant qu'une case n'avait qu'un
+## fond ; il en faut quatre pour qu'un carrefour de quatre terrains montre ses
+## quatre voisins.
+var autotile_layers: Array[MeshInstance3D] = []
+## Matériau de repos de chaque bande — celui qu'elle porte hors surlignage.
+var autotile_mats: Array[StandardMaterial3D] = []
+## Teintes des bandes déjà résolues, par « état:rang ».
 var _autotile_highlights: Dictionary = {}
 
 
@@ -63,24 +67,29 @@ func highlight(state: String) -> StandardMaterial3D:
 	return built
 
 
-## Enregistre le calque d'auto-tuilage de cette case.
+## Enregistre les bandes d'auto-tuilage de cette case.
 ##
 ## Appelé par [TacticsAutoTiler] à la construction de l'arène. Les teintes déjà
-## calculées sont jetées : elles partaient de l'ancien matériau, et une case qui
+## calculées sont jetées : elles partaient des anciens matériaux, et une case qui
 ## change de bord (l'éditeur repeint sa voisine) doit changer de lavis avec lui.
-func set_autotile(overlay: MeshInstance3D, base: StandardMaterial3D) -> void:
-	autotile = overlay
-	autotile_mat = base
+func set_autotile(layers: Array[MeshInstance3D],
+		bases: Array[StandardMaterial3D]) -> void:
+	autotile_layers = layers
+	autotile_mats = bases
 	_autotile_highlights.clear()
 
 
-## Le calque de cette case, passé au lavis d'un état.
-func autotile_highlight(state: String) -> StandardMaterial3D:
-	var known: Variant = _autotile_highlights.get(state)
+## Une bande de cette case, passée au lavis d'un état.
+##
+## Le rang entre dans la clé : deux bandes d'une même case portent deux tuiles
+## différentes — la mer au nord, le bois à l'ouest —, donc deux lavis.
+func autotile_highlight(state: String, rank: int) -> StandardMaterial3D:
+	var key: String = "%s:%d" % [state, rank]
+	var known: Variant = _autotile_highlights.get(key)
 	if known is StandardMaterial3D:
 		return known
-	var built: StandardMaterial3D = TacticsScenery.tinted(autotile_mat, state)
-	_autotile_highlights[state] = built
+	var built: StandardMaterial3D = TacticsScenery.tinted(autotile_mats[rank], state)
+	_autotile_highlights[key] = built
 	return built
 #endregion
 
@@ -101,11 +110,14 @@ func _process(_delta: float) -> void:
 	else:
 		tile.material_override = highlight(state)
 
-	# Le calque de transition suit le même état que la case qu'il recouvre : sans
-	# cela, une rive resterait bleu-mer par-dessus une case atteignable, et le
-	# joueur perdrait de vue jusqu'où il peut aller.
-	if autotile and is_instance_valid(autotile):
-		autotile.material_override = autotile_mat if state.is_empty() else autotile_highlight(state)
+	# Les bandes de transition suivent le même état que la case qu'elles bordent :
+	# sans cela, une rive resterait bleu-mer par-dessus une case atteignable, et
+	# le joueur perdrait de vue jusqu'où il peut aller.
+	for rank: int in autotile_layers.size():
+		var layer: MeshInstance3D = autotile_layers[rank]
+		if layer and is_instance_valid(layer):
+			layer.material_override = autotile_mats[rank] if state.is_empty() \
+				else autotile_highlight(state, rank)
 
 
 ## L'état que cette case doit afficher, ou une chaîne vide pour son terrain nu.

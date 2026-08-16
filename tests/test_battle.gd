@@ -209,7 +209,8 @@ func _run() -> void:
 		var fallen_id: String = fallen_name.to_lower().replace(" ", "_")
 
 		any_pawn.stats.hp = 0
-		await physics_frame  # le runner retient l'état de la frame
+		await process_frame  # le runner retient l'état en _process — la frame
+		await physics_frame  # d'idle n'est pas garantie sinon (course flaky)
 		level.player.remove_child(any_pawn)
 		any_pawn.queue_free()
 		for _i in 40:  # bien au-delà de la demi-seconde du délai de libération

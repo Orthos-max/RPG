@@ -36,15 +36,28 @@ extends RefCounted
 ## [constant PAIR_DIR] : le bord de A dessiné sur le fond de B, pour chaque
 ## couple de terrains. La case lit donc **deux** choses de son voisinage — de
 ## quels côtés son terrain s'arrête ([method mask_at]), et ce qui commence
-## alors ([method neighbor_at]) — et compose `water_sand_n` au lieu de
+## alors ([method neighbors_at]) — et compose `water_sand_n` au lieu de
 ## `water_n`.
 ##
-## Un seul calque par case, donc un seul fond : quand une case d'eau a du sable
-## au nord et de la neige à l'est, c'est le voisin **dominant** qui l'emporte
-## (le plus représenté parmi les côtés qui bordent, à égalité le premier dans
-## l'ordre n, e, s, w). Deux fonds sur une seule tuile demanderaient deux
-## calques empilés ; un seul suffit à faire disparaître la bande d'herbe, qui
-## était tout le défaut.
+## ## Un calque **par côté**, et non un par case
+##
+## Un seul calque par case ne portait qu'un fond : une plage qui a la mer à l'est
+## et un bois à l'ouest choisissait le voisin **dominant** et bordait des deux
+## côtés sur la même chose — de l'eau à gauche de la forêt, ou l'inverse. Le
+## masque savait pourtant tout ce qu'il fallait ; c'est le calque unique qui ne
+## pouvait pas le dire.
+##
+## Chaque côté bordé reçoit donc **sa** bande ([method band_mesh]), texturée de
+## la tuile à masque simple de ce côté et du fond de son voisin **réel** :
+## `sand_water_e` à droite, `sand_forest_w` à gauche. Le centre de la case n'est
+## couvert par rien et garde le matériau de terrain — il n'a pas de transition à
+## montrer. `fill`, donc, ne pose plus aucun calque.
+##
+## Deux bandes se croisent au coin, et la seconde recouvre la première ; chacune
+## est posée un cheveu plus haut que la précédente ([constant SIDE_LIFT]) pour
+## que le recouvrement soit décidé une fois pour toutes plutôt que clignoté à
+## chaque image. Un coin appartient à deux voisins : il faut bien qu'il en
+## trahisse un, et le trahir de façon stable est tout ce qu'on peut promettre.
 ##
 ## Toute paire absente — voisin d'herbe, voisin sans fond dessiné, tuile jamais
 ## engendrée — retombe sur la tuile d'origine à fond d'herbe. C'est le
@@ -52,8 +65,8 @@ extends RefCounted
 ##
 ## ## Un calque, pas un remplacement
 ##
-## Le dessus de la case reçoit un quadrilatère à part, posé quelques millimètres
-## au-dessus du `BoxMesh`. Deux raisons, et la seconde est la vraie :
+## Le dessus de la case reçoit ses quadrilatères à part, posés quelques
+## millimètres au-dessus du `BoxMesh`. Deux raisons, et la seconde est la vraie :
 ##
 ## 1. Le matériau de terrain est projeté en coordonnées **monde**
 ##    ([TacticsScenery]) — le motif traverse les cases au lieu de recommencer sur
@@ -68,7 +81,10 @@ extends RefCounted
 
 const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 
-## Nom du nœud de calque, cherché et reposé à l'identique d'une bataille à l'autre.
+## Préfixe des nœuds de calque : un par côté bordé, `AutoTile_n`, `AutoTile_e`…
+##
+## Cherchés et reposés à l'identique d'une bataille à l'autre, et retirés dès que
+## leur côté cesse de border — l'éditeur repeint une voisine, la bande s'en va.
 const OVERLAY_NODE: String = "AutoTile"
 
 ## Terrains qui reçoivent des bords, et le jeu de tuiles qui les porte.
@@ -76,7 +92,15 @@ const OVERLAY_NODE: String = "AutoTile"
 ## La montagne y est depuis le 2026-08-12 : elle est franchissable (coût 2),
 ## donc souvent collée à une plaine que l'œil traverse — ses bords sont
 ## synthétisés par `art/decouper-bords.py` (le pack SSCAP n'en fournit pas).
+##
+## La prairie y est depuis le 2026-08-16, et c'est un pas de côté par rapport au
+## parti du pack rappelé plus haut : l'herbe n'était le fond de personne d'autre
+## qu'elle-même, donc ne montrait jamais rien. Elle dit maintenant, elle aussi,
+## de quel côté elle s'arrête — ses tuiles sont engendrées par
+## `art/bords-prairie.py`, qui n'a que `edges-pairs/` à remplir puisqu'une
+## prairie sur fond de prairie n'existe pas.
 const EDGE_SETS: Dictionary = {
+	MapDataClass.TerrainType.GRASS: "grass",
 	MapDataClass.TerrainType.WATER: "water",
 	MapDataClass.TerrainType.FOREST: "forest",
 	MapDataClass.TerrainType.SAND: "sand",
@@ -97,9 +121,11 @@ const PAIR_DIR: String = "res://assets/textures/terrain/edges-pairs/"
 ## Terrains qui savent servir de **fond** à la transition d'un voisin.
 ##
 ## Ce sont les surfaces qu'`art/bords-paires.py` sait peindre derrière un bord.
-## L'herbe n'y est pas : c'est déjà le fond des tuiles de [constant EDGE_DIR],
-## donc le cas que le repli couvre. Un terrain absent d'ici — un mur, un pont,
-## une ruine — laisse son voisin border sur de l'herbe, comme avant.
+## L'herbe n'y est pas, bien qu'elle ait maintenant ses propres bords : c'est
+## déjà le fond des tuiles de [constant EDGE_DIR], donc le cas que le repli
+## couvre — l'y ajouter demanderait de recopier `edges/` en neuf exemplaires
+## sous un autre nom. Un terrain absent d'ici — un mur, un pont, une ruine —
+## laisse son voisin border sur de l'herbe, comme avant.
 const BACKGROUND_SETS: Dictionary = {
 	MapDataClass.TerrainType.WATER: "water",
 	MapDataClass.TerrainType.FOREST: "forest",
@@ -116,6 +142,23 @@ const BACKGROUND_SETS: Dictionary = {
 ## clignoter l'une dans l'autre, assez peu pour qu'aucune caméra du jeu ne voie
 ## le calque flotter.
 const OVERLAY_LIFT: float = 0.006
+
+## Écart entre deux bandes voisines, dans l'ordre n, e, s, w.
+##
+## Deux bandes qui se croisent au coin sont coplanaires : la carte de profondeur
+## n'y départage rien et le coin scintille au moindre mouvement de caméra. Un
+## cheveu d'écart tranche à la place — l'ouest passe devant le nord, toujours.
+const SIDE_LIFT: float = 0.0008
+
+## Part de la case couverte par la bande d'un côté.
+##
+## Mesurée sur les tuiles elles-mêmes : le fond du voisin y descend jusqu'au
+## neuvième pixel sur trente-deux (le bord ouest du fortin, le plus profond de
+## tous), et le liseré sombre qui l'accompagne d'un ou deux de plus. Dix pixels
+## couvrent donc toute transition dessinée — en couper une plus court laisserait
+## reparaître, sous la bande, la bande d'herbe que les paires ont fait
+## disparaître.
+const BAND_RATIO: float = 0.3125
 
 ## Côtés du masque, dans l'ordre où les lettres s'écrivent, et leur direction
 ## en coordonnées de grille.
@@ -156,39 +199,58 @@ static func apply_to_grid(grid: BattleGrid) -> void:
 				apply_to_tile(grid, cell, tile as TacticsTile)
 
 
-## Habille une case : choisit sa tuile de bord et pose (ou reprend) son calque.
+## Habille une case : une bande par côté bordé, chacune sur le fond de son voisin.
+##
+## Les côtés qui ne bordent plus rien — ou dont la tuile manque — perdent la
+## leur : l'éditeur repeint une voisine, et la rive s'efface sans laisser de
+## calque orphelin derrière elle.
 static func apply_to_tile(grid: BattleGrid, cell: Vector2i, tile: TacticsTile) -> void:
-	var overlay: MeshInstance3D = tile.get_node_or_null(OVERLAY_NODE) as MeshInstance3D
-
-	var terrain: int = int(tile.terrain_type)
-	var material: StandardMaterial3D = overlay_material(
-		terrain, mask_at(grid, cell, terrain), neighbor_at(grid, cell, terrain))
-	if not material:
-		# Terrain sans bords, ou tuile manquante du dossier `edges/`. Un calque
-		# posé par un terrain précédent — l'éditeur repeint une case — s'en va.
-		if overlay:
-			tile.set_autotile(null, null)
-			overlay.queue_free()
-		return
-
 	var top: MeshInstance3D = tile.get_node_or_null("Tile") as MeshInstance3D
 	if not top or not top.mesh:
 		return
 	var box: AABB = top.mesh.get_aabb()
 
-	if not overlay:
-		overlay = MeshInstance3D.new()
-		overlay.name = OVERLAY_NODE
-		# Le calque ne projette pas d'ombre : il double le dessus de la case, et
-		# deux surfaces à six millièmes l'une de l'autre s'ombrageraient l'une
-		# l'autre en un moiré de bandes sombres.
-		overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		tile.add_child(overlay)
+	var terrain: int = int(tile.terrain_type)
+	var mask: String = mask_at(grid, cell, terrain)
+	var backgrounds: Dictionary = neighbors_at(grid, cell, terrain)
 
-	overlay.mesh = quad_mesh(box.size.x, box.size.z)
-	overlay.position = Vector3(box.get_center().x, box.end.y + OVERLAY_LIFT, box.get_center().z)
-	overlay.material_override = material
-	tile.set_autotile(overlay, material)
+	var layers: Array[MeshInstance3D] = []
+	var materials: Array[StandardMaterial3D] = []
+	for rank: int in SIDES.size():
+		var side: String = str(SIDES[rank][0])
+		var node_name: String = "%s_%s" % [OVERLAY_NODE, side]
+		var overlay: MeshInstance3D = tile.get_node_or_null(node_name) as MeshInstance3D
+
+		var material: StandardMaterial3D = null
+		if mask.contains(side):
+			material = overlay_material(terrain, side, int(backgrounds.get(side, -1)))
+		if not material:
+			# Terrain sans bords, côté qui ne borde plus, ou tuile manquante du
+			# dossier `edges/`. Sortir de l'arbre avant de libérer : un nœud
+			# seulement `queue_free` garde son nom jusqu'à la fin de l'image, et
+			# c'est le nom qui retrouve la bande d'un côté.
+			if overlay:
+				tile.remove_child(overlay)
+				overlay.queue_free()
+			continue
+
+		if not overlay:
+			overlay = MeshInstance3D.new()
+			overlay.name = node_name
+			# Le calque ne projette pas d'ombre : il double le dessus de la case, et
+			# deux surfaces à six millièmes l'une de l'autre s'ombrageraient l'une
+			# l'autre en un moiré de bandes sombres.
+			overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			tile.add_child(overlay)
+
+		overlay.mesh = band_mesh(box.size.x, box.size.z, side)
+		overlay.position = Vector3(box.get_center().x,
+			box.end.y + OVERLAY_LIFT + float(rank) * SIDE_LIFT, box.get_center().z)
+		overlay.material_override = material
+		layers.append(overlay)
+		materials.append(material)
+
+	tile.set_autotile(layers, materials)
 #endregion
 
 
@@ -213,37 +275,32 @@ static func mask_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> String:
 	return mask if not mask.is_empty() else "fill"
 
 
-## Le terrain qui borde une case, celui dont la transition prendra le fond.
+## Ce qui borde une case, **côté par côté** : `{"n": WATER, "w": FOREST}`.
 ##
-## [method mask_at] dit **de quel côté** le terrain s'arrête ; celui-ci dit ce
-## qui commence alors. Les deux lisent le même voisinage, et c'est délibérément
-## deux appels plutôt qu'un dictionnaire : l'éditeur de cartes en refait la
-## paire sur sa propre grille, et deux fonctions qui rendent chacune une valeur
-## simple s'y répliquent sans cérémonie.
+## [method mask_at] dit de quels côtés le terrain s'arrête ; celui-ci dit ce qui
+## commence alors, et le dit pour chacun. C'était un seul terrain — le voisin
+## dominant — tant qu'une case n'avait qu'un calque : une plage entre mer et
+## bois bordait alors des deux côtés sur le même fond, et l'un des deux voisins
+## était toujours démenti.
 ##
-## Le voisin **dominant** l'emporte — le plus représenté parmi les côtés qui
-## bordent —, à égalité le premier dans l'ordre n, e, s, w. Un seul calque par
-## case ne peut porter qu'un fond ; autant que ce soit celui qu'on voit le plus.
-##
-## Rend `-1` quand aucun voisin ne sait faire fond ([constant BACKGROUND_SETS]) :
-## la case retombe alors sur sa tuile à fond d'herbe.
-static func neighbor_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> int:
+## Le terrain est rendu tel quel, sans regarder [constant BACKGROUND_SETS] : un
+## voisin qui ne sait pas faire fond — un mur, une porte — n'est pas une absence
+## de voisin, c'est un fond qui n'a pas été dessiné, et [method _edge_paths]
+## retombe alors sur la tuile à fond d'herbe. Les côtés qui ne bordent rien sont
+## absents du dictionnaire, comme ils sont absents du masque.
+static func neighbors_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> Dictionary:
+	var found: Dictionary = {}
 	if not grid or not EDGE_SETS.has(terrain):
-		return -1
+		return found
 
-	var tally: Dictionary = {}
-	var best: int = -1
 	for side: Array in SIDES:
 		var tile: Node = grid.tile_at_cell(cell + (side[1] as Vector2i))
 		if not tile:
 			continue
 		var other: int = int(tile.terrain_type)
-		if other == terrain or not BACKGROUND_SETS.has(other):
-			continue
-		tally[other] = int(tally.get(other, 0)) + 1
-		if best < 0 or int(tally[other]) > int(tally[best]):
-			best = other
-	return best
+		if other != terrain:
+			found[str(side[0])] = other
+	return found
 
 
 ## Matériau du calque d'un terrain pour un masque, ou `null` s'il n'en a pas.
@@ -318,28 +375,56 @@ static func _build_material(terrain: int, mask: String,
 
 
 #region Géométrie
-## Le quadrilatère du dessus d'une case, UV écrites à la main.
+## La bande d'un côté du dessus d'une case, UV écrites à la main.
 ##
 ## `u` suit `+X`, `v` suit `+Z` : le coin de l'image en haut à gauche tombe sur
 ## le coin de la case au plus petit `x` et au plus petit `z`. C'est toute la
 ## convention, et elle tient en une ligne parce qu'elle est posée ici plutôt que
 ## déduite d'un `PlaneMesh` ou d'une projection triplanaire.
-static func quad_mesh(width: float, depth: float) -> ArrayMesh:
-	var key: String = "%.4f:%.4f" % [width, depth]
+##
+## La bande ne prend qu'une lisière de la case, et **la même** de la tuile : le
+## quadrilatère nord couvre le dixième supérieur du carreau et n'y lit que le
+## dixième supérieur de l'image. C'est ce qui permet à quatre bandes de porter
+## quatre tuiles différentes sans qu'aucune ne mente sur son côté.
+## [param side] `n`, `e`, `s` ou `w` ; toute autre valeur rend la case entière.
+static func band_mesh(width: float, depth: float, side: String) -> ArrayMesh:
+	var key: String = "%.4f:%.4f:%s" % [width, depth, side]
 	var cached: Variant = _quad_cache.get(key)
 	if cached is ArrayMesh:
 		return cached
 
 	var half_x: float = width * 0.5
 	var half_z: float = depth * 0.5
+	var x0: float = -half_x
+	var x1: float = half_x
+	var z0: float = -half_z
+	var z1: float = half_z
+	var u0: float = 0.0
+	var u1: float = 1.0
+	var v0: float = 0.0
+	var v1: float = 1.0
+	match side:
+		"n":
+			z1 = -half_z + depth * BAND_RATIO
+			v1 = BAND_RATIO
+		"s":
+			z0 = half_z - depth * BAND_RATIO
+			v0 = 1.0 - BAND_RATIO
+		"w":
+			x1 = -half_x + width * BAND_RATIO
+			u1 = BAND_RATIO
+		"e":
+			x0 = half_x - width * BAND_RATIO
+			u0 = 1.0 - BAND_RATIO
+
 	var vertices := PackedVector3Array([
-		Vector3(-half_x, 0.0, -half_z),
-		Vector3(half_x, 0.0, -half_z),
-		Vector3(half_x, 0.0, half_z),
-		Vector3(-half_x, 0.0, half_z),
+		Vector3(x0, 0.0, z0),
+		Vector3(x1, 0.0, z0),
+		Vector3(x1, 0.0, z1),
+		Vector3(x0, 0.0, z1),
 	])
 	var uvs := PackedVector2Array([
-		Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0),
+		Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1), Vector2(u0, v1),
 	])
 	var normals := PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])
 	var indices := PackedInt32Array([0, 1, 2, 0, 2, 3])
