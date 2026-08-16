@@ -371,17 +371,17 @@ func _test_edge_pairs() -> bool:
 	else:
 		print_rich("  OK: une rive d'eau bordée de sable prend water_sand_n")
 
-	# 3. Le repli tient : un voisin qui ne sait pas faire fond — l'herbe, un mur —
-	#    rend exactement la tuile d'avant, à fond d'herbe. Aucune régression
-	#    possible sur les cartes qui ne bordent que des plaines.
-	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.WALL, -1]:
+	# 3. Le repli tient : un voisin qui ne sait pas faire fond — l'herbe, une
+	#    ruine — rend exactement la tuile d'avant, à fond d'herbe. Aucune
+	#    régression possible sur les cartes qui ne bordent que des plaines.
+	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.RUINS, -1]:
 		var fallback: Array[String] = TacticsAutoTiler._edge_paths(
 			_MD.TerrainType.WATER, "n", neighbor)
 		if fallback.size() != 1 or not fallback[0].ends_with("edges/water_n.png"):
 			print_rich("[color=red]  FAIL: voisin %d → %s[/color]" % [neighbor, str(fallback)])
 			ok = false
 	if ok:
-		print_rich("  OK: herbe, mur ou rien du tout → la tuile d'origine, inchangée")
+		print_rich("  OK: herbe, ruine ou rien du tout → la tuile d'origine, inchangée")
 
 	# 4. Et le matériau se bâtit vraiment dans les deux cas.
 	var paired: StandardMaterial3D = TacticsAutoTiler.overlay_material(
@@ -432,7 +432,6 @@ func _test_edge_ownership() -> bool:
 				% _MD.type_key(other))
 			ok = false
 	var sans_bords: Array[int] = [
-		_MD.TerrainType.WALL, _MD.TerrainType.GATE, _MD.TerrainType.TOWER,
 		_MD.TerrainType.RUINS, _MD.TerrainType.BRIDGE, _MD.TerrainType.PIT,
 	]
 	for bare: int in sans_bords:

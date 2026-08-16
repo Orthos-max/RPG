@@ -75,8 +75,9 @@ MARGE = 4
 # désignera jamais. C'est pourquoi `terrain_outdoor_earth` en est sorti le
 # 2026-08-16, quand le hameau est passé à son propre sol.
 MANIFESTE: list[tuple[str, int, str]] = [
-    ("terrain_outdoor_grass",     4, "prairie"),
-    ("terrain_outdoor_forest",    3, "sous-bois"),
+    ("terrain_outdoor_grass",     6, "prairie"),
+    ("terrain_outdoor_forest",    5, "sous-bois"),
+    ("terrain_mountain_rock",     4, "montagne"),
     ("terrain_outdoor_sand",      3, "sable"),
     ("terrain_outdoor_path",      3, "chemin"),
     ("terrain_outdoor_cobble",    3, "pave"),
@@ -193,14 +194,22 @@ def _prairie(tuile, rng, palette) -> None:
         (_melange(clair, (255, 236, 150), 0.75), _melange(clair, (250, 250, 235), 0.70)),
         (_melange(clair, (255, 215, 120), 0.65), _melange(clair, (245, 225, 150), 0.60)),
         (_melange(clair, (235, 225, 250), 0.70), _melange(clair, (230, 220, 245), 0.65)),
+        (_melange(clair, (255, 170, 200), 0.70), _melange(clair, (250, 200, 220), 0.65)),
     ))
-    for _ in range(rng.randint(1, 3)):
+    for _ in range(rng.randint(2, 4)):
         _fleur(tuile, rng, coeur, petale)
     # Un caillou perdu dans l'herbe, ou une touffe plus haute.
-    if rng.random() < 0.6:
+    if rng.random() < 0.7:
         _tache(tuile, rng, _melange(sombre, (150, 145, 130), 0.55), 1)
-    for _ in range(rng.randint(1, 2)):
+    if rng.random() < 0.5:
+        _tache(tuile, rng, _ecarte(sombre, -8), rng.randint(1, 2))
+    for _ in range(rng.randint(2, 3)):
         _brin(tuile, rng, _ecarte(clair, 14))
+    # Une motte d'herbe sèche (un peu plus jaune) et un trèfle discret.
+    if rng.random() < 0.5:
+        _tache(tuile, rng, _melange(clair, (215, 200, 120), 0.60), rng.randint(1, 2))
+    if rng.random() < 0.4:
+        _tache(tuile, rng, _melange(sombre, (90, 140, 70), 0.60), 1)
 
 
 def _sous_bois(tuile, rng, palette) -> None:
@@ -212,7 +221,7 @@ def _sous_bois(tuile, rng, palette) -> None:
     for _ in range(rng.randint(1, 2)):
         _tache(tuile, rng, _ecarte(sombre, -6), rng.randint(1, 2))
     # Un champignon : un chapeau de deux pixels sur un pied clair.
-    if rng.random() < 0.7:
+    if rng.random() < 0.8:
         chapeau = _melange(clair, (196, 96, 72), 0.60)
         pied = _melange(clair, (232, 222, 200), 0.55)
         cx = rng.randint(MARGE + 1, TAILLE - 2 - MARGE)
@@ -221,6 +230,50 @@ def _sous_bois(tuile, rng, palette) -> None:
         px[cx, cy] = chapeau + (255,)
         px[cx + 1, cy] = chapeau + (255,)
         px[cx, cy + 1] = pied + (255,)
+    # Litière de feuilles mortes : deux ou trois petits points roux.
+    for _ in range(rng.randint(1, 3)):
+        _tache(tuile, rng, _melange(sombre, (140, 110, 60), 0.55), 1)
+    # Une racine apparente : un trait sombre légèrement coudé.
+    if rng.random() < 0.6:
+        x = rng.randint(MARGE, TAILLE - 1 - MARGE - 5)
+        y = rng.randint(MARGE, TAILLE - 1 - MARGE)
+        px = tuile.load()
+        for i in range(rng.randint(4, 6)):
+            px[x + i, y] = _ecarte(sombre, -8) + (255,)
+            if rng.random() < 0.35:
+                y = min(TAILLE - 1 - MARGE, max(MARGE, y + rng.choice((-1, 1))))
+    # Une mousse claire au pied d'un arbre (carré d'un pixel).
+    if rng.random() < 0.5:
+        _tache(tuile, rng, _melange(clair, (120, 160, 90), 0.55), 1)
+
+
+def _montagne(tuile, rng, palette) -> None:
+    """La roche nue : veines de quartz, lichens, éboulis, fissures.
+
+    La montagne est grise et dure — ses variantes doivent se lire comme des
+    accidents de la roche, pas comme des plantations. Un filon clair traverse
+    la tuile, un lichen s'accroche, un éboulis s'amasse au creux.
+    """
+    clair = _quantile(palette, 0.88)
+    sombre = _quantile(palette, 0.12)
+    # Un filon de quartz : un trait clair qui traverse la tuile en biais.
+    if rng.random() < 0.7:
+        x = rng.randint(MARGE, TAILLE - 1 - MARGE - 8)
+        y = rng.randint(MARGE, TAILLE - 1 - MARGE)
+        px = tuile.load()
+        for i in range(rng.randint(7, 10)):
+            px[x + i, y] = _ecarte(clair, 10) + (255,)
+            if rng.random() < 0.5:
+                y = min(TAILLE - 1 - MARGE, max(MARGE, y + rng.choice((-1, 1))))
+    # Un lichen : une tache d'un vert pâle, comme posée sur la pierre.
+    if rng.random() < 0.6:
+        _tache(tuile, rng, _melange(clair, (130, 160, 110), 0.50), rng.randint(1, 2))
+    # Un éboulis : deux ou trois gravats sombres au creux.
+    for _ in range(rng.randint(2, 3)):
+        _tache(tuile, rng, _ecarte(sombre, -8), 1)
+    # Une fissure profonde, plus sombre que tout ce qui l'entoure.
+    if rng.random() < 0.5:
+        _fissure(tuile, rng, _ecarte(sombre, -14))
 
 
 def _sable(tuile, rng, palette) -> None:
@@ -417,6 +470,7 @@ RECETTES = {
     "tour": _tour,
     "porte": _porte,
     "mur": _mur,
+    "montagne": _montagne,
 }
 #endregion
 

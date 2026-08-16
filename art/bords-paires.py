@@ -102,6 +102,9 @@ FONDS: dict[str, str] = {
     "snow": "terrain_outdoor_snow.png",
     "swamp": "terrain_outdoor_swamp.png",
     "mountain": "terrain_mountain_rock.png",
+    "gate": "terrain_outdoor_gate.png",
+    "tower": "terrain_outdoor_tower.png",
+    "wall": "terrain_outdoor_wall.png",
 }
 
 ## Voisins en croix d'un pixel — l'ouverture et l'inondation s'y tiennent.

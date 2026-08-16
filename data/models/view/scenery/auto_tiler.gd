@@ -138,6 +138,9 @@ const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.FORT: "fort",
 	MapDataClass.TerrainType.SNOW: "snow",
 	MapDataClass.TerrainType.SWAMP: "swamp",
+	MapDataClass.TerrainType.GATE: "gate",
+	MapDataClass.TerrainType.TOWER: "tower",
+	MapDataClass.TerrainType.WALL: "wall",
 }
 
 ## Rang d'un terrain absent de [constant TERRAIN_PRIORITY] : sous la prairie.
@@ -167,9 +170,12 @@ const TERRAIN_PRIORITY: Dictionary = {
 	MapDataClass.TerrainType.SAND: 4,
 	MapDataClass.TerrainType.FOREST: 5,
 	MapDataClass.TerrainType.MOUNTAIN: 6,
-	MapDataClass.TerrainType.SNOW: 7,
-	MapDataClass.TerrainType.SWAMP: 8,
-	MapDataClass.TerrainType.WATER: 9,
+	MapDataClass.TerrainType.GATE: 7,
+	MapDataClass.TerrainType.SNOW: 8,
+	MapDataClass.TerrainType.TOWER: 9,
+	MapDataClass.TerrainType.SWAMP: 10,
+	MapDataClass.TerrainType.WALL: 11,
+	MapDataClass.TerrainType.WATER: 12,
 }
 
 ## Dossier des tuiles de bord, à fond d'herbe — le repli de toute paire absente.
@@ -194,6 +200,9 @@ const BACKGROUND_SETS: Dictionary = {
 	MapDataClass.TerrainType.SNOW: "snow",
 	MapDataClass.TerrainType.SWAMP: "swamp",
 	MapDataClass.TerrainType.MOUNTAIN: "mountain",
+	MapDataClass.TerrainType.GATE: "gate",
+	MapDataClass.TerrainType.TOWER: "tower",
+	MapDataClass.TerrainType.WALL: "wall",
 }
 
 ## Décalage vertical du calque au-dessus du dessus de la case.

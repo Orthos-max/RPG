@@ -73,6 +73,9 @@ FONDS: dict[str, str] = {
     "mountain": "terrain_mountain_rock.png",
     "village": "terrain_outdoor_hamlet.png",
     "fort": "terrain_outdoor_flagstone.png",
+    "gate": "terrain_outdoor_gate.png",
+    "tower": "terrain_outdoor_tower.png",
+    "wall": "terrain_outdoor_wall.png",
 }
 
 ## Les quinze voisinages qui montrent un voisin. `fill` n'en montre aucun.
