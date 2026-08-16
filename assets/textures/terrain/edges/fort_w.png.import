@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://duacqdubpj4hh"
-path="res://.godot/imported/terrain_outdoor_earth_v3.png-51502feaf97a1d83c387a208042fba6e.ctex"
+uid="uid://cst5ryswvim8r"
+path="res://.godot/imported/fort_w.png-ed8fbcbf9c42f6261003e6e841688dea.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/terrain/variants/terrain_outdoor_earth_v3.png"
-dest_files=["res://.godot/imported/terrain_outdoor_earth_v3.png-51502feaf97a1d83c387a208042fba6e.ctex"]
+source_file="res://assets/textures/terrain/edges/fort_w.png"
+dest_files=["res://.godot/imported/fort_w.png-ed8fbcbf9c42f6261003e6e841688dea.ctex"]
 
 [params]
 

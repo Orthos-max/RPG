@@ -50,7 +50,7 @@ BORDS = RACINE / "assets" / "textures" / "terrain" / "edges"
 TAILLE = 32
 
 ## Les terrains habillés par [TacticsAutoTiler] — mêmes clés que `EDGE_SETS`.
-TERRAINS = ["water", "forest", "sand", "path", "mountain"]
+TERRAINS = ["water", "forest", "sand", "path", "mountain", "fort", "village"]
 
 ## Les quatre coins, et le sommet de case d'où part leur quart de disque (px).
 COINS: dict[str, tuple[int, int]] = {

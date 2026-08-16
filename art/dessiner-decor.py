@@ -128,6 +128,69 @@ def rocher() -> Image.Image:
     return _rogner(image)
 
 
+## Palette des terrains bâtis : la paille d'un hameau, le bois d'un tonneau,
+## la pierre taillée d'un fortin. Relevée sur les tuiles que `sols-batis.py`
+## dérive — un décor de hameau doit avoir la couleur du sol qui le porte.
+JAUNE_PAILLE = (214, 186, 112, 255)
+JAUNE_CLAIR = (236, 214, 152, 255)
+OCRE_OMBRE = (150, 122, 62, 255)
+BOIS_DOUVE = (128, 90, 52, 255)
+BOIS_SOMBRE = (92, 62, 36, 255)
+FER_CERCLE = (86, 82, 78, 255)
+DALLE_CLAIRE = (162, 158, 150, 255)
+DALLE_SOMBRE = (108, 104, 98, 255)
+
+
+def botte() -> Image.Image:
+    """Botte de paille : un dôme de brins, avec la corde qui les tient.
+
+    Un dôme plutôt qu'un cube. Vue de trois quarts sous la caméra tactique, une
+    botte cubique se confond avec une caisse, et le hameau se met à ressembler
+    à un entrepôt.
+    """
+    image, dessin = _neuf(15, 11)
+    dessin.chord([0, 1, 14, 15], 180, 360, fill=JAUNE_PAILLE)
+    dessin.rectangle([0, 8, 14, 10], fill=JAUNE_PAILLE)
+    # Les brins : quelques traits obliques, sans quoi le dôme est un galet jaune.
+    for x, y in ((3, 5), (6, 3), (9, 4), (12, 6), (4, 8), (10, 8)):
+        dessin.line([(x, y), (x + 2, y + 2)], fill=JAUNE_CLAIR)
+    dessin.line([(1, 10), (13, 10)], fill=OCRE_OMBRE)
+    # La corde, en travers : c'est elle qui dit « botte » plutôt que « tas ».
+    dessin.line([(7, 2), (7, 10)], fill=OCRE_OMBRE)
+    return _rogner(image)
+
+
+def tonneau() -> Image.Image:
+    """Tonneau : des douves bombées, deux cercles de fer."""
+    image, dessin = _neuf(11, 14)
+    dessin.ellipse([0, 0, 10, 13], fill=BOIS_DOUVE)
+    # Les douves, en trois traits verticaux — le bombement vient de l'ellipse.
+    for x in (2, 5, 8):
+        dessin.line([(x, 2), (x, 11)], fill=BOIS_SOMBRE)
+    for y in (4, 9):
+        dessin.line([(1, y), (9, y)], fill=FER_CERCLE)
+    # Le couvercle capte la lumière du plateau (nord-ouest).
+    dessin.arc([0, 0, 10, 4], 180, 360, fill=JAUNE_CLAIR)
+    return _rogner(image)
+
+
+def pile_dalles() -> Image.Image:
+    """Pile de dalles taillées : la réserve d'un fortin qu'on répare.
+
+    Trois assises décalées, la plus haute la plus courte : une pile d'aplomb se
+    lit comme un bloc, et un fortin n'a pas de bloc qui traîne dans sa cour.
+    """
+    image, dessin = _neuf(15, 11)
+    assises = [(0, 8, 14, 10), (1, 5, 12, 7), (3, 2, 10, 4)]
+    for index, (x0, y0, x1, y1) in enumerate(assises):
+        dessin.rectangle([x0, y0, x1, y1], fill=DALLE_SOMBRE)
+        # Le dessus de chaque assise prend le jour ; le joint reste dans l'ombre.
+        dessin.line([(x0, y0), (x1, y0)], fill=DALLE_CLAIRE)
+        if index:
+            dessin.point([(x0 + 2, y0 + 1), (x1 - 3, y1)], fill=GRIS_SOMBRE)
+    return _rogner(image)
+
+
 ## Côté de la texture d'ombre, en pixels.
 OMBRE_TAILLE = 32
 ## Opacité au centre de l'ombre (le bord tombe à zéro).
@@ -165,6 +228,9 @@ DESSINS = {
     "flower": fleur,
     "mushroom": champignon,
     "rock": rocher,
+    "hay": botte,
+    "barrel": tonneau,
+    "stack": pile_dalles,
     "shadow": ombre,
 }
 

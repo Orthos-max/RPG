@@ -67,6 +67,8 @@ const SEEDING: Dictionary = {
 	MapDataClass.TerrainType.PATH: {"kinds": ["pebbles"], "rate": 0.10},
 	MapDataClass.TerrainType.FOREST: {"kinds": ["mushroom", "bush"], "rate": 0.08},
 	MapDataClass.TerrainType.MOUNTAIN: {"kinds": ["rock"], "rate": 0.10},
+	MapDataClass.TerrainType.VILLAGE: {"kinds": ["hay", "barrel"], "rate": 0.08},
+	MapDataClass.TerrainType.FORT: {"kinds": ["stack", "barrel"], "rate": 0.08},
 }
 
 ## Encombrement de chaque sprite : hauteur au sol, et largeur de son ombre.
@@ -81,6 +83,9 @@ const SIZES: Dictionary = {
 	"bush": {"height": 0.40, "shadow": 0.30},
 	"pebbles": {"height": 0.18, "shadow": 0.22},
 	"rock": {"height": 0.26, "shadow": 0.24},
+	"hay": {"height": 0.32, "shadow": 0.26},
+	"barrel": {"height": 0.34, "shadow": 0.22},
+	"stack": {"height": 0.36, "shadow": 0.28},
 }
 
 ## Écart au centre de la case, en fraction de case.

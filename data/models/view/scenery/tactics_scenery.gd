@@ -94,8 +94,8 @@ const TERRAIN_TEXTURES: Dictionary = {
 	MapDataClass.TerrainType.SAND: "res://assets/textures/terrain/terrain_outdoor_sand.png",
 	MapDataClass.TerrainType.WALL: "res://assets/textures/terrain/terrain_mountain_rock_dark.png",
 	MapDataClass.TerrainType.PIT: "res://assets/textures/terrain/terrain_mountain_void.png",
-	MapDataClass.TerrainType.VILLAGE: "res://assets/textures/terrain/terrain_outdoor_earth.png",
-	MapDataClass.TerrainType.FORT: "res://assets/textures/terrain/terrain_outdoor_pavement.png",
+	MapDataClass.TerrainType.VILLAGE: "res://assets/textures/terrain/terrain_outdoor_hamlet.png",
+	MapDataClass.TerrainType.FORT: "res://assets/textures/terrain/terrain_outdoor_flagstone.png",
 	MapDataClass.TerrainType.RUINS: "res://assets/textures/terrain/terrain_outdoor_cobble.png",
 	MapDataClass.TerrainType.BRIDGE: "res://assets/textures/terrain/terrain_indoor_planks.png",
 }

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cvxxtonfikcrx"
-path="res://.godot/imported/terrain_outdoor_earth_v1.png-fa11216979384adfbc6870930cec7fdf.ctex"
+uid="uid://dlygyglscak75"
+path="res://.godot/imported/village_n.png-0f63855056697d4ee2c8bd1c89c198f0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/terrain/variants/terrain_outdoor_earth_v1.png"
-dest_files=["res://.godot/imported/terrain_outdoor_earth_v1.png-fa11216979384adfbc6870930cec7fdf.ctex"]
+source_file="res://assets/textures/terrain/edges/village_n.png"
+dest_files=["res://.godot/imported/village_n.png-0f63855056697d4ee2c8bd1c89c198f0.ctex"]
 
 [params]
 

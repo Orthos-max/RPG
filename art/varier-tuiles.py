@@ -68,13 +68,20 @@ MARGE = 4
 # Le compte suit la visibilité : l'herbe couvre le plus de cases et se lit le
 # mieux, elle en reçoit quatre. Les sols bâtis, qu'on voit par plaques de deux ou
 # trois cases, se contentent de trois.
+#
+# Seules figurent ici les tuiles qu'un terrain porte réellement
+# ([constant TacticsScenery.TERRAIN_TEXTURES]) : décliner une tuile de la
+# bibliothèque que personne n'affiche écrirait des fichiers que le hachage ne
+# désignera jamais. C'est pourquoi `terrain_outdoor_earth` en est sorti le
+# 2026-08-16, quand le hameau est passé à son propre sol.
 MANIFESTE: list[tuple[str, int, str]] = [
-    ("terrain_outdoor_grass",  4, "prairie"),
-    ("terrain_outdoor_forest", 3, "sous-bois"),
-    ("terrain_outdoor_sand",   3, "sable"),
-    ("terrain_outdoor_path",   3, "chemin"),
-    ("terrain_outdoor_earth",  3, "terre"),
-    ("terrain_outdoor_cobble", 3, "pave"),
+    ("terrain_outdoor_grass",     4, "prairie"),
+    ("terrain_outdoor_forest",    3, "sous-bois"),
+    ("terrain_outdoor_sand",      3, "sable"),
+    ("terrain_outdoor_path",      3, "chemin"),
+    ("terrain_outdoor_cobble",    3, "pave"),
+    ("terrain_outdoor_flagstone", 3, "fortin"),
+    ("terrain_outdoor_hamlet",    3, "hameau"),
 ]
 
 
@@ -233,18 +240,6 @@ def _chemin(tuile, rng, palette) -> None:
         _tache(tuile, rng, _ecarte(clair, 8), 2)
 
 
-def _terre(tuile, rng, palette) -> None:
-    clair = _quantile(palette, 0.90)
-    sombre = _quantile(palette, 0.10)
-    # Des mottes : c'est de la terre battue, elle se craquelle et se retourne.
-    for _ in range(rng.randint(2, 3)):
-        _tache(tuile, rng, _ecarte(sombre, -8), rng.randint(1, 2))
-    for _ in range(rng.randint(1, 2)):
-        _tache(tuile, rng, _ecarte(clair, 10), rng.randint(1, 2))
-    if rng.random() < 0.5:
-        _fissure(tuile, rng, _ecarte(sombre, -12))
-
-
 def _pave(tuile, rng, palette) -> None:
     clair = _quantile(palette, 0.85)
     sombre = _quantile(palette, 0.10)
@@ -257,13 +252,57 @@ def _pave(tuile, rng, palette) -> None:
         _tache(tuile, rng, _melange(sombre, (96, 124, 62), 0.45), 1)
 
 
+def _fortin(tuile, rng, palette) -> None:
+    """La cour d'un fortin : ce qu'une garnison laisse sur ses dalles.
+
+    La cour est appareillée (`art/sols-batis.py`), donc son motif est déjà
+    régulier : ce sont ses **accidents** qui la déclinent, et il en faut peu. Un
+    gravier de plus se voit ; une dalle de plus ne se verrait pas.
+    """
+    clair = _quantile(palette, 0.88)
+    sombre = _quantile(palette, 0.10)
+    # De l'herbe repoussée dans un joint : le signe qu'on ne balaie pas tout.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (104, 132, 66), 0.55), 1)
+    # Du gravier tombé d'un mur, et la dalle qu'un charroi a usée jusqu'au clair.
+    for _ in range(rng.randint(2, 3)):
+        _tache(tuile, rng, _ecarte(sombre, -8), 1)
+    if rng.random() < 0.7:
+        _tache(tuile, rng, _ecarte(clair, 10), rng.randint(1, 2))
+    # La fêlure d'une dalle : elle court en travers de l'appareillage, jamais
+    # dans le sens des joints — sinon elle passe pour un joint de plus.
+    if rng.random() < 0.6:
+        _fissure(tuile, rng, _ecarte(sombre, -14))
+
+
+def _hameau(tuile, rng, palette) -> None:
+    """Le sol d'un hameau : mottes retournées, cailloux, paille de plus."""
+    clair = _quantile(palette, 0.90)
+    sombre = _quantile(palette, 0.10)
+    # Des mottes : c'est de la terre battue, elle se craquelle et se retourne.
+    for _ in range(rng.randint(2, 3)):
+        _tache(tuile, rng, _ecarte(sombre, -10), rng.randint(1, 2))
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _ecarte(clair, 10), rng.randint(1, 2))
+    # Un caillou ou deux, plus gris que la terre qui les tient.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (150, 144, 132), 0.55), 1)
+    # Une trace de passage — l'ornière du chemin, mais plus courte : devant une
+    # porte, on tourne, on ne roule pas droit.
+    if rng.random() < 0.6:
+        _ride(tuile, rng, _ecarte(sombre, -12))
+    for _ in range(rng.randint(1, 2)):
+        _brin(tuile, rng, _melange(clair, (228, 204, 132), 0.70))
+
+
 RECETTES = {
     "prairie": _prairie,
     "sous-bois": _sous_bois,
     "sable": _sable,
     "chemin": _chemin,
-    "terre": _terre,
     "pave": _pave,
+    "fortin": _fortin,
+    "hameau": _hameau,
 }
 #endregion
 

@@ -58,6 +58,8 @@ const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.SAND: "sand",
 	MapDataClass.TerrainType.PATH: "path",
 	MapDataClass.TerrainType.MOUNTAIN: "mountain",
+	MapDataClass.TerrainType.VILLAGE: "village",
+	MapDataClass.TerrainType.FORT: "fort",
 }
 
 ## Dossier des tuiles de bord.

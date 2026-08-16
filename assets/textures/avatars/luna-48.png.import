@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c0rs8pmy1tpvu"
-path="res://.godot/imported/terrain_outdoor_earth_v2.png-cdfacf758704bc9dbf08104369f7f0bd.ctex"
+uid="uid://cfo5ppmwrrh5h"
+path="res://.godot/imported/luna-48.png-58b1de7ad2100d5819c37a198359058d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/terrain/variants/terrain_outdoor_earth_v2.png"
-dest_files=["res://.godot/imported/terrain_outdoor_earth_v2.png-cdfacf758704bc9dbf08104369f7f0bd.ctex"]
+source_file="res://assets/textures/avatars/luna-48.png"
+dest_files=["res://.godot/imported/luna-48.png-58b1de7ad2100d5819c37a198359058d.ctex"]
 
 [params]
 
