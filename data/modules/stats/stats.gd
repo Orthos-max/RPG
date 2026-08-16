@@ -499,6 +499,28 @@ func tick_buffs() -> void:
 ## Bonus temporaires en cours (lecture seule, pour l'UI et l'export CielAI).
 func active_buffs() -> Array:
 	return _active_buffs.duplicate(true)
+
+
+## Réinstalle les bonus en cours [b]sans toucher aux statistiques[/b].
+##
+## Réservé à la reprise d'une bataille sauvegardée ([BattleSnapshot]) : les
+## chiffres relus portent déjà le bonus, puisque [method apply_buff] l'ajoute à
+## la stat elle-même. Repasser par `apply_buff` le compterait deux fois ; ne rien
+## faire rendrait le bonus éternel, faute de compte à rebours. Cette porte-ci ne
+## rend que le compte à rebours.
+func set_active_buffs(buffs: Array) -> void:
+	_active_buffs = []
+	for b: Variant in buffs:
+		if typeof(b) != TYPE_DICTIONARY:
+			continue
+		var buff: Dictionary = b
+		if not str(buff.get("stat", "")) in ["str", "mag", "skl", "spd", "lck", "def", "res"]:
+			continue
+		_active_buffs.append({
+			"stat": str(buff["stat"]),
+			"amount": int(buff.get("amount", 0)),
+			"turns": int(buff.get("turns", 1)),
+		})
 #endregion
 
 

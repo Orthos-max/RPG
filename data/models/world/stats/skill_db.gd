@@ -25,6 +25,21 @@ enum Trigger {
 ## Modificateurs reconnus par le calculateur de combat
 const MOD_KEYS: Array[String] = ["hit", "crit", "avoid", "crit_avoid", "damage", "defense"]
 
+## Abréviation de chaque modificateur, pour les affichages serrés.
+##
+## Les mêmes mots que la fiche d'unité ([UnitSheet]) : « Préc », « Crit », « Esq ».
+## L'étiquette de survol ([EnemyPeekPanel]) n'a la place que de ceux-là.
+const MOD_SHORT: Dictionary = {
+	"hit": "Préc", "crit": "Crit", "avoid": "Esq", "crit_avoid": "ÉvCrit",
+	"damage": "Dég", "defense": "Déf",
+}
+
+## Ce que fait une compétence à déclenchement, en deux mots.
+const PROC_SHORT: Dictionary = {
+	"pierce": "perce l'armure",
+	"extra_hit": "frappe en plus",
+}
+
 static var DATA: Dictionary = {
 	"duelist": {
 		"name": "Duelliste",
@@ -179,6 +194,73 @@ static func tooltip(skill_id: String) -> String:
 	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
 		lines.append("⟶ Déclenchement aléatoire, une chance par coup porté.")
 	return "\n".join(lines)
+
+
+## Effet chiffré d'une compétence, en une poignée de caractères.
+##
+## « +10 Préc +5 Crit » pour une passive, « perce l'armure » pour une compétence
+## à déclenchement. C'est [method describe] compressé : la phrase entière tient
+## dans une info-bulle qu'on ouvre, pas dans une étiquette qui suit le curseur.
+##
+## Rend "" pour une compétence inconnue — l'appelant n'affiche alors aucune ligne.
+static func short_effect(skill_id: String) -> String:
+	var skill: Dictionary = get_skill(skill_id)
+	if skill.is_empty():
+		return ""
+	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
+		return str(PROC_SHORT.get(str(skill.get("proc", "")), "effet spécial"))
+
+	var mods: Dictionary = skill.get("mods", {})
+	var parts: Array[String] = []
+	# Dans l'ordre du catalogue, pas dans celui du dictionnaire : deux unités
+	# portant la même compétence doivent la lire de la même façon.
+	for key: String in MOD_KEYS:
+		if mods.has(key):
+			parts.append("%+d %s" % [int(mods[key]), str(MOD_SHORT[key])])
+	return " ".join(parts)
+
+
+## Quand la compétence joue, en un mot — "" quand elle joue toujours.
+##
+## Le pendant court de [method trigger_label] : « attaque », « défense »,
+## « PV < 50 % ». Une passive permanente ne dit rien, sa ligne serait du bruit.
+static func short_trigger(skill_id: String) -> String:
+	var skill: Dictionary = get_skill(skill_id)
+	if skill.is_empty():
+		return ""
+	match int(skill.get("trigger", Trigger.ALWAYS)):
+		Trigger.WHEN_ATTACKING:
+			return "attaque"
+		Trigger.WHEN_DEFENDING:
+			return "défense"
+		Trigger.WHEN_HP_LOW:
+			return "PV < %d %%" % int(round(float(skill.get("threshold", 0.5)) * 100.0))
+		Trigger.WHEN_HP_FULL:
+			return "PV pleins"
+		Trigger.ON_TERRAIN:
+			return "terrain"
+		Trigger.VS_FLYING:
+			return "vs vol"
+	return ""
+
+
+## Une compétence en une ligne : nom, effet, condition.
+##
+## « Duelliste  +10 Préc · attaque ». C'est la forme que lit le bestiaire
+## ([EnemyPeekPanel]) : de quoi juger un échange d'un coup d'œil, sans ouvrir la
+## fiche complète. "" pour une compétence inconnue.
+static func summary(skill_id: String) -> String:
+	var skill: Dictionary = get_skill(skill_id)
+	if skill.is_empty():
+		return ""
+	var line: String = str(skill.get("name", skill_id))
+	var effect: String = short_effect(skill_id)
+	if not effect.is_empty():
+		line += "  %s" % effect
+	var when: String = short_trigger(skill_id)
+	if not when.is_empty():
+		line += " · %s" % when
+	return line
 
 
 ## La compétence s'applique-t-elle dans ce contexte ?

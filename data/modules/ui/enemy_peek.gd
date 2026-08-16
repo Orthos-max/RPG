@@ -9,6 +9,17 @@ extends CanvasLayer
 ## le curseur et répond tout de suite : PV, les cinq stats qui décident d'un
 ## échange, et l'arme en main.
 ##
+## [b]C'est aussi un bestiaire[/b] : sous les chiffres viennent les compétences
+## de l'unité ([method skill_lines_for]) et le flanc par lequel elle encaisse le
+## moins ([method weakness_line]). Deux questions qu'on se pose avant chaque
+## engagement — « que va-t-elle me faire ? » et « qui dois-je envoyer ? » —
+## auxquelles il fallait jusqu'ici répondre de mémoire.
+##
+## Le codex reste [b]court par construction[/b] : au plus [constant MAX_SKILLS]
+## compétences, résumées en une ligne chacune par [method SkillDB.summary], et
+## une largeur bornée à [constant CODEX_WIDTH]. Une étiquette de survol qui
+## couvre le plateau ne se lit plus, elle se subit.
+##
 ## [b]Elle montre aussi la portée de l'unité pointée[/b] : les cases qu'elle peut
 ## atteindre au tour prochain s'allument en orange le temps du survol
 ## ([method BattleThreatRange.cells_for], le même calcul que la touche C mais
@@ -28,6 +39,7 @@ extends CanvasLayer
 
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 const ThreatRangeClass = preload("res://data/modules/ui/threat_range.gd")
+const SkillDBClass = preload("res://data/models/world/stats/skill_db.gd")
 
 ## Calque de collision des pions — le même que celui du clic de sélection.
 const PAWN_MASK: int = 2
@@ -52,9 +64,29 @@ const C_PANEL := Color(0.05, 0.04, 0.10, 0.9)
 const C_ENEMY := Color("#e94560")
 const C_TEXT := Color(1, 1, 1, 0.88)
 const C_DIM := Color(0.72, 0.74, 0.8)
+## Les compétences, dans le violet que le jeu réserve déjà aux ✨.
+const C_SKILL := Color("#c9a7ff")
+## La faiblesse, dans l'or des conseils : c'est une invitation à agir.
+const C_WEAK := Color("#f5c842")
 
 ## Les stats montrées, dans l'ordre — celles qui décident d'un échange.
 const SHOWN_STATS: Array[String] = ["FOR", "MAG", "VIT", "DÉF", "RÉS"]
+
+## Compétences détaillées au plus, avant de compter les suivantes.
+##
+## Quatre lignes tiennent sous les chiffres sans les noyer ; une promue en porte
+## rarement plus, et le surplus se dit d'un « … et 2 autres ».
+const MAX_SKILLS: int = 4
+
+## Largeur du codex, en pixels. Elle borne l'étiquette entière : les lignes de
+## chiffres, elles, sont plus courtes.
+const CODEX_WIDTH: float = 300.0
+
+## Écart DÉF/RÉS à partir duquel un flanc devient un conseil.
+##
+## En deçà de trois points, envoyer le mage plutôt que le lancier ne change rien
+## au nombre de coups nécessaires : l'annoncer serait un faux conseil.
+const WEAKNESS_GAP: int = 3
 
 ## Le niveau observé — sert à retrouver la grille où teinter la portée.
 var level: Node = null
@@ -65,6 +97,10 @@ var _title: Label = null
 var _health: Label = null
 var _stats: Label = null
 var _weapon: Label = null
+var _skills: Label = null
+var _weakness: Label = null
+## Le filet qui sépare les chiffres du codex — masqué quand le codex est vide.
+var _rule: HSeparator = null
 
 var _since_refresh: float = 0.0
 var _shown: TacticsPawn = null
@@ -122,6 +158,60 @@ static func lines_for(stats: Stats) -> Array[String]:
 			int(sheet.get("range", 1)),
 		],
 	]
+
+
+## Les compétences de l'unité, une par ligne — vide si elle n'en a aucune.
+##
+## Une ligne par compétence ([method SkillDB.summary]) : le nom, l'effet chiffré,
+## et la condition qui le déclenche. Au-delà de [constant MAX_SKILLS], le reste
+## est compté plutôt que déroulé — le survol doit rester une étiquette.
+##
+## Les identifiants inconnus du catalogue sont écartés : une fiche peut porter
+## une compétence retirée du jeu, et une ligne vide sous les chiffres ne dirait
+## rien à personne.
+static func skill_lines_for(stats: Stats) -> Array[String]:
+	var lines: Array[String] = []
+	if not stats:
+		return lines
+
+	var known: Array[String] = []
+	for id: Variant in stats.get_skills():
+		var summary: String = SkillDBClass.summary(str(id))
+		if not summary.is_empty():
+			known.append(summary)
+
+	for i: int in range(mini(known.size(), MAX_SKILLS)):
+		lines.append("✨ %s" % known[i])
+	if known.size() > MAX_SKILLS:
+		lines.append("… et %d autre(s)" % (known.size() - MAX_SKILLS))
+	return lines
+
+
+## Le flanc par lequel l'unité encaisse le moins — "" quand elle est équilibrée.
+##
+## Les deux chiffres sont déjà sur la ligne des stats ; ce qui manquait, c'est la
+## conclusion. Un chevalier à DÉF 14 / RÉS 3 se prend au sortilège, un mage à
+## l'inverse : le dire évite de compter l'écart de tête à chaque survol.
+static func weakness_line(stats: Stats) -> String:
+	if not stats:
+		return ""
+	if stats.res <= stats.def - WEAKNESS_GAP:
+		return "⚡ Faible au magique — RÉS %d / DÉF %d" % [stats.res, stats.def]
+	if stats.def <= stats.res - WEAKNESS_GAP:
+		return "🗡 Faible au physique — DÉF %d / RÉS %d" % [stats.def, stats.res]
+	return ""
+
+
+## Le codex complet d'une unité : ses compétences, puis sa faiblesse.
+##
+## Une seule fonction pour ce que le panneau montre sous les chiffres — c'est
+## elle que lisent les tests, faute d'écran où survoler quoi que ce soit.
+static func codex_lines(stats: Stats) -> Array[String]:
+	var lines: Array[String] = skill_lines_for(stats)
+	var weakness: String = weakness_line(stats)
+	if not weakness.is_empty():
+		lines.append(weakness)
+	return lines
 #endregion
 
 
@@ -161,12 +251,29 @@ func _build() -> void:
 	_stats = _make_label(column, 13, C_TEXT)
 	_weapon = _make_label(column, 12, C_DIM)
 
+	# Le codex ouvre sur un filet : sans lui, compétences et chiffres se lisent
+	# comme un seul bloc de texte.
+	var rule := HSeparator.new()
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(rule)
 
-func _make_label(parent: Node, font_size: int, color: Color) -> Label:
+	_skills = _make_label(column, 12, C_SKILL, CODEX_WIDTH)
+	_weakness = _make_label(column, 12, C_WEAK, CODEX_WIDTH)
+	_rule = rule
+
+
+func _make_label(parent: Node, font_size: int, color: Color, max_width: float = 0.0) -> Label:
 	var label := Label.new()
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
+	# Une largeur imposée est ce qui borne l'étiquette : un Label ne revient à la
+	# ligne que s'il sait où s'arrêter. Elle ne s'applique qu'au codex, et un
+	# Label masqué ne pèse rien dans la colonne — l'étiquette d'une unité sans
+	# compétence garde donc la largeur de ses chiffres.
+	if max_width > 0.0:
+		label.custom_minimum_size = Vector2(max_width, 0)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	parent.add_child(label)
 	return label
 #endregion
@@ -227,7 +334,30 @@ func show_for(pawn: TacticsPawn) -> void:
 	_health.text = lines[1]
 	_stats.text = lines[2]
 	_weapon.text = lines[3]
+	_fill_codex(pawn.stats)
 	_frame.visible = true
+
+
+## Pose les lignes du bestiaire, et efface le bloc s'il n'y a rien à dire.
+##
+## Masquer plutôt que vider : un Label vide garderait la largeur imposée au
+## codex, et une unité sans compétence traînerait une étiquette trois fois plus
+## large que ses chiffres.
+func _fill_codex(stats: Stats) -> void:
+	var skills: Array[String] = skill_lines_for(stats)
+	var weakness: String = weakness_line(stats)
+
+	_skills.text = "\n".join(skills)
+	_skills.visible = not skills.is_empty()
+	_weakness.text = weakness
+	_weakness.visible = not weakness.is_empty()
+	if _rule:
+		_rule.visible = _skills.visible or _weakness.visible
+
+	# La colonne vient de changer de hauteur : sans ce recalcul, l'étiquette
+	# garderait la taille de l'unité précédente le temps d'une image, et
+	# `_follow_cursor` la placerait à partir d'une mesure périmée.
+	_frame.reset_size()
 
 
 ## Masque l'aperçu : la souris a quitté l'unité.

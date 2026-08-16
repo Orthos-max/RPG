@@ -38,6 +38,14 @@ const AUTO_SLOT: int = 0
 ## d'*avant* — c'est celui-ci, et lui seul.
 const CHAPTER_SLOT: int = SAVE_SLOTS
 
+## Emplacement de la sauvegarde à la volée, prise en pleine bataille (F5).
+##
+## **Hors des emplacements du joueur** lui aussi, et distinct de
+## [constant CHAPTER_SLOT] : celui-ci porte l'état d'avant le premier coup, quand
+## le quick save porte celui de l'instant — pions posés, PV entamés, tour en
+## cours ([BattleSnapshot]). Les deux filets ne rattrapent pas la même chute.
+const QUICK_SLOT: int = SAVE_SLOTS + 1
+
 ## Prix d'un personnage écrit par le joueur, à l'intendance.
 ##
 ## **Gratuit pour l'instant** (choix d'Aurèle, 2026-08-07) : on veut d'abord
@@ -69,6 +77,12 @@ var deployment_tiles: Dictionary = {}
 var bonus_history: Dictionary = {}
 ## Nombre de tours du chapitre en cours
 var turn_count: int = 1
+## Bataille en cours portée par la dernière sauvegarde relue ([BattleSnapshot]).
+##
+## Vide dans le cas courant : seule la sauvegarde à la volée en écrit une. C'est
+## le pion manquant de la sauvegarde de campagne, qui ne savait dire que « où en
+## est l'armée », jamais « où en est la bataille ».
+var battle_state: Dictionary = {}
 
 
 func _ready() -> void:
@@ -738,7 +752,12 @@ func has_save(slot: int = 0) -> bool:
 
 
 ## Écrit la partie sur disque. Renvoie false en cas d'échec d'écriture.
-func save_game(slot: int = 0) -> bool:
+##
+## [param battle] Instantané de la bataille en cours ([BattleSnapshot.capture]),
+## que seule la sauvegarde à la volée fournit. Une sauvegarde ordinaire se prend
+## entre deux chapitres : il n'y a alors aucune bataille à décrire, et la clé
+## reste vide.
+func save_game(slot: int = 0, battle: Dictionary = {}) -> bool:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
 	var payload: Dictionary = {
 		"version": SAVE_VERSION,
