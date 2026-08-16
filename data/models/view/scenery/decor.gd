@@ -69,6 +69,8 @@ const SEEDING: Dictionary = {
 	MapDataClass.TerrainType.MOUNTAIN: {"kinds": ["rock"], "rate": 0.10},
 	MapDataClass.TerrainType.VILLAGE: {"kinds": ["hay", "barrel"], "rate": 0.08},
 	MapDataClass.TerrainType.FORT: {"kinds": ["stack", "barrel"], "rate": 0.08},
+	MapDataClass.TerrainType.SNOW: {"kinds": ["rock"], "rate": 0.08},
+	MapDataClass.TerrainType.SWAMP: {"kinds": ["blades", "mushroom"], "rate": 0.10},
 }
 
 ## Encombrement de chaque sprite : hauteur au sol, et largeur de son ombre.

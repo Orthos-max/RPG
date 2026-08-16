@@ -82,6 +82,13 @@ MANIFESTE: list[tuple[str, int, str]] = [
     ("terrain_outdoor_cobble",    3, "pave"),
     ("terrain_outdoor_flagstone", 3, "fortin"),
     ("terrain_outdoor_hamlet",    3, "hameau"),
+    ("terrain_outdoor_snow",      3, "neige"),
+    ("terrain_outdoor_swamp",     3, "marais"),
+    ("terrain_mountain_pit",      3, "fosse"),
+    ("terrain_outdoor_ruins",     3, "ruines"),
+    ("terrain_outdoor_tower",     3, "tour"),
+    ("terrain_outdoor_gate",      3, "porte"),
+    ("terrain_outdoor_wall",      3, "mur"),
 ]
 
 
@@ -295,6 +302,106 @@ def _hameau(tuile, rng, palette) -> None:
         _brin(tuile, rng, _melange(clair, (228, 204, 132), 0.70))
 
 
+def _neige(tuile, rng, palette) -> None:
+    """Un champ de neige : congères, cristaux, cailloux affleurants."""
+    clair = _quantile(palette, 0.92)
+    sombre = _quantile(palette, 0.25)
+    # La congère : une tache claire qui déborde légèrement.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _ecarte(clair, 8), rng.randint(2, 3))
+    # Les cailloux que la neige ne recouvre pas, gris ardoise.
+    for _ in range(rng.randint(1, 3)):
+        _tache(tuile, rng, _melange(sombre, (140, 148, 156), 0.50), 1)
+    # Une fine fissure de glace, presque blanche.
+    if rng.random() < 0.5:
+        _fissure(tuile, rng, _ecarte(clair, -14))
+
+
+def _marais(tuile, rng, palette) -> None:
+    """Une flaque de marais : vase, eau croupie, racines émergées."""
+    sombre = _quantile(palette, 0.10)
+    clair = _quantile(palette, 0.60)
+    # L'eau croupie : une tache sombre luisante, plus verte que la vase.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (52, 84, 60), 0.45), rng.randint(2, 3))
+    # Des racines / brindilles qui émergent, sombres.
+    for _ in range(rng.randint(1, 3)):
+        _brin(tuile, rng, _ecarte(sombre, -14))
+    # Un reflet clair sur la flaque, comme un coup de lumière.
+    if rng.random() < 0.6:
+        _tache(tuile, rng, _melange(clair, (168, 196, 150), 0.40), 1)
+
+
+def _fosse(tuile, rng, palette) -> None:
+    """Le fond d'un gouffre : rien que de l'obscur, et une aspérité de roche."""
+    sombre = _quantile(palette, 0.08)
+    # Le fond est presque noir ; une arête de roche encore plus sombre.
+    for _ in range(rng.randint(1, 3)):
+        _tache(tuile, rng, _ecarte(sombre, -10), rng.randint(1, 2))
+    if rng.random() < 0.4:
+        _fissure(tuile, rng, _ecarte(sombre, -16))
+
+
+def _ruines(tuile, rng, palette) -> None:
+    """Un dallage crevé : gravats, joints d'herbe, pierre cassée."""
+    clair = _quantile(palette, 0.85)
+    sombre = _quantile(palette, 0.10)
+    # L'herbe qui repousse dans les joints.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (104, 132, 66), 0.55), 1)
+    # Un éclat de pierre claire, un gravat sombre.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _ecarte(clair, 8), rng.randint(1, 2))
+    if rng.random() < 0.6:
+        _tache(tuile, rng, _ecarte(sombre, -8), 1)
+    # La fissure qui traverse une dalle morte.
+    if rng.random() < 0.5:
+        _fissure(tuile, rng, _ecarte(sombre, -10))
+
+
+def _tour(tuile, rng, palette) -> None:
+    """L'assise d'une tour : un éclat de plus, une herbe entre les pierres."""
+    clair = _quantile(palette, 0.88)
+    sombre = _quantile(palette, 0.10)
+    # De l'herbe dans un joint de l'assise.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (104, 132, 66), 0.55), 1)
+    # Une pierre claire usée par les ans, un éclat sombre.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _ecarte(clair, 8), rng.randint(1, 2))
+    if rng.random() < 0.5:
+        _tache(tuile, rng, _ecarte(sombre, -8), 1)
+
+
+def _porte(tuile, rng, palette) -> None:
+    """Un seuil de porte : rainure usée, traces de passage, gravier."""
+    clair = _quantile(palette, 0.85)
+    sombre = _quantile(palette, 0.12)
+    # L'ornière du charroi qui passe la porte — courte, au centre.
+    if rng.random() < 0.7:
+        _ride(tuile, rng, _ecarte(sombre, -10))
+    # Du gravier roulé sous les semelles.
+    for _ in range(rng.randint(1, 3)):
+        _tache(tuile, rng, _ecarte(sombre, -6), 1)
+    if rng.random() < 0.5:
+        _tache(tuile, rng, _ecarte(clair, 8), 1)
+
+
+def _mur(tuile, rng, palette) -> None:
+    """Un chemin de ronde : pierre éclatée, mousse dans un joint."""
+    sombre = _quantile(palette, 0.10)
+    clair = _quantile(palette, 0.85)
+    # La mousse qui s'accroche entre les assises.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _melange(sombre, (96, 124, 62), 0.45), 1)
+    # Une pierre claire ou sombre, selon le hasard.
+    for _ in range(rng.randint(1, 2)):
+        _tache(tuile, rng, _ecarte(clair if rng.random() < 0.5 else sombre,
+                                  10 if rng.random() < 0.5 else -8), 1)
+    if rng.random() < 0.4:
+        _fissure(tuile, rng, _ecarte(sombre, -10))
+
+
 RECETTES = {
     "prairie": _prairie,
     "sous-bois": _sous_bois,
@@ -303,6 +410,13 @@ RECETTES = {
     "pave": _pave,
     "fortin": _fortin,
     "hameau": _hameau,
+    "neige": _neige,
+    "marais": _marais,
+    "fosse": _fosse,
+    "ruines": _ruines,
+    "tour": _tour,
+    "porte": _porte,
+    "mur": _mur,
 }
 #endregion
 

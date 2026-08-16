@@ -92,12 +92,16 @@ const TERRAIN_TEXTURES: Dictionary = {
 	MapDataClass.TerrainType.WATER: "res://assets/textures/terrain/terrain_outdoor_water.png",
 	MapDataClass.TerrainType.PATH: "res://assets/textures/terrain/terrain_outdoor_path.png",
 	MapDataClass.TerrainType.SAND: "res://assets/textures/terrain/terrain_outdoor_sand.png",
-	MapDataClass.TerrainType.WALL: "res://assets/textures/terrain/terrain_mountain_rock_dark.png",
-	MapDataClass.TerrainType.PIT: "res://assets/textures/terrain/terrain_mountain_void.png",
+	MapDataClass.TerrainType.WALL: "res://assets/textures/terrain/terrain_outdoor_wall.png",
+	MapDataClass.TerrainType.PIT: "res://assets/textures/terrain/terrain_mountain_pit.png",
 	MapDataClass.TerrainType.VILLAGE: "res://assets/textures/terrain/terrain_outdoor_hamlet.png",
 	MapDataClass.TerrainType.FORT: "res://assets/textures/terrain/terrain_outdoor_flagstone.png",
-	MapDataClass.TerrainType.RUINS: "res://assets/textures/terrain/terrain_outdoor_cobble.png",
+	MapDataClass.TerrainType.RUINS: "res://assets/textures/terrain/terrain_outdoor_ruins.png",
 	MapDataClass.TerrainType.BRIDGE: "res://assets/textures/terrain/terrain_indoor_planks.png",
+	MapDataClass.TerrainType.SNOW: "res://assets/textures/terrain/terrain_outdoor_snow.png",
+	MapDataClass.TerrainType.SWAMP: "res://assets/textures/terrain/terrain_outdoor_swamp.png",
+	MapDataClass.TerrainType.GATE: "res://assets/textures/terrain/terrain_outdoor_gate.png",
+	MapDataClass.TerrainType.TOWER: "res://assets/textures/terrain/terrain_outdoor_tower.png",
 }
 
 ## Tuile de rechange d'un terrain sur ses cases **hautes**.
