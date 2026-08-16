@@ -195,7 +195,7 @@ func _make_tile(pos: Vector2i) -> StaticBody3D:
 
 ## Met une tuile à jour : taille, position, couleur — sans toucher au reste.
 func _apply_tile(body: StaticBody3D, pos: Vector2i) -> void:
-	var height: float = _elevation_at(pos)
+	var height: float = doc.height_at(pos)
 	var thickness: float = maxf(absf(height), MIN_THICKNESS)
 	var size := Vector3(doc.tile_size * 0.98, thickness, doc.tile_size * 0.98)
 
@@ -307,7 +307,7 @@ func _rebuild_props() -> void:
 	for row: int in doc.grid_size.y:
 		for col: int in doc.grid_size.x:
 			var pos := Vector2i(col, row)
-			var height: float = _elevation_at(pos)
+			var height: float = doc.height_at(pos)
 			var thickness: float = maxf(absf(height), MIN_THICKNESS)
 			var center: Vector3 = _tile_center(pos, height)
 			cells.append({
@@ -317,6 +317,7 @@ func _rebuild_props() -> void:
 			})
 	TacticsProps.build(self, cells, doc.tile_size)
 	TacticsDecor.build(self, cells, doc.tile_size)
+	TacticsAmbiance.build(self, cells, doc.tile_size)
 
 
 ## Redessine les repères posés sur la carte : unités, zone de départ, point à prendre.
@@ -351,7 +352,7 @@ func _flat_marker(pos: Vector2i, color: Color) -> Node3D:
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	marker.material_override = material
 
-	var height: float = _elevation_at(pos)
+	var height: float = doc.height_at(pos)
 	marker.position = _tile_center(pos, height) + Vector3(0, height / 2.0 + 0.04, 0)
 	return marker
 
@@ -362,8 +363,8 @@ func _unit_marker(unit: Dictionary) -> Node3D:
 	var is_player: bool = str(unit.get("team", "")) == MapDocument.TEAM_PLAYER
 
 	var root := Node3D.new()
-	var height: float = _elevation_at(pos)
-	root.position = _tile_center(pos, height) + Vector3(0, height / 2.0, 0)
+	root.position = _tile_center(pos, doc.height_at(pos)) \
+		+ Vector3(0, doc.height_at(pos) / 2.0, 0)
 
 	var body := MeshInstance3D.new()
 	var mesh := CapsuleMesh.new()
@@ -388,17 +389,6 @@ func _unit_marker(unit: Dictionary) -> Node3D:
 
 
 ## Centre monde d'une tuile (même formule que l'arène de jeu).
-## L'altitude à laquelle une case se dresse, plancher du terrain compris.
-##
-## L'éditeur lisait `doc.height_at(pos)` en quatre endroits — la tuile, le décor,
-## les pastilles, les jetons d'unité. Une montagne y serait restée au ras de
-## l'herbe pendant que la bataille la dresse d'une unité, et la carte peinte
-## aurait cessé de ressembler à la carte jouée. La règle vient donc du même
-## endroit que pour la bataille ([method MapData.elevation]).
-func _elevation_at(pos: Vector2i) -> float:
-	return MapDataClass.elevation(doc.terrain_at(pos), doc.height_at(pos))
-
-
 func _tile_center(pos: Vector2i, height: float) -> Vector3:
 	var half := Vector2(float(doc.grid_size.x) / 2.0, float(doc.grid_size.y) / 2.0)
 	return Vector3(

@@ -65,10 +65,7 @@ func _generate_from_map_data() -> void:
 	for row in md.grid_size.y:
 		for col in md.grid_size.x:
 			var terrain: int = md.get_terrain(col, row)
-			# Le plancher du terrain passe avant la hauteur déclarée : une montagne
-			# se dresse d'une unité même quand la carte la laisse au ras de l'herbe
-			# ([constant MapData.TERRAIN_FLOOR]).
-			var height: float = MapDataClass.elevation(terrain, md.get_height(col, row))
+			var height: float = md.get_height(col, row)
 
 			# Each tile gets its own BoxMesh with thickness matching its elevation
 			var tile_mesh := BoxMesh.new()
@@ -110,9 +107,7 @@ func _generate_from_map_data() -> void:
 					# partagé de [TacticsConfig], un seul objet pour toute la carte.
 					if TacticsScenery.needs_tile_material(tile.terrain_type):
 						tile.terrain_mat = TacticsScenery.terrain_material_at(
-							tile.terrain_type, Vector2i(col, row),
-							MapDataClass.elevation(tile.terrain_type,
-								md.get_height(col, row)))
+							tile.terrain_type, Vector2i(col, row), md.get_height(col, row))
 					elif TacticsConfig.terrain_material.has(tile.terrain_type):
 						tile.terrain_mat = TacticsConfig.terrain_material[tile.terrain_type]
 			idx += 1

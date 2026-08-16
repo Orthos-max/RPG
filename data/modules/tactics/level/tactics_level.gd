@@ -54,6 +54,7 @@ func _ready() -> void:
 	arena.configure_tiles() # Configure arena tiles
 	TacticsProps.decorate(arena) # Arbres, rochers, créneaux sur les cases
 	TacticsDecor.decorate(arena) # Fleurs, herbes hautes, cailloux, champignons
+	TacticsAmbiance.decorate(arena) # Feuilles, flocons, fumée, poussière
 	_setup_camps() # Trois camps si la session le demande (M5), deux sinon
 	participant.configure(camera, ui_control) # Configure participant with camera and UI control
 

@@ -60,7 +60,8 @@ MATIERE = "terrain_outdoor_grass.png"
 ## Mêmes clés que `TacticsAutoTiler.BACKGROUND_SETS` — les seules que le rendu
 ## ira chercher. Le hameau et le fortin y étaient d'avance, engendrés le jour où
 ## le jeu ne savait pas encore s'en servir comme fond ; ils en sont depuis le
-## 2026-08-16, et la ruine avec eux.
+## 2026-08-16, la ruine avec eux, et le pont le même jour — c'est lui qui
+## laissait une bande d'herbe entre une rivière et le platelage qui la franchit.
 FONDS: dict[str, str] = {
     "water": "terrain_outdoor_water.png",
     "forest": "terrain_outdoor_forest.png",
@@ -75,6 +76,7 @@ FONDS: dict[str, str] = {
     "gate": "terrain_outdoor_gate.png",
     "tower": "terrain_outdoor_tower.png",
     "wall": "terrain_outdoor_wall.png",
+    "bridge": "terrain_indoor_planks.png",
 }
 
 ## Les quinze voisinages qui montrent un voisin. `fill` n'en montre aucun.

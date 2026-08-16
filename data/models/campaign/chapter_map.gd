@@ -99,22 +99,19 @@ static func height_at(map: Dictionary, pos: Vector2i) -> float:
 ##    marches trop hautes, ce sont des cases où l'on ne va pas — c'est ce que
 ##    fait le parcours ([TacticsArenaService.process_surrounding_tiles]), qui
 ##    écarte l'infranchissable avant même de regarder la dénivellation.
-## 2. **L'altitude vaut la moitié de la hauteur rendue.** Une case engendrée
+## 2. **L'altitude vaut la moitié de la hauteur déclarée.** Une case engendrée
 ##    depuis [MapData] est un volume dont le centre est posé à `hauteur / 2` — et
 ##    c'est ce centre que [BattleGrid] retient, donc lui que le jeu compare d'une
 ##    case à l'autre. Comparer les hauteurs brutes ferait paraître les marches
-##    deux fois plus hautes qu'elles ne sont. Et c'est bien la hauteur *rendue*
-##    ([method MapData.elevation]) : une montagne se dresse d'une unité quoi
-##    qu'en dise la carte, et cette marche-là existe pour de bon.
+##    deux fois plus hautes qu'elles ne sont.
 static func walkable_cells(map: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	var gs: Vector2i = map.get("grid_size", Vector2i.ZERO)
 	for row: int in gs.y:
 		for col: int in gs.x:
 			var pos := Vector2i(col, row)
-			var terrain: int = terrain_at(map, pos)
-			if MapDataRef.is_walkable(terrain):
-				out[pos] = MapDataRef.elevation(terrain, height_at(map, pos)) / 2.0
+			if MapDataRef.is_walkable(terrain_at(map, pos)):
+				out[pos] = height_at(map, pos) / 2.0
 	return out
 
 

@@ -372,16 +372,27 @@ func _test_edge_pairs() -> bool:
 		print_rich("  OK: une rive d'eau bordée de sable prend water_sand_n")
 
 	# 3. Le repli tient : un voisin qui ne sait pas faire fond — l'herbe, une
-	#    ruine — rend exactement la tuile d'avant, à fond d'herbe. Aucune
+	#    fosse — rend exactement la tuile d'avant, à fond d'herbe. Aucune
 	#    régression possible sur les cartes qui ne bordent que des plaines.
-	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.BRIDGE, -1]:
+	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.PIT, -1]:
 		var fallback: Array[String] = TacticsAutoTiler._edge_paths(
 			_MD.TerrainType.WATER, "n", neighbor)
 		if fallback.size() != 1 or not fallback[0].ends_with("edges/water_n.png"):
 			print_rich("[color=red]  FAIL: voisin %d → %s[/color]" % [neighbor, str(fallback)])
 			ok = false
 	if ok:
-		print_rich("  OK: herbe, ruine ou rien du tout → la tuile d'origine, inchangée")
+		print_rich("  OK: herbe, fosse ou rien du tout → la tuile d'origine, inchangée")
+
+	# 3 bis. Et le pont, lui, **fait** fond depuis le 2026-08-16 : c'est
+	#        précisément ce qui retirait les six pixels de prairie qu'une rivière
+	#        montrait entre elle et le tablier qui la franchit.
+	var over: Array[String] = TacticsAutoTiler._edge_paths(
+		_MD.TerrainType.WATER, "n", _MD.TerrainType.BRIDGE)
+	if over.size() != 2 or not over[0].ends_with("edges-pairs/water_bridge_n.png"):
+		print_rich("[color=red]  FAIL: une rive d'eau contre un pont → %s[/color]" % str(over))
+		ok = false
+	else:
+		print_rich("  OK: une rive d'eau contre un pont borde sur le platelage")
 
 	# 4. Et le matériau se bâtit vraiment dans les deux cas.
 	var paired: StandardMaterial3D = TacticsAutoTiler.overlay_material(
@@ -431,9 +442,9 @@ func _test_edge_ownership() -> bool:
 			print_rich("[color=red]  FAIL: la prairie et %s se disputent leur bord[/color]"
 				% _MD.type_key(other))
 			ok = false
-	var sans_bords: Array[int] = [
-		_MD.TerrainType.BRIDGE, _MD.TerrainType.PIT,
-	]
+	# La fosse est le dernier terrain sans bords : le pont a les siens depuis le
+	# 2026-08-16. Elle ne porte donc rien, mais ne dispense pas sa voisine.
+	var sans_bords: Array[int] = [_MD.TerrainType.PIT]
 	for bare: int in sans_bords:
 		if TacticsAutoTiler.carries(bare, _MD.TerrainType.GRASS) \
 				or TacticsAutoTiler.carries(bare, _MD.TerrainType.WATER):
@@ -446,9 +457,22 @@ func _test_edge_ownership() -> bool:
 		if TacticsAutoTiler.carries(terrain, terrain):
 			print_rich("[color=red]  FAIL: %s se borde lui-même[/color]" % _MD.type_key(terrain))
 			ok = false
+
+	# Le pont, lui, est **posé** sur le paysage : il pose son seuil de planches là
+	# où le chemin s'arrête, et laisse la rivière garder sa rive. C'est tout son
+	# rang, et c'est ce que les cartes du jeu demandent — un tablier qui l'aurait
+	# emporté sur l'eau aurait coupé sa travée du chemin aux deux bouts.
+	if not TacticsAutoTiler.carries(_MD.TerrainType.BRIDGE, _MD.TerrainType.PATH):
+		print_rich("[color=red]  FAIL: le pont ne pose pas son seuil sur le chemin[/color]")
+		ok = false
+	if TacticsAutoTiler.carries(_MD.TerrainType.BRIDGE, _MD.TerrainType.WATER) \
+			or not TacticsAutoTiler.carries(_MD.TerrainType.WATER, _MD.TerrainType.BRIDGE):
+		print_rich("[color=red]  FAIL: le pont dispute sa rive à la rivière[/color]")
+		ok = false
+
 	if ok:
 		print_rich("  OK: l'eau porte toujours sa rive, la prairie ne porte jamais rien, "
-			+ "mur et pont ne portent pas mais laissent border")
+			+ "la fosse ne porte pas mais laisse border, le pont pose son seuil")
 
 	# 2. Trois voisinages nommés, sur de vraies tuiles habillées par le service.
 	var herbe: int = _MD.TerrainType.GRASS

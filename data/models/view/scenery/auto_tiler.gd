@@ -22,7 +22,7 @@ extends RefCounted
 ## reste ce qu'elle est partout — le fond du tableau.
 ##
 ## Conséquence pratique : seuls les terrains listés dans [constant EDGE_SETS]
-## reçoivent un habillage. Tout le reste — mur, fosse, pont — garde son
+## reçoivent un habillage. Tout le reste — la fosse, seule désormais — garde son
 ## remplissage, et rien n'est à ajouter pour qu'il continue de fonctionner.
 ##
 ## ## Sur quel fond la transition se dessine
@@ -77,9 +77,9 @@ extends RefCounted
 ##
 ## La prairie est à zéro et ne porte donc jamais rien, quels que soient ses
 ## voisins — c'est le parti du pack rappelé plus haut, tenu jusqu'au bout. Un
-## terrain sans bords — mur, pont, fosse — ne porte rien non plus (il n'a rien à
-## porter), mais il ne dispense pas son voisin : il compte pour moins que tout le
-## reste, si bien qu'une plage collée à un rempart borde quand même.
+## terrain sans bords — la fosse — ne porte rien non plus (il n'a rien à porter),
+## mais il ne dispense pas son voisin : il compte pour moins que tout le reste,
+## si bien qu'une plage collée à une fosse borde quand même.
 ##
 ## Deux bandes se croisent au coin, et la seconde recouvre la première ; chacune
 ## est posée un cheveu plus haut que la précédente ([constant SIDE_LIFT]) pour
@@ -127,6 +127,11 @@ const OVERLAY_NODE: String = "AutoTile"
 ## de quel côté elle s'arrête — ses tuiles sont engendrées par
 ## `art/bords-prairie.py`, qui n'a que `edges-pairs/` à remplir puisqu'une
 ## prairie sur fond de prairie n'existe pas.
+##
+## Le pont y est depuis le 2026-08-16, et il était le dernier terrain
+## franchissable à n'avoir rien. Sa limite est pourtant la plus **matérielle** de
+## toutes — une planche sciée, pas une frontière de paysage — et c'est
+## `art/bords-pont.py` qui la dessine.
 const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.GRASS: "grass",
 	MapDataClass.TerrainType.WATER: "water",
@@ -142,14 +147,15 @@ const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.TOWER: "tower",
 	MapDataClass.TerrainType.WALL: "wall",
 	MapDataClass.TerrainType.RUINS: "ruins",
+	MapDataClass.TerrainType.BRIDGE: "bridge",
 }
 
 ## Rang d'un terrain absent de [constant TERRAIN_PRIORITY] : sous la prairie.
 ##
-## Mur, porte, tour, ruine, pont, fosse : ils n'ont pas de bords, donc rien à
-## porter. Les mettre en dessous de tout plutôt que hors du jeu est ce qui fait
-## qu'une plage bordant un rempart borde quand même — leur voisin, lui, a bien
-## une transition à montrer, et personne d'autre ne la montrera.
+## Il ne reste que la fosse : elle n'a pas de bords, donc rien à porter. La
+## mettre en dessous de tout plutôt que hors du jeu est ce qui fait qu'une plage
+## bordant une fosse borde quand même — sa voisine, elle, a bien une transition à
+## montrer, et personne d'autre ne la montrera.
 const NO_PRIORITY: int = -1
 
 ## Qui, de deux terrains voisins, dessine la frontière qui les sépare.
@@ -163,21 +169,38 @@ const NO_PRIORITY: int = -1
 ## L'eau ferme la marche et porte donc toujours sa rive, y compris contre un
 ## marais ou de la neige — c'est le terrain dont la limite est la plus nette à
 ## l'œil, et celui qu'on regarde en premier sur une carte.
+##
+## Le pont ouvre la marche juste après le chemin, et c'est délibéré malgré son
+## bord de planche sciée : un tablier est **posé** sur le paysage, comme la
+## route qu'il prolonge, et les cartes du jeu le disent — sur les quatre qui en
+## portent un, ses voisines sont de l'eau (quatorze côtés) et du chemin (sept).
+##
+## - Contre l'eau, il perd, et c'est ce qu'on veut : la rivière garde sa rive,
+##   mais la dessine désormais **sur du platelage** ([constant BACKGROUND_SETS])
+##   au lieu des six pixels de prairie qu'elle y mettait — le vrai défaut du
+##   pont, celui qui se voyait de loin.
+## - Contre le chemin, il l'emporte, et pose son seuil de planches là où la route
+##   s'arrête : c'est l'abord d'un pont, et il a bien lieu d'exister.
+##
+## Le mettre au-dessus de l'eau lui aurait fait dessiner son propre bord scié sur
+## les deux rives — plus joli sur une case, mais il aurait alors coupé sa travée
+## du chemin aux deux bouts, et le pont serait devenu une île.
 const TERRAIN_PRIORITY: Dictionary = {
 	MapDataClass.TerrainType.GRASS: 0,
 	MapDataClass.TerrainType.FORT: 1,
 	MapDataClass.TerrainType.VILLAGE: 2,
 	MapDataClass.TerrainType.PATH: 3,
-	MapDataClass.TerrainType.SAND: 4,
-	MapDataClass.TerrainType.FOREST: 5,
-	MapDataClass.TerrainType.MOUNTAIN: 6,
-	MapDataClass.TerrainType.GATE: 7,
-	MapDataClass.TerrainType.SNOW: 8,
-	MapDataClass.TerrainType.TOWER: 9,
-	MapDataClass.TerrainType.SWAMP: 10,
-	MapDataClass.TerrainType.WALL: 12,
-	MapDataClass.TerrainType.RUINS: 11,
-	MapDataClass.TerrainType.WATER: 13,
+	MapDataClass.TerrainType.BRIDGE: 4,
+	MapDataClass.TerrainType.SAND: 5,
+	MapDataClass.TerrainType.FOREST: 6,
+	MapDataClass.TerrainType.MOUNTAIN: 7,
+	MapDataClass.TerrainType.GATE: 8,
+	MapDataClass.TerrainType.SNOW: 9,
+	MapDataClass.TerrainType.TOWER: 10,
+	MapDataClass.TerrainType.SWAMP: 11,
+	MapDataClass.TerrainType.RUINS: 12,
+	MapDataClass.TerrainType.WALL: 13,
+	MapDataClass.TerrainType.WATER: 14,
 }
 
 ## Dossier des tuiles de bord, à fond d'herbe — le repli de toute paire absente.
@@ -192,8 +215,12 @@ const PAIR_DIR: String = "res://assets/textures/terrain/edges-pairs/"
 ## L'herbe n'y est pas, bien qu'elle ait maintenant ses propres bords : c'est
 ## déjà le fond des tuiles de [constant EDGE_DIR], donc le cas que le repli
 ## couvre — l'y ajouter demanderait de recopier `edges/` en neuf exemplaires
-## sous un autre nom. Un terrain absent d'ici — un mur, un pont, une ruine —
-## laisse son voisin border sur de l'herbe, comme avant.
+## sous un autre nom. Un terrain absent d'ici — la fosse — laisse son voisin
+## border sur de l'herbe, comme avant.
+##
+## Le pont y est depuis le 2026-08-16, et c'est la moitié qui manquait le plus :
+## une rivière collée au tablier qui la franchit prenait `water_n`, sa rive **sur
+## fond d'herbe**, et montrait six pixels de prairie entre l'eau et les planches.
 const BACKGROUND_SETS: Dictionary = {
 	MapDataClass.TerrainType.WATER: "water",
 	MapDataClass.TerrainType.FOREST: "forest",
@@ -208,6 +235,7 @@ const BACKGROUND_SETS: Dictionary = {
 	MapDataClass.TerrainType.VILLAGE: "village",
 	MapDataClass.TerrainType.FORT: "fort",
 	MapDataClass.TerrainType.RUINS: "ruins",
+	MapDataClass.TerrainType.BRIDGE: "bridge",
 }
 
 ## Décalage vertical du calque au-dessus du dessus de la case.

@@ -83,8 +83,8 @@ HERBE = "terrain_outdoor_grass.png"
 ## Les fonds, et la tuile de remplissage qui les peint.
 ##
 ## Ce sont ceux de `TacticsAutoTiler.BACKGROUND_SETS`, la ruine exceptée — un
-## terrain ne se borde pas lui-même. Même liste que `bords-remparts.py` et
-## `bords-prairie.py`, à qui la ruine a été ajoutée le même jour.
+## terrain ne se borde pas lui-même. Même liste que `bords-remparts.py`,
+## `bords-prairie.py` et `bords-pont.py`.
 FONDS: dict[str, str] = {
     "water": "terrain_outdoor_water.png",
     "forest": "terrain_outdoor_forest.png",
@@ -98,6 +98,7 @@ FONDS: dict[str, str] = {
     "gate": "terrain_outdoor_gate.png",
     "tower": "terrain_outdoor_tower.png",
     "wall": "terrain_outdoor_wall.png",
+    "bridge": "terrain_indoor_planks.png",
 }
 
 ## Les seize voisinages, écrits dans l'ordre n, e, s, w.

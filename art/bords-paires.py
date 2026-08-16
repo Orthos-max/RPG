@@ -118,6 +118,7 @@ FONDS: dict[str, str] = {
     "gate": "terrain_outdoor_gate.png",
     "tower": "terrain_outdoor_tower.png",
     "wall": "terrain_outdoor_wall.png",
+    "bridge": "terrain_indoor_planks.png",
 }
 
 ## Voisins en croix d'un pixel — l'ouverture et l'inondation s'y tiennent.
