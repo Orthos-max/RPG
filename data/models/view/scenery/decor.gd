@@ -337,10 +337,12 @@ static func _prop_foot(cell: Vector2i, tile_size: float, quarters: int = 0) -> V
 
 ## Largeur de la frondaison d'un arbre de la case, en unités monde.
 ##
-## Réplique de la carrure d'un arbre de [TacticsProps] : l'ombre d'un chêne doit
-## couvrir ce que le chêne couvre.
+## Réplique de la carrure d'un arbre de [TacticsProps] (`_tree_girth`, privée) :
+## l'ombre d'un chêne doit grandir et rétrécir avec le chêne. Elle couvre
+## l'emprise entière de l'arbre — frondaison, branches et fût — donc davantage
+## que la seule masse de feuilles.
 static func _canopy_span(cell: Vector2i, tile_size: float) -> float:
-	return (0.8 + _noise(cell, 1) * 0.4) * tile_size
+	return (0.85 + _noise(cell, 1) * 0.25) * tile_size
 
 
 static func _append(out: Dictionary, kind: String, entry: Dictionary) -> void:

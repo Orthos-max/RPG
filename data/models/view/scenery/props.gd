@@ -14,11 +14,12 @@ extends RefCounted
 ## aucune image à produire, aucun artiste. Quatre règles tiennent l'ensemble :
 ##
 ## - **Rien ne cache une unité.** Le décor est plafonné sous la hauteur d'un pion,
-##   et sur les cases où l'on peut se tenir — forêt, village, fortin, ruines — il
-##   est décalé vers un coin, centre dégagé. Montagne, mur et tour étant
-##   infranchissables, leur décor peut occuper toute la case sans masquer personne.
-##   Seul ce qui est plus bas que [constant FLAT_HEIGHT] a le droit de couvrir le
-##   centre : on marche dessus, comme sur le platelage d'un pont.
+##   et sur les cases où l'on peut se tenir — forêt, montagne, village, fortin,
+##   ruines — il est décalé vers un coin ou semé en couronne, centre dégagé. Mur
+##   et tour étant infranchissables, leur décor peut occuper toute la case sans
+##   masquer personne. Seul ce qui est plus bas que [constant FLAT_HEIGHT] a le
+##   droit de couvrir le centre : on marche dessus, comme sur le platelage d'un
+##   pont.
 ## - **Rien n'intercepte la souris.** Ces volumes n'ont aucune collision — la
 ##   sélection continue de viser la tuile elle-même, dont le corps physique est
 ##   la seule chose que le rayon rencontre.
@@ -48,14 +49,14 @@ const MAX_HEIGHT: float = 0.85
 
 ## Écart entre le centre de la case et le pied du décor, en fraction de case.
 ##
-## C'est ce décalage qui laisse le centre dégagé, donc le pion lisible. Il ne
-## vaut que pour la **forêt** : c'est le seul de ces trois terrains où une unité
-## peut se tenir — montagne et mur sont infranchissables, leur décor a donc le
-## droit d'occuper toute la case.
+## C'est ce décalage qui laisse le centre dégagé, donc le pion lisible : arbre
+## d'un bois, maison d'un hameau, colonne d'une ruine s'enracinent tous là.
+## L'éboulis d'une montagne, lui, sème ses pierres en couronne à [constant
+## ROCK_RING] — même promesse, autre figure.
 ##
-## Tenu par un test : 0,30 de case d'écart contre 0,22 de rayon de frondaison
-## au plus, le centre reste hors du feuillage. Élargir l'un sans resserrer
-## l'autre casserait la promesse.
+## Tenu par un test : 0,30 de case d'écart contre 0,18 de demi-largeur de
+## frondaison au plus, le centre reste hors du feuillage. Élargir l'un sans
+## resserrer l'autre casserait la promesse.
 const CORNER_OFFSET: float = 0.30
 
 ## Sous cette hauteur, un décor se marche dessus.
@@ -73,7 +74,25 @@ const FLAT_HEIGHT: float = 0.12
 ## que le sol de la forêt, un rocher plus clair que la montagne qui le porte.
 const TRUNK_COLOR: String = "#4a3524"
 const CANOPY_COLOR: String = "#2c6b1c"
+
+
+## Le vert d'un conifère : plus sombre et plus froid que celui d'un feuillu.
+## Deux verts valent mieux qu'un — c'est ce qui fait voir un bois mêlé là où une
+## teinte unique ne montrait qu'une seule espèce répétée vingt fois.
+const PINE_COLOR: String = "#1f5233"
+
+
 const ROCK_COLOR: String = "#9d8a72"
+
+
+## Les deux autres pierres d'un éboulis : le pic, qu'on voit sur le ciel, est
+## plus sombre ; la dalle, qui prend le jour à plat, plus claire.
+const ROCK_DARK_COLOR: String = "#87795f"
+
+
+const ROCK_PALE_COLOR: String = "#b0a08a"
+
+
 const WALL_COLOR: String = "#6b6b6b"
 
 
@@ -237,11 +256,9 @@ static func placements(cells: Array, tile_size: float) -> Dictionary:
 				if _noise(cell, 30) < 0.34:
 					_append(out, "tuft", _tuft(top, cell, tile_size))
 			MapDataClass.TerrainType.FOREST:
-				_append(out, "trunk", _tree_trunk(top, cell, tile_size))
-				_append(out, "canopy", _tree_canopy(top, cell, tile_size))
+				_plant_tree(out, top, cell, tile_size)
 			MapDataClass.TerrainType.MOUNTAIN:
-				for i: int in 2:
-					_append(out, "rock", _rock(top, cell, tile_size, i))
+				_raise_rocks(out, top, cell, tile_size)
 			MapDataClass.TerrainType.WALL:
 				var wall_ew: bool = _runs_east_west(cell, terrain_by_cell, RAMPART_KINDS)
 				_append(out, "wall_base", _wall_base(top, tile_size, wall_ew))
@@ -255,8 +272,7 @@ static func placements(cells: Array, tile_size: float) -> Dictionary:
 				for i: int in 3:
 					_append(out, "reed", _reed(top, cell, tile_size, i))
 			MapDataClass.TerrainType.VILLAGE:
-				_append(out, "house_wall", _house_wall(top, cell, tile_size))
-				_append(out, "house_roof", _house_roof(top, cell, tile_size))
+				_build_hamlet(out, top, cell, tile_size)
 			MapDataClass.TerrainType.FORT:
 				_append(out, "keep", _keep(top, cell, tile_size))
 				if _has_banner(cell):
@@ -268,9 +284,7 @@ static func placements(cells: Array, tile_size: float) -> Dictionary:
 					_append(out, "pier", _gate_pier(top, tile_size, gate_ew, side))
 					_append(out, "lintel", _gate_lintel(top, tile_size, gate_ew, side))
 			MapDataClass.TerrainType.RUINS:
-				for i: int in 2:
-					_append(out, "column", _broken_column(top, cell, tile_size, i))
-				_append(out, "rubble", _rubble(top, cell, tile_size))
+				_strew_ruins(out, top, cell, tile_size)
 			MapDataClass.TerrainType.TOWER:
 				_append(out, "tower_base", _tower_base(top, tile_size))
 				_append(out, "tower_shaft", _tower_shaft(top, tile_size))
@@ -314,28 +328,158 @@ static func _tile_top(tile: Node3D) -> float:
 #endregion
 
 
-#region Formes
-## Tronc d'arbre : un cylindre court, planté hors du centre de la case.
-static func _tree_trunk(top: Vector3, cell: Vector2i, tile_size: float) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.32 * _tree_rise(cell)
-	return Transform3D(
-		Basis.IDENTITY.scaled(Vector3(_tree_girth(cell), height, _tree_girth(cell))),
-		top + _corner(cell, tile_size) + Vector3(0.0, height / 2.0, 0.0))
+#region Forêt
+## Les trois arbres que sait pousser une case de bois.
+##
+## Un seul cylindre coiffé d'un cône donnait un bois de quilles : toutes les
+## cases portaient la même silhouette, à la carrure près. Trois profils, tirés
+## du hachage de la case, suffisent à ce qu'un bois de vingt cases n'ait plus
+## deux arbres voisins pareils.
+enum TreeShape {
+	LEAFY, ## Feuillu : fût évasé, deux branches, trois masses de feuillage.
+	PINE, ## Conifère : trois étages de cônes, du plus large au plus effilé.
+	SAPLING, ## Jeune pousse : un fût court, deux petites masses, bien plus bas.
+}
+
+## Quel arbre pousse sur cette case. Feuillus en majorité, pousses en minorité.
+static func _tree_of(cell: Vector2i) -> TreeShape:
+	var draw: float = _noise(cell, 4)
+	if draw < 0.44:
+		return TreeShape.LEAFY
+	if draw < 0.82:
+		return TreeShape.PINE
+	return TreeShape.SAPLING
 
 
-## Frondaison : un cône posé sur le tronc, tourné d'une case à l'autre.
-static func _tree_canopy(top: Vector3, cell: Vector2i, tile_size: float) -> Transform3D:
-	var trunk_h: float = MAX_HEIGHT * 0.32 * _tree_rise(cell)
-	var height: float = MAX_HEIGHT * 0.68 * _tree_rise(cell)
-	var basis: Basis = Basis(Vector3.UP, _noise(cell, 2) * TAU)
-	return Transform3D(
-		basis.scaled(Vector3(_tree_girth(cell), height, _tree_girth(cell))),
-		top + _corner(cell, tile_size) + Vector3(0.0, trunk_h + height / 2.0, 0.0))
+## Plante l'arbre d'une case de forêt : fût, branches et frondaison.
+static func _plant_tree(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	match _tree_of(cell):
+		TreeShape.PINE:
+			_plant_pine(out, top, cell, tile_size)
+		TreeShape.SAPLING:
+			_plant_sapling(out, top, cell, tile_size)
+		_:
+			_plant_leafy(out, top, cell, tile_size)
+
+
+## Les trois masses de feuillage d'un feuillu.
+##
+## `[altitude, hauteur, largeur, dehors, côté]` : les deux premières en fraction
+## de [constant MAX_HEIGHT], les trois suivantes en fraction de case. `dehors`
+## éloigne du centre de la case, `côté` glisse le long du bord — **aucune ne
+## rentre vers le centre**, et c'est ce qui garde lisible le pion qui s'y tient.
+const LEAFY_MASSES: Array = [
+	[0.58, 0.36, 0.32, 0.02, -0.04],
+	[0.80, 0.28, 0.25, 0.01, 0.07],
+	[0.55, 0.26, 0.23, 0.06, -0.10],
+]
+
+## Les trois étages d'un conifère. `[altitude, hauteur, largeur]`, mêmes unités.
+const PINE_TIERS: Array = [
+	[0.34, 0.36, 0.32],
+	[0.60, 0.32, 0.25],
+	[0.84, 0.30, 0.17],
+]
+
+## Les deux masses d'une jeune pousse, dans le format de [constant LEAFY_MASSES].
+const SAPLING_MASSES: Array = [
+	[0.40, 0.30, 0.27, 0.02, -0.02],
+	[0.58, 0.22, 0.19, 0.05, 0.07],
+]
+
+
+## Feuillu : un fût qui s'évase du pied, deux branches, trois masses de feuilles.
+static func _plant_leafy(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var rise: float = _tree_rise(cell)
+	var girth: float = _tree_girth(cell)
+	var foot: Vector3 = top + _corner(cell, tile_size)
+	var trunk_h: float = MAX_HEIGHT * 0.42 * rise
+	var trunk_w: float = tile_size * 0.13 * girth
+
+	_append(out, "trunk", Transform3D(
+		Basis(Vector3.UP, _noise(cell, 2) * TAU).scaled(Vector3(trunk_w, trunk_h, trunk_w)),
+		foot + Vector3(0.0, trunk_h / 2.0, 0.0)))
+
+	# Deux branches, chacune de son côté, et toutes deux penchées vers l'extérieur
+	# de la case : une branche qui rentre passerait au-dessus du pion.
+	var out_dir: Vector3 = _corner_dir(cell)
+	var side_dir: Vector3 = Vector3(-out_dir.z, 0.0, out_dir.x)
+	for i: int in 2:
+		var lean: Vector3 = (side_dir * (1.0 if i == 0 else -1.0) * 0.9
+			+ out_dir * 0.45 + Vector3.UP * 0.9).normalized()
+		var length: float = MAX_HEIGHT * (0.20 + _noise(cell, 5 + i) * 0.08) * rise
+		var joint: Vector3 = foot + Vector3(0.0, trunk_h * (0.52 + 0.16 * float(i)), 0.0)
+		_append(out, "trunk", Transform3D(
+			_aim(lean).scaled(Vector3(trunk_w * 0.38, length, trunk_w * 0.38)),
+			joint + lean * length / 2.0))
+
+	_pile_masses(out, "canopy", LEAFY_MASSES, foot, cell, tile_size, rise, girth)
+
+
+## Conifère : un fût grêle et trois cônes empilés, le dernier en flèche.
+static func _plant_pine(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var rise: float = _tree_rise(cell)
+	var girth: float = _tree_girth(cell)
+	var foot: Vector3 = top + _corner(cell, tile_size)
+	var trunk_h: float = MAX_HEIGHT * 0.28 * rise
+	var trunk_w: float = tile_size * 0.10 * girth
+
+	_append(out, "trunk", Transform3D(
+		Basis(Vector3.UP, _noise(cell, 2) * TAU).scaled(Vector3(trunk_w, trunk_h, trunk_w)),
+		foot + Vector3(0.0, trunk_h / 2.0, 0.0)))
+
+	for i: int in PINE_TIERS.size():
+		var tier: Array = PINE_TIERS[i]
+		var width: float = tile_size * float(tier[2]) * girth
+		var height: float = MAX_HEIGHT * float(tier[1]) * rise
+		# Chaque étage tourne pour lui-même : sans cela, les arêtes des trois
+		# cônes s'alignent et l'arbre redevient un seul cône à gradins.
+		_append(out, "pine", Transform3D(
+			Basis(Vector3.UP, _noise(cell, 6 + i) * TAU).scaled(Vector3(width, height, width)),
+			foot + Vector3(0.0, MAX_HEIGHT * float(tier[0]) * rise, 0.0)))
+
+
+## Jeune pousse : deux masses sur un fût court — de quoi trouer la canopée.
+static func _plant_sapling(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var rise: float = _tree_rise(cell)
+	var girth: float = _tree_girth(cell)
+	var foot: Vector3 = top + _corner(cell, tile_size)
+	var trunk_h: float = MAX_HEIGHT * 0.26 * rise
+	var trunk_w: float = tile_size * 0.10 * girth
+
+	_append(out, "trunk", Transform3D(
+		Basis(Vector3.UP, _noise(cell, 2) * TAU).scaled(Vector3(trunk_w, trunk_h, trunk_w)),
+		foot + Vector3(0.0, trunk_h / 2.0, 0.0)))
+
+	_pile_masses(out, "canopy", SAPLING_MASSES, foot, cell, tile_size, rise, girth)
+
+
+## Pose une frondaison décrite au format de [constant LEAFY_MASSES].
+static func _pile_masses(out: Dictionary, kind: String, masses: Array, foot: Vector3,
+		cell: Vector2i, tile_size: float, rise: float, girth: float) -> void:
+	var out_dir: Vector3 = _corner_dir(cell)
+	var side_dir: Vector3 = Vector3(-out_dir.z, 0.0, out_dir.x)
+	for i: int in masses.size():
+		var mass: Array = masses[i]
+		var width: float = tile_size * float(mass[2]) * girth
+		var height: float = MAX_HEIGHT * float(mass[1]) * rise
+		var offset: Vector3 = out_dir * tile_size * float(mass[3]) \
+			+ side_dir * tile_size * float(mass[4])
+		_append(out, kind, Transform3D(
+			Basis(Vector3.UP, _noise(cell, 7 + i) * TAU).scaled(Vector3(width, height, width)),
+			foot + offset + Vector3(0.0, MAX_HEIGHT * float(mass[0]) * rise, 0.0)))
 
 
 ## Carrure d'un arbre — sa largeur, qui a le droit de varier franchement.
+##
+## Plafonnée à 1,10 : au-delà, la plus large des masses de feuillage mordait sur
+## le centre de la case, que [constant CORNER_OFFSET] promet de laisser libre.
 static func _tree_girth(cell: Vector2i) -> float:
-	return 0.8 + _noise(cell, 1) * 0.4
+	return 0.85 + _noise(cell, 1) * 0.25
 
 
 ## Élancement d'un arbre : sa part du plafond, jamais davantage.
@@ -347,33 +491,125 @@ static func _tree_rise(cell: Vector2i) -> float:
 	return 0.78 + _noise(cell, 1) * 0.22
 
 
-## Rocher : un bloc anguleux posé de guingois, deux par case, jamais pareils.
+#endregion
+
+
+#region Montagne
+## Ce qu'un éboulis pose sur une case : trois pierres, jamais de la même famille.
+enum Stone {
+	BLOCK, ## Bloc anguleux, trapu, basculé.
+	SPIRE, ## Pic effilé — c'est lui qui donne à la case son profil de montagne.
+	SLAB, ## Dalle plate, couchée de guingois.
+}
+
+## Distance du centre de la case où se posent les pierres, en fraction de case.
+##
+## La montagne se traverse (au prix de deux points de mouvement) : une unité peut
+## s'y tenir, donc son décor s'écarte du centre comme celui d'un bois. Sous 0,32
+## la plus large des dalles commencerait à mordre dessus.
+const ROCK_RING: float = 0.32
+
+
+## Deux ou trois pierres autour du centre de la case, chacune de son espèce.
+static func _raise_rocks(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var count: int = 2 if _noise(cell, 12) < 0.30 else 3
+	for i: int in count:
+		var salt: int = 10 + i * 7
+		var seat: Vector3 = top + _scatter(cell, tile_size, i, count, salt)
+		match _stone_of(cell, salt):
+			Stone.SPIRE:
+				_append(out, "rock_pic", _rock_spire(seat, cell, salt, tile_size))
+			Stone.SLAB:
+				_append(out, "rock_slab", _rock_slab(seat, cell, salt, tile_size))
+			_:
+				_append(out, "rock", _rock_block(seat, cell, salt, tile_size))
+
+
+## Quelle pierre tire cette place de l'éboulis.
+static func _stone_of(cell: Vector2i, salt: int) -> Stone:
+	var draw: float = _noise(cell, salt + 500)
+	if draw < 0.46:
+		return Stone.BLOCK
+	if draw < 0.78:
+		return Stone.SPIRE
+	return Stone.SLAB
+
+
+## Bloc anguleux : trapu, tourné et basculé, jamais cubique.
 ##
 ## Un bloc plutôt qu'une sphère : Godot lisse les normales d'une `SphereMesh`
 ## quel que soit son nombre de segments, ce qui donne un galet — un œuf, même,
 ## dès qu'on l'étire. Ce sont les arêtes vives et l'inclinaison qui font la
 ## pierre : chaque face prend la lumière autrement.
-static func _rock(top: Vector3, cell: Vector2i, tile_size: float, index: int) -> Transform3D:
-	var salt: int = 10 + index
-	var scale_factor: float = 0.7 + _noise(cell, salt) * 0.5
-	# Trapu, et jamais cubique : un bloc aussi haut que large est une caisse.
-	var height: float = MAX_HEIGHT * 0.30 * scale_factor
-	var width: float = tile_size * 0.34 * scale_factor
-	var depth: float = width * (0.55 + _noise(cell, salt + 400) * 0.6)
-	var yaw: float = _noise(cell, salt + 100) * TAU
-
-	# Basculé franchement : d'aplomb, il redevient une caisse.
+static func _rock_block(seat: Vector3, cell: Vector2i, salt: int,
+		tile_size: float) -> Transform3D:
+	var bulk: float = 0.75 + _noise(cell, salt + 1) * 0.5
+	var width: float = tile_size * 0.28 * bulk
+	var depth: float = width * (0.60 + _noise(cell, salt + 2) * 0.55)
+	var height: float = MAX_HEIGHT * 0.26 * bulk
 	var tilt := Basis.from_euler(Vector3(
-		(_noise(cell, salt + 200) - 0.5) * 0.7,
-		yaw,
-		(_noise(cell, salt + 300) - 0.5) * 0.7))
-
-	# Les deux rochers d'une case s'écartent l'un de l'autre, sans quoi ils se
-	# superposeraient en un seul caillou plus gros.
-	var away: Vector3 = Vector3(cos(yaw), 0.0, sin(yaw)) * tile_size * 0.16
+		(_noise(cell, salt + 3) - 0.5) * 0.55,
+		_noise(cell, salt + 4) * TAU,
+		(_noise(cell, salt + 5) - 0.5) * 0.55))
 	return Transform3D(
 		tilt.scaled(Vector3(width, height, depth)),
-		top + _corner(cell, tile_size) * 0.6 + away + Vector3(0.0, height / 2.0, 0.0))
+		seat + Vector3(0.0, height / 2.0, 0.0))
+
+
+## Pic : une aiguille à cinq pans, deux fois plus haute que large.
+##
+## C'est la pièce qui fait lire « montagne » plutôt que « caillasse » : deux
+## blocs trapus ne montraient qu'un éboulis, une arête qui monte donne un relief.
+static func _rock_spire(seat: Vector3, cell: Vector2i, salt: int,
+		tile_size: float) -> Transform3D:
+	var bulk: float = 0.80 + _noise(cell, salt + 1) * 0.45
+	var width: float = tile_size * 0.20 * bulk
+	var height: float = MAX_HEIGHT * (0.42 + _noise(cell, salt + 2) * 0.26)
+	# À peine dévié de l'aplomb : un pic couché n'est plus un pic.
+	var tilt := Basis.from_euler(Vector3(
+		(_noise(cell, salt + 3) - 0.5) * 0.30,
+		_noise(cell, salt + 4) * TAU,
+		(_noise(cell, salt + 5) - 0.5) * 0.30))
+	return Transform3D(
+		tilt.scaled(Vector3(width, height, width * (0.85 + _noise(cell, salt + 6) * 0.3))),
+		seat + Vector3(0.0, height / 2.0, 0.0))
+
+
+## Dalle : une pierre plate posée en biais, celle sur laquelle on s'assoit.
+static func _rock_slab(seat: Vector3, cell: Vector2i, salt: int,
+		tile_size: float) -> Transform3D:
+	var bulk: float = 0.80 + _noise(cell, salt + 1) * 0.35
+	var width: float = tile_size * 0.30 * bulk
+	var depth: float = width * (0.55 + _noise(cell, salt + 2) * 0.40)
+	var height: float = MAX_HEIGHT * 0.11 * bulk
+	# Franchement inclinée : à plat, une dalle ne se distingue pas du sol.
+	var tilt := Basis.from_euler(Vector3(
+		(_noise(cell, salt + 3) - 0.5) * 0.75,
+		_noise(cell, salt + 4) * TAU,
+		(_noise(cell, salt + 5) - 0.5) * 0.75))
+	return Transform3D(
+		tilt.scaled(Vector3(width, height, depth)),
+		seat + Vector3(0.0, height / 2.0, 0.0))
+
+
+## Place la [param index]e pièce d'un semis de [param count], autour du centre.
+##
+## Un tour complet réparti en parts égales, plus une dérive dans la part : les
+## pièces ne se superposent jamais, et elles ne dessinent pas non plus l'étoile
+## régulière qu'un angle fixe donnerait.
+static func _scatter(cell: Vector2i, tile_size: float, index: int, count: int,
+		salt: int) -> Vector3:
+	var angle: float = (float(index) + 0.15 + _noise(cell, salt + 900) * 0.7) \
+		* (TAU / float(count))
+	var radius: float = tile_size * (ROCK_RING + _noise(cell, salt + 901) * 0.05)
+	return Vector3(cos(angle), 0.0, sin(angle)) * radius
+
+
+#endregion
+
+
+#region Formes
 
 
 ## Soubassement d'un rempart : une semelle plus large que le mur, très basse.
@@ -472,36 +708,129 @@ static func _reed(top: Vector3, cell: Vector2i, tile_size: float, index: int) ->
 
 
 #region Constructions
-## Corps d'une maison : un bloc de torchis, planté dans un coin de la case.
-static func _house_wall(top: Vector3, cell: Vector2i, tile_size: float) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.42
-	return Transform3D(
-		_house_basis(cell).scaled(Vector3(_house_width(cell, tile_size),
-			height, _house_depth(cell, tile_size))),
-		top + _corner(cell, tile_size) + Vector3(0.0, height / 2.0, 0.0))
+## Le hameau d'une case : une maison, et parfois la remise qui va avec.
+##
+## Un bloc coiffé d'un prisme faisait bien une maison, mais **la** maison :
+## seize cases de village en alignaient seize exemplaires. Deux modèles, un
+## débord de toit, une cheminée, une porte et une remise de temps en temps
+## suffisent à ce qu'un hameau ait l'air habité.
+static func _build_hamlet(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	_build_house(out, top + _corner(cell, tile_size), cell, tile_size)
+	# La remise se pose dans le coin opposé : accolée à la maison, elle n'en
+	# serait qu'une excroissance, et au centre elle gênerait le pion.
+	if _noise(cell, 24) < 0.42:
+		_build_shed(out, top + _corner(cell, tile_size, 2), cell, tile_size)
 
 
-## Toit à quatre pans, débordant un peu sur les murs qu'il couvre.
-static func _house_roof(top: Vector3, cell: Vector2i, tile_size: float) -> Transform3D:
-	var wall_h: float = MAX_HEIGHT * 0.42
-	var height: float = MAX_HEIGHT * 0.34
-	return Transform3D(
-		_house_basis(cell).scaled(Vector3(_house_width(cell, tile_size) * 1.2,
-			height, _house_depth(cell, tile_size) * 1.2)),
-		top + _corner(cell, tile_size) + Vector3(0.0, wall_h + height / 2.0, 0.0))
+## Part du plafond prise par les murs d'une maison ; le toit prend le reste.
+const HOUSE_WALL_RISE: float = 0.40
+const HOUSE_ROOF_RISE: float = 0.32
 
 
-## Une maison n'est jamais de biais : elle s'aligne sur un quart de tour.
-static func _house_basis(cell: Vector2i) -> Basis:
-	return Basis(Vector3.UP, floor(_noise(cell, 22) * 4.0) * (TAU / 4.0))
+## Corps de logis : murs, toit débordant, porte, et souvent une cheminée.
+##
+## Deux modèles selon le hachage — la grande chaumière au toit de tuile, et la
+## petite maison au toit d'ardoise croisé d'une croupe. Le débord du toit est ce
+## qui distingue une maison d'une caisse : c'est l'ombre portée sous l'avant-toit
+## qui donne l'épaisseur du mur.
+static func _build_house(out: Dictionary, seat: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var small: bool = _noise(cell, 23) < 0.42
+	var grow: float = 0.88 + _noise(cell, 20) * 0.24
+	var width: float = tile_size * (0.20 if small else 0.26) * grow
+	var depth: float = width * ((1.00 + _noise(cell, 21) * 0.18) if small
+		else (1.02 + _noise(cell, 21) * 0.30))
+	var wall_h: float = MAX_HEIGHT * HOUSE_WALL_RISE * (0.85 if small else 1.0)
+	var roof_h: float = MAX_HEIGHT * HOUSE_ROOF_RISE * (0.90 if small else 1.0)
+	# Une maison n'est jamais de biais : elle s'aligne sur un quart de tour.
+	var basis := Basis(Vector3.UP, floor(_noise(cell, 22) * 4.0) * (TAU / 4.0))
+
+	_append(out, "house_wall", Transform3D(
+		basis.scaled(Vector3(width, wall_h, depth)),
+		seat + Vector3(0.0, wall_h / 2.0, 0.0)))
+
+	# Le faîtage d'un `PrismMesh` court sur `z` : la profondeur étant le grand
+	# côté, le toit se pose dans le sens de la maison sans qu'on ait à le tourner.
+	var ridge: String = "house_hip" if small else "house_roof"
+	_append(out, ridge, Transform3D(
+		basis.scaled(Vector3(width * 1.22, roof_h, depth * 1.12)),
+		seat + Vector3(0.0, wall_h + roof_h / 2.0, 0.0)))
+	if small:
+		# La croupe : un second pan, en travers et un peu plus bas, qui casse la
+		# ligne du faîtage — c'est ce qui fait lire quatre pans au lieu de deux.
+		_append(out, ridge, Transform3D(
+			basis.scaled(Vector3(depth * 1.10, roof_h * 0.80, width * 1.00)),
+			seat + Vector3(0.0, wall_h + roof_h * 0.40, 0.0)))
+
+	_hang_door(out, basis, seat, cell, width, depth, wall_h)
+	if _noise(cell, 25) < 0.58:
+		_raise_chimney(out, basis, seat, cell, tile_size, width, depth, wall_h, roof_h)
 
 
-static func _house_width(cell: Vector2i, tile_size: float) -> float:
-	return tile_size * 0.25 * (0.85 + _noise(cell, 20) * 0.3)
+## Porte : un panneau de bois plaqué sur la façade, du côté qui regarde dehors.
+##
+## Du côté qui regarde dehors, et pas d'un côté tiré au sort : une porte qui
+## donne sur le centre de la case est un mur pour la caméra tactique, qui voit
+## la maison de l'extérieur du plateau.
+static func _hang_door(out: Dictionary, basis: Basis, seat: Vector3, cell: Vector2i,
+		width: float, depth: float, wall_h: float) -> void:
+	var want: Vector3 = _corner_dir(cell)
+	var facing: int = 0
+	var best: float = -2.0
+	for i: int in 4:
+		var normal: Vector3 = basis * (Vector3.RIGHT if i % 2 == 0 else Vector3.BACK) \
+			* (1.0 if i < 2 else -1.0)
+		var score: float = normal.normalized().dot(want)
+		if score > best:
+			best = score
+			facing = i
+	var side: float = 1.0 if facing < 2 else -1.0
+	var along_x: bool = facing % 2 == 0
+	var reach: float = (width if along_x else depth) / 2.0
+	var normal: Vector3 = (basis * (Vector3.RIGHT if along_x else Vector3.BACK)).normalized() * side
+
+	var door_h: float = wall_h * 0.62
+	var leaf: float = (depth if along_x else width) * 0.34
+	var thick: float = leaf * 0.22
+	var size := Vector3(thick, door_h, leaf) if along_x else Vector3(leaf, door_h, thick)
+	_append(out, "door", Transform3D(
+		basis.scaled(size),
+		seat + normal * (reach + thick * 0.35) + Vector3(0.0, door_h / 2.0, 0.0)))
 
 
-static func _house_depth(cell: Vector2i, tile_size: float) -> float:
-	return _house_width(cell, tile_size) * (0.8 + _noise(cell, 21) * 0.4)
+## Cheminée : un conduit de pierre qui perce le toit près du pignon.
+static func _raise_chimney(out: Dictionary, basis: Basis, seat: Vector3, cell: Vector2i,
+		tile_size: float, width: float, depth: float, wall_h: float,
+		roof_h: float) -> void:
+	var stack: float = tile_size * 0.075
+	var height: float = roof_h * 0.95
+	# Sur le rampant, à un tiers du faîtage : plantée au milieu du toit, elle
+	# ressemble à un mât ; au bord, elle flotte à côté de la maison.
+	var offset: Vector3 = basis * Vector3(
+		width * (0.18 if _noise(cell, 26) < 0.5 else -0.18), 0.0,
+		depth * (0.30 if _noise(cell, 27) < 0.5 else -0.30))
+	_append(out, "chimney", Transform3D(
+		basis.scaled(Vector3(stack, height, stack)),
+		seat + offset + Vector3(0.0, wall_h + roof_h * 0.35 + height / 2.0, 0.0)))
+
+
+## Remise : une resserre basse, à toit de chaume, dans un coin de la cour.
+static func _build_shed(out: Dictionary, seat: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var grow: float = 0.85 + _noise(cell, 36) * 0.3
+	var width: float = tile_size * 0.15 * grow
+	var depth: float = width * (1.05 + _noise(cell, 37) * 0.35)
+	var wall_h: float = MAX_HEIGHT * 0.22
+	var roof_h: float = MAX_HEIGHT * 0.16
+	var basis := Basis(Vector3.UP, floor(_noise(cell, 38) * 4.0) * (TAU / 4.0))
+
+	_append(out, "house_wall", Transform3D(
+		basis.scaled(Vector3(width, wall_h, depth)),
+		seat + Vector3(0.0, wall_h / 2.0, 0.0)))
+	_append(out, "house_roof", Transform3D(
+		basis.scaled(Vector3(width * 1.25, roof_h, depth * 1.10)),
+		seat + Vector3(0.0, wall_h + roof_h / 2.0, 0.0)))
 
 
 ## Donjon d'un fortin : un tambour de pierre trapu, dans un coin de la cour.
@@ -601,26 +930,127 @@ static func _gate_axis(east_west: bool, side: int) -> Vector3:
 	return Vector3(sign_side, 0.0, 0.0) if east_west else Vector3(0.0, 0.0, sign_side)
 
 
-## Colonne brisée : un fût court, arrêté net — deux par case de ruines.
-static func _broken_column(top: Vector3, cell: Vector2i, tile_size: float,
-		index: int) -> Transform3D:
-	var salt: int = 70 + index
-	var height: float = MAX_HEIGHT * (0.22 + _noise(cell, salt) * 0.28)
-	var width: float = tile_size * 0.15
-	return Transform3D(
-		Basis.IDENTITY.scaled(Vector3(width, height, width)),
-		top + _corner(cell, tile_size, index) + Vector3(0.0, height / 2.0, 0.0))
+## Ce qu'il reste d'un édifice : la case tire une de ces trois scènes.
+enum Ruin {
+	COLONNADE, ## Deux colonnes brisées sur leur socle, de hauteurs inégales.
+	FALLEN, ## Une colonne debout, et le fût de sa voisine couché à côté.
+	WALL, ## Un pan de mur écroulé, en trois assises de moins en moins hautes.
+}
+
+## Quelle ruine porte cette case.
+static func _ruin_of(cell: Vector2i) -> Ruin:
+	var draw: float = _noise(cell, 71)
+	if draw < 0.38:
+		return Ruin.COLONNADE
+	if draw < 0.72:
+		return Ruin.FALLEN
+	return Ruin.WALL
+
+
+## Jonche une case de ruines : colonnes, fûts couchés, pans de mur et blocs.
+##
+## Deux fûts identiques et un caillou tenaient lieu de ruine ; on y lisait deux
+## bornes plutôt qu'un édifice écroulé. Ce qui fait une ruine, c'est le
+## **désordre réglé** : ce qui tient encore debout, ce qui est tombé à côté, et
+## ce qui s'est cassé en morceaux.
+static func _strew_ruins(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	match _ruin_of(cell):
+		Ruin.FALLEN:
+			_raise_column(out, top, cell, tile_size, 0)
+			_lay_shaft(out, top, cell, tile_size, 1)
+		Ruin.WALL:
+			_break_wall(out, top, cell, tile_size)
+		_:
+			_raise_column(out, top, cell, tile_size, 0)
+			_raise_column(out, top, cell, tile_size, 1)
+
+	_append(out, "rubble", _rubble(top, cell, tile_size, 2))
+	if _noise(cell, 83) < 0.55:
+		_append(out, "rubble", _rubble(top, cell, tile_size, 3))
+
+
+## Colonne brisée : un fût arrêté net, sur le socle qui l'a portée.
+##
+## Le socle fait plus que garnir : c'est lui qui pose la colonne sur le sol au
+## lieu de l'y planter, et son débord donne l'ombre qui dit la pierre taillée.
+static func _raise_column(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float, index: int) -> void:
+	var salt: int = 70 + index * 5
+	var seat: Vector3 = top + _corner(cell, tile_size, index)
+	var width: float = tile_size * (0.12 + _noise(cell, salt + 1) * 0.04)
+	var plinth_h: float = MAX_HEIGHT * 0.05
+	var height: float = MAX_HEIGHT * (0.26 + _noise(cell, salt) * 0.32)
+
+	_append(out, "plinth", Transform3D(
+		Basis(Vector3.UP, _noise(cell, salt + 2) * TAU)
+			.scaled(Vector3(width * 1.7, plinth_h, width * 1.7)),
+		seat + Vector3(0.0, plinth_h / 2.0, 0.0)))
+	_append(out, "column", Transform3D(
+		Basis(Vector3.UP, _noise(cell, salt + 3) * TAU).scaled(Vector3(width, height, width)),
+		seat + Vector3(0.0, plinth_h + height / 2.0, 0.0)))
+
+
+## Fût couché : la colonne d'à côté, tombée le long du bord de la case.
+##
+## Couchée **en travers du rayon**, jamais vers le centre : un fût qui roule sur
+## la case bloquerait la seule chose que ce module promet de ne pas boucher.
+static func _lay_shaft(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float, index: int) -> void:
+	var seat: Vector3 = top + _corner(cell, tile_size, index)
+	var angle: float = _corner_angle(cell, index) + PI / 2.0 \
+		+ (_noise(cell, 76) - 0.5) * 0.5
+	var lie: Vector3 = Vector3(cos(angle), 0.0, sin(angle))
+	var girth: float = tile_size * (0.11 + _noise(cell, 77) * 0.03)
+	var length: float = tile_size * (0.28 + _noise(cell, 78) * 0.14)
+	_append(out, "shaft", Transform3D(
+		_aim(lie).scaled(Vector3(girth, length, girth)),
+		seat + Vector3(0.0, girth / 2.0, 0.0)))
+
+
+## Les trois assises d'un pan de mur écroulé. `[écart, hauteur, longueur]`, en
+## fractions de case sauf la hauteur, en fraction du plafond.
+const RUIN_COURSES: Array = [
+	[-0.17, 0.34, 0.18],
+	[0.00, 0.24, 0.16],
+	[0.16, 0.13, 0.15],
+]
+
+
+## Pan de mur : trois assises alignées le long du bord, en marche d'escalier.
+##
+## Les hauteurs décroissent d'un bout à l'autre — c'est ce dégradé qui fait lire
+## un mur *tombé*, là où trois blocs de même hauteur feraient une murette neuve.
+static func _break_wall(out: Dictionary, top: Vector3, cell: Vector2i,
+		tile_size: float) -> void:
+	var seat: Vector3 = top + _corner(cell, tile_size)
+	var angle: float = _corner_angle(cell) + PI / 2.0
+	var run: Vector3 = Vector3(cos(angle), 0.0, sin(angle))
+	var thickness: float = tile_size * (0.11 + _noise(cell, 79) * 0.03)
+
+	for i: int in RUIN_COURSES.size():
+		var course: Array = RUIN_COURSES[i]
+		var height: float = MAX_HEIGHT * float(course[1]) * (0.85 + _noise(cell, 84 + i) * 0.3)
+		_append(out, "ruin_wall", Transform3D(
+			Basis(Vector3.UP, -angle).scaled(
+				Vector3(tile_size * float(course[2]), height, thickness)),
+			seat + run * tile_size * float(course[0]) + Vector3(0.0, height / 2.0, 0.0)))
 
 
 ## Pierre effondrée : le bloc qui manque aux colonnes, couché de travers.
-static func _rubble(top: Vector3, cell: Vector2i, tile_size: float) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.16
-	var width: float = tile_size * 0.20
+static func _rubble(top: Vector3, cell: Vector2i, tile_size: float,
+		quarters: int) -> Transform3D:
+	var salt: int = 80 + quarters * 4
+	var bulk: float = 0.75 + _noise(cell, salt) * 0.5
+	var height: float = MAX_HEIGHT * 0.14 * bulk
+	var width: float = tile_size * 0.18 * bulk
 	var tilt := Basis.from_euler(Vector3(
-		(_noise(cell, 80) - 0.5) * 0.4, _noise(cell, 81) * TAU, (_noise(cell, 82) - 0.5) * 0.4))
+		(_noise(cell, salt + 1) - 0.5) * 0.5,
+		_noise(cell, salt + 2) * TAU,
+		(_noise(cell, salt + 3) - 0.5) * 0.5))
 	return Transform3D(
-		tilt.scaled(Vector3(width, height, width * 0.65)),
-		top + _corner(cell, tile_size, 2) * 0.85 + Vector3(0.0, height / 2.0, 0.0))
+		tilt.scaled(Vector3(width, height, width * (0.55 + _noise(cell, salt + 4) * 0.4))),
+		top + _corner(cell, tile_size, quarters) * 0.85 + Vector3(0.0, height / 2.0, 0.0))
 
 
 ## Une tour de guet en quatre assises, et le plafond partagé entre elles.
@@ -741,9 +1171,32 @@ static func _runs_east_west(cell: Vector2i, terrain_by_cell: Dictionary,
 ## les unes des autres les pièces d'un même décor — deux colonnes et leur bloc
 ## effondré ne se posent pas dans le même coin.
 static func _corner(cell: Vector2i, tile_size: float, quarters: int = 0) -> Vector3:
-	var angle: float = (floor(_noise(cell, 3) * 4.0) + float(quarters)) * (TAU / 4.0) \
-		+ (TAU / 8.0)
-	return Vector3(cos(angle), 0.0, sin(angle)) * tile_size * CORNER_OFFSET
+	return _corner_dir(cell, quarters) * tile_size * CORNER_OFFSET
+
+
+## Direction du centre de la case vers le coin où se pose son décor.
+##
+## C'est le « dehors » d'une case : un arbre pousse ses branches de ce côté, une
+## maison y tourne sa porte, et aucune frondaison ne s'écarte dans l'autre sens.
+static func _corner_dir(cell: Vector2i, quarters: int = 0) -> Vector3:
+	var angle: float = _corner_angle(cell, quarters)
+	return Vector3(cos(angle), 0.0, sin(angle))
+
+
+## Angle du coin où se pose le décor d'une case, en radians dans le plan `xz`.
+static func _corner_angle(cell: Vector2i, quarters: int = 0) -> float:
+	return (floor(_noise(cell, 3) * 4.0) + float(quarters)) * (TAU / 4.0) + (TAU / 8.0)
+
+
+## Repère d'un membre couché ou penché : son axe `y` suit [param dir].
+##
+## Les maillages de révolution du module montent tous selon `y` — une branche,
+## un fût de colonne tombé ne sont que ces mêmes maillages visés ailleurs.
+static func _aim(dir: Vector3) -> Basis:
+	var axis: Vector3 = Vector3.UP.cross(dir)
+	if axis.length() < 0.0001:
+		return Basis.IDENTITY
+	return Basis(axis.normalized(), Vector3.UP.angle_to(dir))
 
 
 ## Bruit déterministe dans [0, 1), propre à une case et à un usage (`salt`).
@@ -784,48 +1237,45 @@ static func _add_batch(host: Node3D, kind: String, xforms: Array, tile_size: flo
 
 ## Maillage unitaire d'un type de décor — mis à l'échelle par chaque instance.
 ##
-## Les solides de révolution ajoutés depuis les arbres suivent une convention
-## simple : rayon 1/2 et hauteur 1, donc l'échelle de l'instance donne
-## directement largeur et hauteur. Tronc et frondaison, plus anciens, cuisent
-## leur rayon dans le maillage — les toucher casserait un bois déjà réglé.
-static func _mesh_for(kind: String, tile_size: float) -> Mesh:
+## **Tous** les maillages du module tiennent dans le cube unité : rayon 1/2,
+## hauteur 1. L'échelle de l'instance donne donc directement largeur et hauteur,
+## et un test peut juger l'encombrement d'un décor sur sa seule transformation,
+## sans ouvrir le maillage. Tronc et frondaison cuisaient jadis leur rayon dans
+## le maillage, et le test devait connaître le chiffre par cœur.
+static func _mesh_for(kind: String, _tile_size: float) -> Mesh:
 	match kind:
 		"trunk":
-			var trunk := CylinderMesh.new()
-			trunk.top_radius = tile_size * 0.045
-			trunk.bottom_radius = tile_size * 0.06
-			trunk.height = 1.0
-			trunk.radial_segments = 6
-			trunk.rings = 1
-			return trunk
+			# Évasé du pied : c'est le fruit de l'arbre, ce qui l'enracine au lieu
+			# de le poser. Le même maillage sert aux branches, visées ailleurs.
+			return _cone(6, 0.33)
 		"canopy":
-			var canopy := CylinderMesh.new()
-			canopy.top_radius = 0.0
-			canopy.bottom_radius = tile_size * 0.22
-			canopy.height = 1.0
-			canopy.radial_segments = 7
-			canopy.rings = 1
-			return canopy
+			# Une masse de feuilles n'a pas d'arête : c'est le seul décor du module
+			# où le lissage des normales d'une sphère est ce qu'on cherche.
+			return _blob(7, 4)
+		"pine":
+			return _cone(7, 0.02)
+		"rock_pic":
+			return _cone(5, 0.06)
 		"keep", "tower_shaft", "tower_base":
 			return _drum(8)
-		"column":
-			return _drum(6)
+		"column", "shaft":
+			return _drum(8)
 		"pole":
 			return _drum(5)
 		"tuft":
 			return _cone(3, 0.12)
 		"tower_roof":
 			return _cone(8, 0.0)
-		"house_roof":
+		"house_roof", "house_hip":
 			# Un toit à deux pans plutôt qu'un cône : le faîtage est ce qui fait
 			# lire « maison » plutôt que « tente » sur une case de 30 pixels.
 			var roof := PrismMesh.new()
 			roof.size = Vector3.ONE
 			return roof
 		_:
-			# Rocher, créneaux, murs, piliers, linteaux, platelage : un cube
-			# unitaire, mis aux dimensions voulues par l'échelle de chaque
-			# instance. Les arêtes vives font tout le travail.
+			# Blocs, dalles, créneaux, murs, piliers, linteaux, socles, cheminées,
+			# portes, platelage : un cube unitaire, mis aux dimensions voulues par
+			# l'échelle de chaque instance. Les arêtes vives font tout le travail.
 			var block := BoxMesh.new()
 			block.size = Vector3.ONE
 			return block
@@ -849,6 +1299,16 @@ static func _cone(segments: int, top_radius: float) -> CylinderMesh:
 	return mesh
 
 
+## Masse arrondie unitaire : une sphère de rayon 1/2, à aplatir par l'instance.
+static func _blob(segments: int, rings: int) -> SphereMesh:
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = segments
+	mesh.rings = rings
+	return mesh
+
+
 ## Teinte et réponse à la lumière de chaque type de décor.
 ##
 ## L'or d'une bannière et l'ardoise d'un toit sont les seuls à ne pas être mats :
@@ -856,7 +1316,10 @@ static func _cone(segments: int, top_radius: float) -> CylinderMesh:
 const SURFACES: Dictionary = {
 	"trunk": {"color": TRUNK_COLOR, "roughness": 0.95, "metallic": 0.0},
 	"canopy": {"color": CANOPY_COLOR, "roughness": 0.90, "metallic": 0.0},
+	"pine": {"color": PINE_COLOR, "roughness": 0.92, "metallic": 0.0},
 	"rock": {"color": ROCK_COLOR, "roughness": 1.00, "metallic": 0.0},
+	"rock_pic": {"color": ROCK_DARK_COLOR, "roughness": 1.00, "metallic": 0.0},
+	"rock_slab": {"color": ROCK_PALE_COLOR, "roughness": 1.00, "metallic": 0.0},
 	"wall_base": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
 	"wall_body": {"color": WALL_COLOR, "roughness": 0.85, "metallic": 0.0},
 	"wall_crenel": {"color": CUT_STONE_COLOR, "roughness": 0.85, "metallic": 0.0},
@@ -865,6 +1328,9 @@ const SURFACES: Dictionary = {
 	"reed": {"color": REED_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"house_wall": {"color": PLASTER_COLOR, "roughness": 0.92, "metallic": 0.0},
 	"house_roof": {"color": ROOF_COLOR, "roughness": 0.85, "metallic": 0.0},
+	"house_hip": {"color": SLATE_COLOR, "roughness": 0.70, "metallic": 0.0},
+	"chimney": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
+	"door": {"color": WOOD_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"keep": {"color": STONE_COLOR, "roughness": 0.92, "metallic": 0.0},
 	"tower_shaft": {"color": STONE_COLOR, "roughness": 0.92, "metallic": 0.0},
 	"tower_base": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
@@ -872,7 +1338,10 @@ const SURFACES: Dictionary = {
 	"rubble": {"color": STONE_COLOR, "roughness": 1.00, "metallic": 0.0},
 	"pier": {"color": DARK_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"lintel": {"color": CUT_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
-	"column": {"color": DARK_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
+	"column": {"color": CUT_STONE_COLOR, "roughness": 0.88, "metallic": 0.0},
+	"plinth": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
+	"shaft": {"color": CUT_STONE_COLOR, "roughness": 0.92, "metallic": 0.0},
+	"ruin_wall": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
 	"tower_roof": {"color": SLATE_COLOR, "roughness": 0.55, "metallic": 0.05},
 	"banner": {"color": BANNER_COLOR, "roughness": 0.40, "metallic": 0.25},
 	"pole": {"color": TRUNK_COLOR, "roughness": 0.95, "metallic": 0.0},

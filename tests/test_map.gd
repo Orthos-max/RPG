@@ -640,10 +640,9 @@ func _test_props() -> bool:
 	for kind: String in batches:
 		counts[kind] = batches[kind].size()
 	var expected := {
-		"trunk": 1, "canopy": 1, "rock": 2,
 		"wall_base": 1, "wall_body": 1, "wall_crenel": 3,
-		"house_wall": 1, "house_roof": 1, "keep": 1,
-		"pier": 2, "lintel": 2, "column": 2, "rubble": 1,
+		"keep": 1,
+		"pier": 2, "lintel": 2,
 		"tower_base": 1, "tower_shaft": 1, "tower_merlon": 4, "tower_roof": 1,
 		"deck": 1, "railing": 2,
 		"reed": 3,
@@ -653,6 +652,12 @@ func _test_props() -> bool:
 	# donc pas leur compte. Une hampe sans fanion, en revanche, serait un bug.
 	for optional: String in ["tuft", "pebble", "pole", "banner"]:
 		counts.erase(optional)
+	# Forêt, montagne, village et ruines tirent une **scène** (feuillu ou pin,
+	# bloc ou pic, chaumière ou maison à croupe, colonnade ou pan de mur) : leur
+	# garniture n'a pas de compte fixe sur une case unique. Elle se juge sur un
+	# bois entier, dans `_check_scenery_variety`.
+	for scenic: String in VARIED_KINDS:
+		counts.erase(scenic)
 	if batches.get("pole", []).size() != batches.get("banner", []).size():
 		print_rich("[color=red]  FAIL: %d hampe(s) pour %d bannière(s)[/color]" % [
 			batches.get("pole", []).size(), batches.get("banner", []).size()])
@@ -662,28 +667,16 @@ func _test_props() -> bool:
 			str(counts), str(expected)])
 		ok = false
 	else:
-		print_rich("  OK: seize terrains, chacun sa garniture (village → maison, "
-			+ "fortin → donjon et bannière, tour → assise, fût, merlons et flèche, "
-			+ "mur → semelle, chemin de ronde et créneaux, pont → platelage…)")
+		print_rich("  OK: seize terrains, chacun sa garniture (fortin → donjon et "
+			+ "bannière, tour → assise, fût, merlons et flèche, mur → semelle, "
+			+ "chemin de ronde et créneaux, pont → platelage…)")
 		print_rich("  OK: eau, chemin, fosse et neige restent nus")
 
-	# Rien ne dépasse la hauteur d'un pion. Tous les maillages font une unité de
-	# haut : la composante verticale de l'échelle est donc la hauteur réelle.
-	var tallest := 0.0
-	for kind: String in batches:
-		for xf: Transform3D in batches[kind]:
-			var b: Basis = xf.basis
-			var half_y: float = 0.5 * (absf(b.x.y) + absf(b.y.y) + absf(b.z.y))
-			tallest = maxf(tallest, xf.origin.y + half_y)
-	if tallest > TacticsProps.MAX_HEIGHT + 0.001:
-		print_rich("[color=red]  FAIL: décor haut de %.2f (plafond %.2f)[/color]" % [
-			tallest, TacticsProps.MAX_HEIGHT])
-		ok = false
-	else:
-		print_rich("  OK: le plus haut décor tient sous le plafond (%.2f ≤ %.2f)" % [
-			tallest, TacticsProps.MAX_HEIGHT])
-
+	ok = _check_ceiling(batches, "toutes cases") and ok
 	ok = _check_centres_clear(cells, batches, tile_size) and ok
+
+	# Bois, éboulis, hameaux et ruines : ce qui se juge sur une rangée entière.
+	ok = _check_scenery_variety() and ok
 
 	# Une porte s'aligne sur son rempart, un pont sur sa travée.
 	ok = _check_orientation() and ok
@@ -715,6 +708,150 @@ func _test_props() -> bool:
 	return ok
 
 
+## Les décors dont le compte varie d'une case à l'autre.
+##
+## Ces quatre terrains ne posent pas une garniture mais une **scène**, tirée du
+## hachage de la case : un feuillu à trois masses de feuillage ou un pin à trois
+## étages, deux blocs ou trois pierres, une chaumière seule ou flanquée de sa
+## remise. Compter leurs pièces sur une case unique ne dirait rien.
+const VARIED_KINDS: Array[String] = [
+	"trunk", "canopy", "pine",
+	"rock", "rock_pic", "rock_slab",
+	"house_wall", "house_roof", "house_hip", "chimney", "door",
+	"column", "plinth", "shaft", "ruin_wall", "rubble",
+]
+
+## Ce que chaque terrain à scènes doit montrer sur une rangée de cases.
+##
+## `each` : les familles dont chaque case reçoit au moins une pièce — c'est la
+## promesse qu'aucun bois n'a de case pelée. `variety` : les pièces qui doivent
+## apparaître **quelque part** sur la rangée — c'est ce qui sépare trois modèles
+## d'arbre d'un seul modèle tiré trois fois. `least` : le nombre de volumes que
+## la plus dépouillée des cases doit tout de même porter.
+const SCENERY_EXPECTATIONS: Array = [
+	{
+		"label": "forêt", "terrain": _MD.TerrainType.FOREST, "least": 2,
+		"each": [["trunk"], ["canopy", "pine"]],
+		"variety": ["canopy", "pine"],
+	},
+	{
+		"label": "montagne", "terrain": _MD.TerrainType.MOUNTAIN, "least": 2,
+		"each": [["rock", "rock_pic", "rock_slab"]],
+		"variety": ["rock", "rock_pic", "rock_slab"],
+	},
+	{
+		"label": "village", "terrain": _MD.TerrainType.VILLAGE, "least": 3,
+		"each": [["house_wall"], ["house_roof", "house_hip"], ["door"]],
+		"variety": ["house_roof", "house_hip", "chimney"],
+	},
+	{
+		"label": "ruines", "terrain": _MD.TerrainType.RUINS, "least": 2,
+		"each": [["column", "shaft", "ruin_wall"], ["rubble"]],
+		"variety": ["column", "plinth", "shaft", "ruin_wall"],
+	},
+]
+
+
+## Chaque case a sa scène, et deux cases voisines n'ont pas la même.
+##
+## Une case par terrain ne prouvait rien de ces quatre-là : elle tombe d'un côté
+## du tirage et l'autre modèle n'est jamais dessiné. On en déroule donc une
+## rangée entière, et on y vérifie les deux promesses qui comptent — aucune case
+## pelée, et tous les modèles servis.
+func _check_scenery_variety() -> bool:
+	var ok := true
+	for spec: Dictionary in SCENERY_EXPECTATIONS:
+		ok = _check_scenery(spec) and ok
+	return ok
+
+
+func _check_scenery(spec: Dictionary) -> bool:
+	var tile_size := 1.0
+	var span := 24
+	var label: String = str(spec["label"])
+	var terrain: int = int(spec["terrain"])
+
+	# Une rangée de cases voisines : les hachages y diffèrent case à case, donc
+	# les scènes aussi. Elles se posent en ligne pour que le contrôle du centre
+	# retrouve chacune à son abscisse.
+	var cells: Array = []
+	for i in span:
+		cells.append({
+			"cell": Vector2i(i, terrain * 7 + 3),
+			"terrain": terrain,
+			"top": Vector3(float(i) * tile_size, 0.0, 0.0),
+		})
+	var batches: Dictionary = TacticsProps.placements(cells, tile_size)
+
+	# Ce que porte chaque case, pièce par pièce.
+	var per_cell: Array = []
+	for i in span:
+		per_cell.append({})
+	for kind: String in batches:
+		for xf: Transform3D in batches[kind]:
+			var tally: Dictionary = per_cell[int(round(xf.origin.x / tile_size))]
+			tally[kind] = int(tally.get(kind, 0)) + 1
+
+	var ok := true
+	var barest := 999
+	for i in span:
+		var tally: Dictionary = per_cell[i]
+		var pieces := 0
+		for kind: String in tally:
+			pieces += int(tally[kind])
+		barest = mini(barest, pieces)
+		if pieces < int(spec["least"]):
+			print_rich("[color=red]  FAIL: %s, case %d : %d volume(s) seulement[/color]"
+				% [label, i, pieces])
+			ok = false
+		for family: Variant in spec["each"]:
+			var served := false
+			for kind: String in (family as Array):
+				served = served or tally.has(kind)
+			if not served:
+				print_rich("[color=red]  FAIL: %s, case %d : rien de %s (%s)[/color]"
+					% [label, i, str(family), str(tally)])
+				ok = false
+
+	var missing: Array[String] = []
+	for kind: Variant in spec["variety"]:
+		if not batches.has(str(kind)):
+			missing.append(str(kind))
+	if not missing.is_empty():
+		print_rich("[color=red]  FAIL: %s : %d cases sans un seul %s[/color]"
+			% [label, span, ", ".join(missing)])
+		ok = false
+
+	if ok:
+		print_rich("  OK: %d cases de %s, toutes garnies (%d volumes au moins), "
+			% [span, label, barest] + "tous les modèles servis (%s)"
+			% ", ".join(spec["variety"] as Array))
+
+	ok = _check_ceiling(batches, label) and ok
+	return _check_centres_clear(cells, batches, tile_size) and ok
+
+
+## Rien ne dépasse la hauteur d'un pion.
+##
+## Tous les maillages du module tiennent dans le cube unité : la hauteur réelle
+## d'une pièce se lit donc sur sa seule transformation — la projection verticale
+## de son échelle, inclinaisons comprises.
+func _check_ceiling(batches: Dictionary, label: String) -> bool:
+	var tallest := 0.0
+	for kind: String in batches:
+		for xf: Transform3D in batches[kind]:
+			var b: Basis = xf.basis
+			var half_y: float = 0.5 * (absf(b.x.y) + absf(b.y.y) + absf(b.z.y))
+			tallest = maxf(tallest, xf.origin.y + half_y)
+	if tallest > TacticsProps.MAX_HEIGHT + 0.001:
+		print_rich("[color=red]  FAIL: %s : décor haut de %.2f (plafond %.2f)[/color]" % [
+			label, tallest, TacticsProps.MAX_HEIGHT])
+		return false
+	print_rich("  OK: %s : le plus haut décor tient sous le plafond (%.2f ≤ %.2f)" % [
+		label, tallest, TacticsProps.MAX_HEIGHT])
+	return true
+
+
 ## Aucun décor ne s'assied sur le centre d'une case praticable.
 ##
 ## Le test d'avant ne savait mesurer que des troncs et des frondaisons — deux
@@ -729,11 +866,11 @@ func _test_props() -> bool:
 ##
 ## Seul ce qui dépasse `TacticsProps.FLAT_HEIGHT` est jugé : plus bas, on lui
 ## marche dessus — c'est tout le propos d'un platelage de pont.
+##
+## Tous les maillages suivent désormais la même convention — cube unité, mis à
+## l'échelle par l'instance — donc la demi-largeur vaut 1/2 pour chacun, et ce
+## test n'a plus de rayon à connaître par cœur.
 func _check_centres_clear(cells: Array, batches: Dictionary, tile_size: float) -> bool:
-	# Tronc et frondaison cuisent leur rayon dans le maillage ; tout le reste
-	# suit la convention « maillage unitaire, mis à l'échelle par l'instance ».
-	var local_half := {"trunk": 0.06, "canopy": 0.22}
-
 	var terrain_by_index := {}
 	for entry in cells:
 		terrain_by_index[int(round(entry["top"].x / tile_size))] = int(entry["terrain"])
@@ -741,7 +878,7 @@ func _check_centres_clear(cells: Array, batches: Dictionary, tile_size: float) -
 	var offenders: Array[String] = []
 	var margin := 99.0
 	for kind: String in batches:
-		var half: float = float(local_half.get(kind, 0.5))
+		var half := 0.5
 		for xf: Transform3D in batches[kind]:
 			var index: int = int(round(xf.origin.x / tile_size))
 			if not _MD.is_walkable(int(terrain_by_index.get(index, 0))):
