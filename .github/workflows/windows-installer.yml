@@ -117,3 +117,8 @@ jobs:
           # et le stockage est saturé en quelques jours (45 artefacts / 2,5 Go
           # en août 2026). La release GitHub garde l'installeur officiel.
           retention-days: 7
+        continue-on-error: true
+        # Le quota d'artefacts est recalculé par GitHub avec 6-12h de retard :
+        # après une purge, les premiers builds peuvent encore être refusés.
+        # L'artefact n'est qu'un intermédiaire (l'installeur est dans la
+        # release) — un échec d'upload ne doit pas faire échouer le build.
