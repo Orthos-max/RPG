@@ -22,9 +22,33 @@ extends RefCounted
 ## reste ce qu'elle est partout — le fond du tableau.
 ##
 ## Conséquence pratique : seuls les terrains listés dans [constant EDGE_SETS]
-## reçoivent un habillage. Tout le reste — montagne, mur, neige, marais —
-## garde son remplissage, et rien n'est à ajouter pour qu'ils continuent de
-## fonctionner.
+## reçoivent un habillage. Tout le reste — mur, fosse, pont — garde son
+## remplissage, et rien n'est à ajouter pour qu'il continue de fonctionner.
+##
+## ## Sur quel fond la transition se dessine
+##
+## Le pack ne connaît qu'un fond : l'herbe. Une rive d'eau collée à une plage
+## affichait donc **eau | herbe | sable** — six pixels de prairie entre deux
+## terrains qui n'en ont jamais vu. Le masque disait pourtant juste ; c'est la
+## tuile qui n'avait qu'un voisin possible.
+##
+## `art/bords-paires.py` engendre le jeu manquant dans
+## [constant PAIR_DIR] : le bord de A dessiné sur le fond de B, pour chaque
+## couple de terrains. La case lit donc **deux** choses de son voisinage — de
+## quels côtés son terrain s'arrête ([method mask_at]), et ce qui commence
+## alors ([method neighbor_at]) — et compose `water_sand_n` au lieu de
+## `water_n`.
+##
+## Un seul calque par case, donc un seul fond : quand une case d'eau a du sable
+## au nord et de la neige à l'est, c'est le voisin **dominant** qui l'emporte
+## (le plus représenté parmi les côtés qui bordent, à égalité le premier dans
+## l'ordre n, e, s, w). Deux fonds sur une seule tuile demanderaient deux
+## calques empilés ; un seul suffit à faire disparaître la bande d'herbe, qui
+## était tout le défaut.
+##
+## Toute paire absente — voisin d'herbe, voisin sans fond dessiné, tuile jamais
+## engendrée — retombe sur la tuile d'origine à fond d'herbe. C'est le
+## comportement d'avant, à l'identique : rien ne peut régresser.
 ##
 ## ## Un calque, pas un remplacement
 ##
@@ -64,8 +88,27 @@ const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.SWAMP: "swamp",
 }
 
-## Dossier des tuiles de bord.
+## Dossier des tuiles de bord, à fond d'herbe — le repli de toute paire absente.
 const EDGE_DIR: String = "res://assets/textures/terrain/edges/"
+
+## Dossier des tuiles de bord **par paire**, `{A}_{B}_{masque}.png`.
+const PAIR_DIR: String = "res://assets/textures/terrain/edges-pairs/"
+
+## Terrains qui savent servir de **fond** à la transition d'un voisin.
+##
+## Ce sont les surfaces qu'`art/bords-paires.py` sait peindre derrière un bord.
+## L'herbe n'y est pas : c'est déjà le fond des tuiles de [constant EDGE_DIR],
+## donc le cas que le repli couvre. Un terrain absent d'ici — un mur, un pont,
+## une ruine — laisse son voisin border sur de l'herbe, comme avant.
+const BACKGROUND_SETS: Dictionary = {
+	MapDataClass.TerrainType.WATER: "water",
+	MapDataClass.TerrainType.FOREST: "forest",
+	MapDataClass.TerrainType.SAND: "sand",
+	MapDataClass.TerrainType.PATH: "path",
+	MapDataClass.TerrainType.SNOW: "snow",
+	MapDataClass.TerrainType.SWAMP: "swamp",
+	MapDataClass.TerrainType.MOUNTAIN: "mountain",
+}
 
 ## Décalage vertical du calque au-dessus du dessus de la case.
 ##
@@ -88,7 +131,7 @@ const SIDES: Array[Array] = [
 	["w", Vector2i(-1, 0)],
 ]
 
-## Matériaux de calque déjà bâtis, par « terrain:masque ».
+## Matériaux de calque déjà bâtis, par « terrain:masque:fond ».
 static var _material_cache: Dictionary = {}
 ## Quadrilatères déjà bâtis, par côté (deux tailles de case suffisent en pratique).
 static var _quad_cache: Dictionary = {}
@@ -117,8 +160,9 @@ static func apply_to_grid(grid: BattleGrid) -> void:
 static func apply_to_tile(grid: BattleGrid, cell: Vector2i, tile: TacticsTile) -> void:
 	var overlay: MeshInstance3D = tile.get_node_or_null(OVERLAY_NODE) as MeshInstance3D
 
+	var terrain: int = int(tile.terrain_type)
 	var material: StandardMaterial3D = overlay_material(
-		int(tile.terrain_type), mask_at(grid, cell, int(tile.terrain_type)))
+		terrain, mask_at(grid, cell, terrain), neighbor_at(grid, cell, terrain))
 	if not material:
 		# Terrain sans bords, ou tuile manquante du dossier `edges/`. Un calque
 		# posé par un terrain précédent — l'éditeur repeint une case — s'en va.
@@ -169,32 +213,86 @@ static func mask_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> String:
 	return mask if not mask.is_empty() else "fill"
 
 
+## Le terrain qui borde une case, celui dont la transition prendra le fond.
+##
+## [method mask_at] dit **de quel côté** le terrain s'arrête ; celui-ci dit ce
+## qui commence alors. Les deux lisent le même voisinage, et c'est délibérément
+## deux appels plutôt qu'un dictionnaire : l'éditeur de cartes en refait la
+## paire sur sa propre grille, et deux fonctions qui rendent chacune une valeur
+## simple s'y répliquent sans cérémonie.
+##
+## Le voisin **dominant** l'emporte — le plus représenté parmi les côtés qui
+## bordent —, à égalité le premier dans l'ordre n, e, s, w. Un seul calque par
+## case ne peut porter qu'un fond ; autant que ce soit celui qu'on voit le plus.
+##
+## Rend `-1` quand aucun voisin ne sait faire fond ([constant BACKGROUND_SETS]) :
+## la case retombe alors sur sa tuile à fond d'herbe.
+static func neighbor_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> int:
+	if not grid or not EDGE_SETS.has(terrain):
+		return -1
+
+	var tally: Dictionary = {}
+	var best: int = -1
+	for side: Array in SIDES:
+		var tile: Node = grid.tile_at_cell(cell + (side[1] as Vector2i))
+		if not tile:
+			continue
+		var other: int = int(tile.terrain_type)
+		if other == terrain or not BACKGROUND_SETS.has(other):
+			continue
+		tally[other] = int(tally.get(other, 0)) + 1
+		if best < 0 or int(tally[other]) > int(tally[best]):
+			best = other
+	return best
+
+
 ## Matériau du calque d'un terrain pour un masque, ou `null` s'il n'en a pas.
 ##
 ## Le chargement passe par [method ResourceLoader.exists] pour la même raison
 ## que [method TacticsScenery.terrain_texture] : une image que Godot n'a pas
 ## encore importée ne doit pas emporter la scène, seulement priver la case de
 ## son bord. Les absences sont mises en cache comme les présences.
-static func overlay_material(terrain: int, mask: String) -> StandardMaterial3D:
-	var key: String = "%d:%s" % [terrain, mask]
+## [param neighbor] terrain qui borde la case, ou `-1` pour border sur l'herbe.
+static func overlay_material(terrain: int, mask: String,
+		neighbor: int = -1) -> StandardMaterial3D:
+	var key: String = "%d:%s:%d" % [terrain, mask, neighbor]
 	var cached: Variant = _material_cache.get(key)
 	if cached != null:
 		return cached as StandardMaterial3D
 	if _material_cache.has(key):
 		return null
 
-	var material: StandardMaterial3D = _build_material(terrain, mask)
+	var material: StandardMaterial3D = _build_material(terrain, mask, neighbor)
 	_material_cache[key] = material
 	return material
 
 
-static func _build_material(terrain: int, mask: String) -> StandardMaterial3D:
+## La tuile à poser : celle de la paire si elle a été engendrée, sinon celle à
+## fond d'herbe.
+##
+## L'ordre est un ordre de préférence, pas une hiérarchie de secours : une paire
+## manquante n'est pas une panne, c'est le cas ordinaire d'un voisin d'herbe.
+static func _edge_paths(terrain: int, mask: String, neighbor: int) -> Array[String]:
+	var set_name: String = str(EDGE_SETS[terrain])
+	var paths: Array[String] = []
+	if BACKGROUND_SETS.has(neighbor) and neighbor != terrain:
+		paths.append("%s%s_%s_%s.png" % [
+			PAIR_DIR, set_name, str(BACKGROUND_SETS[neighbor]), mask])
+	paths.append("%s%s_%s.png" % [EDGE_DIR, set_name, mask])
+	return paths
+
+
+static func _build_material(terrain: int, mask: String,
+		neighbor: int) -> StandardMaterial3D:
 	if not EDGE_SETS.has(terrain):
 		return null
-	var path: String = "%s%s_%s.png" % [EDGE_DIR, str(EDGE_SETS[terrain]), mask]
-	if not ResourceLoader.exists(path):
-		return null
-	var texture: Texture2D = load(path) as Texture2D
+
+	var texture: Texture2D = null
+	for path: String in _edge_paths(terrain, mask, neighbor):
+		if ResourceLoader.exists(path):
+			texture = load(path) as Texture2D
+		if texture:
+			break
 	if not texture:
 		return null
 

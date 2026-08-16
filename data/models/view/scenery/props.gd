@@ -85,6 +85,12 @@ const STONE_COLOR: String = "#8a867e"
 const DARK_STONE_COLOR: String = "#6d6a64"
 
 
+## La pierre taillée du haut d'un ouvrage : créneaux d'un rempart, merlons d'une
+## tour. Plus claire que le corps qu'elle couronne — c'est ce contraste qui fait
+## lire une dentelure là où un bloc uni ne montrait qu'une arête.
+const CUT_STONE_COLOR: String = "#a8a296"
+
+
 const PLASTER_COLOR: String = "#c9b48f"
 
 
@@ -110,6 +116,21 @@ const TUFT_COLOR: String = "#74b85c"
 
 const PEBBLE_COLOR: String = "#b8a37a"
 
+
+## Créneaux posés sur une case de rempart.
+##
+## Trois, et pas quatre : les merlons se posent au tiers de case, donc sur un
+## pas qui retombe juste d'une case à l'autre (−1/3, 0, +1/3, puis +2/3 chez la
+## voisine). Un rempart de six cases dessine une dentelure régulière au lieu de
+## six motifs recollés bout à bout.
+const CRENEL_COUNT: int = 3
+
+## Merlons couronnant une tour, posés sur les diagonales.
+##
+## Sur les diagonales plutôt que sur les axes : sous la caméra tactique, deux
+## des quatre côtés sont vus par la tranche, et des merlons cardinaux y
+## disparaîtraient de profil.
+const TOWER_MERLONS: int = 4
 
 #endregion
 
@@ -222,7 +243,11 @@ static func placements(cells: Array, tile_size: float) -> Dictionary:
 				for i: int in 2:
 					_append(out, "rock", _rock(top, cell, tile_size, i))
 			MapDataClass.TerrainType.WALL:
-				_append(out, "merlon", _merlon(top, tile_size))
+				var wall_ew: bool = _runs_east_west(cell, terrain_by_cell, RAMPART_KINDS)
+				_append(out, "wall_base", _wall_base(top, tile_size, wall_ew))
+				_append(out, "wall_body", _wall_body(top, tile_size, wall_ew))
+				for i: int in CRENEL_COUNT:
+					_append(out, "wall_crenel", _wall_crenel(top, tile_size, wall_ew, i))
 			MapDataClass.TerrainType.SAND:
 				if _noise(cell, 31) < 0.28:
 					_append(out, "pebble", _pebble(top, cell, tile_size))
@@ -241,12 +266,16 @@ static func placements(cells: Array, tile_size: float) -> Dictionary:
 				var gate_ew: bool = _runs_east_west(cell, terrain_by_cell, RAMPART_KINDS)
 				for side: int in 2:
 					_append(out, "pier", _gate_pier(top, tile_size, gate_ew, side))
+					_append(out, "lintel", _gate_lintel(top, tile_size, gate_ew, side))
 			MapDataClass.TerrainType.RUINS:
 				for i: int in 2:
 					_append(out, "column", _broken_column(top, cell, tile_size, i))
 				_append(out, "rubble", _rubble(top, cell, tile_size))
 			MapDataClass.TerrainType.TOWER:
+				_append(out, "tower_base", _tower_base(top, tile_size))
 				_append(out, "tower_shaft", _tower_shaft(top, tile_size))
+				for i: int in TOWER_MERLONS:
+					_append(out, "tower_merlon", _tower_merlon(top, tile_size, i))
 				_append(out, "tower_roof", _tower_roof(top, tile_size))
 			MapDataClass.TerrainType.BRIDGE:
 				var span_ew: bool = _runs_east_west(cell, terrain_by_cell, SPAN_KINDS)
@@ -347,12 +376,60 @@ static func _rock(top: Vector3, cell: Vector2i, tile_size: float, index: int) ->
 		top + _corner(cell, tile_size) * 0.6 + away + Vector3(0.0, height / 2.0, 0.0))
 
 
-## Créneau : un bandeau posé sur le mur, plein cadre — un rempart n'a pas de coin.
-static func _merlon(top: Vector3, tile_size: float) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.3
+## Soubassement d'un rempart : une semelle plus large que le mur, très basse.
+##
+## C'est le fruit d'un ouvrage de pierre — la retraite d'un ou deux pouces qui
+## pose le mur sur le sol au lieu de l'y planter. Sombre, elle fait aussi le
+## liseré qui décolle le rempart de sa case.
+##
+## [param east_west] le rempart court-il d'est en ouest ?
+static func _wall_base(top: Vector3, tile_size: float, east_west: bool) -> Transform3D:
+	var height: float = MAX_HEIGHT * 0.10
 	return Transform3D(
-		Basis.IDENTITY.scaled(Vector3(tile_size * 0.82, height, tile_size * 0.82)),
+		Basis.IDENTITY.scaled(_along(tile_size * 0.96, height, tile_size * 0.64, east_west)),
 		top + Vector3(0.0, height / 2.0, 0.0))
+
+
+## Corps d'un rempart : le chemin de ronde, continu d'une case à la suivante.
+##
+## Il court sur toute la longueur de la case dans le sens du rempart, et n'en
+## occupe que la moitié en travers : c'est cette proportion qui fait lire un
+## **mur** — un bloc plein cadre ne montrait qu'un cube gris.
+##
+## [param east_west] le rempart court-il d'est en ouest ?
+static func _wall_body(top: Vector3, tile_size: float, east_west: bool) -> Transform3D:
+	var base_h: float = MAX_HEIGHT * 0.10
+	var height: float = MAX_HEIGHT * 0.42
+	return Transform3D(
+		Basis.IDENTITY.scaled(_along(tile_size * 0.92, height, tile_size * 0.54, east_west)),
+		top + Vector3(0.0, base_h + height / 2.0, 0.0))
+
+
+## Créneau : un des blocs dentelant le haut du rempart, embrasure entre deux.
+##
+## Sa position ne dépend que de la case et du rang, jamais d'un tirage : trois
+## créneaux au pas d'un tiers de case retombent exactement sur ceux de la case
+## voisine, et un rempart de six cases porte une seule dentelure.
+##
+## [param east_west] le rempart court-il d'est en ouest ? [param index] 0 à 2.
+static func _wall_crenel(top: Vector3, tile_size: float, east_west: bool,
+		index: int) -> Transform3D:
+	var walk_h: float = MAX_HEIGHT * 0.52 # semelle + corps
+	var height: float = MAX_HEIGHT * 0.19
+	var step: float = (float(index) - float(CRENEL_COUNT - 1) / 2.0) / float(CRENEL_COUNT)
+	var offset: Vector3 = Vector3(step, 0.0, 0.0) if east_west else Vector3(0.0, 0.0, step)
+	return Transform3D(
+		Basis.IDENTITY.scaled(_along(tile_size * 0.17, height, tile_size * 0.54, east_west)),
+		top + offset * tile_size + Vector3(0.0, walk_h + height / 2.0, 0.0))
+
+
+## Dimensions d'un ouvrage qui court dans un sens : longueur, hauteur, épaisseur.
+##
+## [param east_west] vrai, l'ouvrage s'allonge sur `x` ; faux, sur `z`.
+static func _along(length: float, height: float, thickness: float,
+		east_west: bool) -> Vector3:
+	return Vector3(length, height, thickness) if east_west \
+		else Vector3(thickness, height, length)
 
 
 ## Touffe d'herbe : un petit cône, à peine plus haut qu'un caillou.
@@ -484,15 +561,44 @@ static func _keep_width(cell: Vector2i, tile_size: float) -> float:
 ##
 ## [param east_west] le rempart court-il d'est en ouest ? [param side] 0 ou 1.
 static func _gate_pier(top: Vector3, tile_size: float, east_west: bool, side: int) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.9
-	var sign_side: float = 1.0 if side == 0 else -1.0
-	var away: Vector3 = Vector3(sign_side, 0.0, 0.0) if east_west else Vector3(0.0, 0.0, sign_side)
+	var height: float = MAX_HEIGHT * GATE_PIER_RISE
+	var away: Vector3 = _gate_axis(east_west, side)
 	var thin: float = tile_size * 0.16
 	var thick: float = tile_size * 0.24
 	var size := Vector3(thin, height, thick) if east_west else Vector3(thick, height, thin)
 	return Transform3D(
 		Basis.IDENTITY.scaled(size),
 		top + away * tile_size * 0.38 + Vector3(0.0, height / 2.0, 0.0))
+
+
+## Part du plafond prise par les montants d'une porte ; le linteau a le reste.
+const GATE_PIER_RISE: float = 0.78
+
+
+## Linteau : la traverse posée sur les montants — deux demi-poutres, une par côté.
+##
+## Une seule poutre d'un montant à l'autre passerait au-dessus du centre de la
+## case, or une porte se franchit : c'est la seule règle du module qu'un décor
+## de case praticable ne peut pas enfreindre. Les deux demi-poutres se rejoignent
+## donc à un jeu près — quelques centièmes de case, que la caméra tactique ne
+## sépare pas, et le centre reste libre pour le pion qui s'y tient.
+##
+## [param east_west] le rempart court-il d'est en ouest ? [param side] 0 ou 1.
+static func _gate_lintel(top: Vector3, tile_size: float, east_west: bool,
+		side: int) -> Transform3D:
+	var pier_h: float = MAX_HEIGHT * GATE_PIER_RISE
+	var height: float = MAX_HEIGHT * (1.0 - GATE_PIER_RISE)
+	var away: Vector3 = _gate_axis(east_west, side)
+	var size: Vector3 = _along(tile_size * 0.60, height, tile_size * 0.30, east_west)
+	return Transform3D(
+		Basis.IDENTITY.scaled(size),
+		top + away * tile_size * 0.33 + Vector3(0.0, pier_h + height / 2.0, 0.0))
+
+
+## De quel côté de la case se pose la moitié [param side] d'une porte.
+static func _gate_axis(east_west: bool, side: int) -> Vector3:
+	var sign_side: float = 1.0 if side == 0 else -1.0
+	return Vector3(sign_side, 0.0, 0.0) if east_west else Vector3(0.0, 0.0, sign_side)
 
 
 ## Colonne brisée : un fût court, arrêté net — deux par case de ruines.
@@ -517,23 +623,70 @@ static func _rubble(top: Vector3, cell: Vector2i, tile_size: float) -> Transform
 		top + _corner(cell, tile_size, 2) * 0.85 + Vector3(0.0, height / 2.0, 0.0))
 
 
-## Fût d'une tour de guet : plein cadre, la case est infranchissable.
-static func _tower_shaft(top: Vector3, tile_size: float) -> Transform3D:
-	var height: float = MAX_HEIGHT * 0.62
-	var width: float = tile_size * 0.62
+## Une tour de guet en quatre assises, et le plafond partagé entre elles.
+##
+## Deux boîtes empilées donnaient un champignon gris : rien n'y disait la
+## pierre. Une tour se reconnaît à un **profil**, pas à un volume — un pied
+## évasé, un fût étroit, une couronne dentelée, une flèche. Les quatre parts
+## ci-dessous se répartissent [constant MAX_HEIGHT] sans le dépasser (leur
+## somme fait exactement 1), et c'est le rétrécissement du pied au fût qui
+## fait paraître la tour plus haute qu'elle n'a le droit de l'être.
+const TOWER_BASE_RISE: float = 0.09
+const TOWER_SHAFT_RISE: float = 0.42
+const TOWER_MERLON_RISE: float = 0.13
+const TOWER_ROOF_RISE: float = 0.36
+
+
+## Assise d'une tour : un socle octogonal évasé, bas et large.
+static func _tower_base(top: Vector3, tile_size: float) -> Transform3D:
+	var height: float = MAX_HEIGHT * TOWER_BASE_RISE
+	var width: float = tile_size * 0.70
 	return Transform3D(
 		Basis.IDENTITY.scaled(Vector3(width, height, width)),
 		top + Vector3(0.0, height / 2.0, 0.0))
 
 
-## Toit conique d'ardoise : c'est lui qui fait reconnaître une tour de loin.
-static func _tower_roof(top: Vector3, tile_size: float) -> Transform3D:
-	var shaft_h: float = MAX_HEIGHT * 0.62
-	var height: float = MAX_HEIGHT * 0.38
-	var width: float = tile_size * 0.78
+## Fût d'une tour de guet : un tambour octogonal, nettement plus étroit que
+## l'assise qui le porte — c'est ce ressaut qui fait la tour.
+static func _tower_shaft(top: Vector3, tile_size: float) -> Transform3D:
+	var base_h: float = MAX_HEIGHT * TOWER_BASE_RISE
+	var height: float = MAX_HEIGHT * TOWER_SHAFT_RISE
+	var width: float = tile_size * 0.48
 	return Transform3D(
 		Basis.IDENTITY.scaled(Vector3(width, height, width)),
-		top + Vector3(0.0, shaft_h + height / 2.0, 0.0))
+		top + Vector3(0.0, base_h + height / 2.0, 0.0))
+
+
+## Merlon de couronnement : un des blocs en encorbellement au sommet du fût.
+##
+## Posé un peu **hors** du fût, et plus loin du centre que le débord du toit :
+## sans cela l'avant-toit les couvrirait tous les quatre et la couronne ne se
+## verrait pas. C'est la dentelure qui distingue une tour de guet d'un clocher.
+##
+## [param index] 0 à 3, un par diagonale.
+static func _tower_merlon(top: Vector3, tile_size: float, index: int) -> Transform3D:
+	var shaft_top: float = MAX_HEIGHT * (TOWER_BASE_RISE + TOWER_SHAFT_RISE)
+	var height: float = MAX_HEIGHT * TOWER_MERLON_RISE
+	var block: float = tile_size * 0.13
+	var angle: float = (float(index) + 0.5) * (TAU / float(TOWER_MERLONS))
+	var away: Vector3 = Vector3(cos(angle), 0.0, sin(angle)) * tile_size * 0.27
+	return Transform3D(
+		Basis(Vector3.UP, -angle).scaled(Vector3(block, height, block)),
+		top + away + Vector3(0.0, shaft_top + height / 2.0, 0.0))
+
+
+## Flèche d'ardoise : un cône à huit pans posé sur la couronne, avec débord.
+##
+## C'est elle qu'on reconnaît de loin — et elle part du haut des merlons, pas
+## du haut du fût : un toit qui naîtrait sous la couronne l'avalerait.
+static func _tower_roof(top: Vector3, tile_size: float) -> Transform3D:
+	var crown_top: float = MAX_HEIGHT * (
+		TOWER_BASE_RISE + TOWER_SHAFT_RISE + TOWER_MERLON_RISE)
+	var height: float = MAX_HEIGHT * TOWER_ROOF_RISE
+	var width: float = tile_size * 0.58
+	return Transform3D(
+		Basis.IDENTITY.scaled(Vector3(width, height, width)),
+		top + Vector3(0.0, crown_top + height / 2.0, 0.0))
 
 
 ## Platelage d'un pont : une dalle de bois sur toute la case, assez basse pour
@@ -653,7 +806,7 @@ static func _mesh_for(kind: String, tile_size: float) -> Mesh:
 			canopy.radial_segments = 7
 			canopy.rings = 1
 			return canopy
-		"keep", "tower_shaft":
+		"keep", "tower_shaft", "tower_base":
 			return _drum(8)
 		"column":
 			return _drum(6)
@@ -670,9 +823,9 @@ static func _mesh_for(kind: String, tile_size: float) -> Mesh:
 			roof.size = Vector3.ONE
 			return roof
 		_:
-			# Rocher, créneau, murs, piliers, platelage : un cube unitaire, mis aux
-			# dimensions voulues par l'échelle de chaque instance. Les arêtes vives
-			# font tout le travail.
+			# Rocher, créneaux, murs, piliers, linteaux, platelage : un cube
+			# unitaire, mis aux dimensions voulues par l'échelle de chaque
+			# instance. Les arêtes vives font tout le travail.
 			var block := BoxMesh.new()
 			block.size = Vector3.ONE
 			return block
@@ -704,7 +857,9 @@ const SURFACES: Dictionary = {
 	"trunk": {"color": TRUNK_COLOR, "roughness": 0.95, "metallic": 0.0},
 	"canopy": {"color": CANOPY_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"rock": {"color": ROCK_COLOR, "roughness": 1.00, "metallic": 0.0},
-	"merlon": {"color": WALL_COLOR, "roughness": 0.85, "metallic": 0.0},
+	"wall_base": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
+	"wall_body": {"color": WALL_COLOR, "roughness": 0.85, "metallic": 0.0},
+	"wall_crenel": {"color": CUT_STONE_COLOR, "roughness": 0.85, "metallic": 0.0},
 	"tuft": {"color": TUFT_COLOR, "roughness": 0.95, "metallic": 0.0},
 	"pebble": {"color": PEBBLE_COLOR, "roughness": 1.00, "metallic": 0.0},
 	"reed": {"color": REED_COLOR, "roughness": 0.90, "metallic": 0.0},
@@ -712,8 +867,11 @@ const SURFACES: Dictionary = {
 	"house_roof": {"color": ROOF_COLOR, "roughness": 0.85, "metallic": 0.0},
 	"keep": {"color": STONE_COLOR, "roughness": 0.92, "metallic": 0.0},
 	"tower_shaft": {"color": STONE_COLOR, "roughness": 0.92, "metallic": 0.0},
+	"tower_base": {"color": DARK_STONE_COLOR, "roughness": 0.95, "metallic": 0.0},
+	"tower_merlon": {"color": CUT_STONE_COLOR, "roughness": 0.88, "metallic": 0.0},
 	"rubble": {"color": STONE_COLOR, "roughness": 1.00, "metallic": 0.0},
 	"pier": {"color": DARK_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
+	"lintel": {"color": CUT_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"column": {"color": DARK_STONE_COLOR, "roughness": 0.90, "metallic": 0.0},
 	"tower_roof": {"color": SLATE_COLOR, "roughness": 0.55, "metallic": 0.05},
 	"banner": {"color": BANNER_COLOR, "roughness": 0.40, "metallic": 0.25},
@@ -725,7 +883,7 @@ const SURFACES: Dictionary = {
 
 ## Matériau d'un type de décor : sans transparence, comme le terrain.
 static func _material_for(kind: String) -> StandardMaterial3D:
-	var surface: Dictionary = SURFACES.get(kind, SURFACES["merlon"])
+	var surface: Dictionary = SURFACES.get(kind, SURFACES["wall_body"])
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL

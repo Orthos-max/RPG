@@ -227,7 +227,7 @@ func _apply_autotile(body: StaticBody3D, pos: Vector2i, terrain: int, thickness:
 	var overlay: MeshInstance3D = body.get_node_or_null(AUTOTILE_NODE) as MeshInstance3D
 
 	var material: StandardMaterial3D = TacticsAutoTiler.overlay_material(
-		terrain, _editor_mask(pos, terrain))
+		terrain, _editor_mask(pos, terrain), _editor_neighbor(pos, terrain))
 	if not material:
 		if overlay:
 			body.remove_child(overlay)
@@ -259,6 +259,31 @@ func _editor_mask(pos: Vector2i, terrain: int) -> String:
 		if doc.terrain_at(neighbor) != terrain:
 			mask += str(side[0])
 	return mask if not mask.is_empty() else "fill"
+
+
+## Le terrain qui borde une case, sur lequel sa transition se dessinera.
+##
+## Réplique de [method TacticsAutoTiler.neighbor_at] pour la grille du
+## document, comme [method _editor_mask] l'est de `mask_at` : sans lui,
+## l'éditeur montrerait ses rives sur de l'herbe et la carte peinte ne
+## ressemblerait plus à la carte jouée.
+func _editor_neighbor(pos: Vector2i, terrain: int) -> int:
+	if not TacticsAutoTiler.EDGE_SETS.has(terrain):
+		return -1
+
+	var tally: Dictionary = {}
+	var best: int = -1
+	for side: Array in TacticsAutoTiler.SIDES:
+		var neighbor: Vector2i = pos + (side[1] as Vector2i)
+		if not doc.in_bounds(neighbor):
+			continue
+		var other: int = doc.terrain_at(neighbor)
+		if other == terrain or not TacticsAutoTiler.BACKGROUND_SETS.has(other):
+			continue
+		tally[other] = int(tally.get(other, 0)) + 1
+		if best < 0 or int(tally[other]) > int(tally[best]):
+			best = other
+	return best
 
 
 ## Redessine le décor : arbres, rochers, créneaux, comme en bataille.

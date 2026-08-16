@@ -14,6 +14,7 @@ func _init() -> void:
 	all_ok = _test_scene_loading() and all_ok
 	all_ok = _test_framing() and all_ok
 	all_ok = _test_props() and all_ok
+	all_ok = _test_edge_pairs() and all_ok
 	all_ok = _test_arena_regeneration() and all_ok
 
 	if all_ok:
@@ -320,6 +321,82 @@ func _test_framing() -> bool:
 	return ok
 
 
+## Transitions par paire : une rive d'eau tombe sur le sable, pas sur l'herbe.
+##
+## Le défaut corrigé se voyait à l'œil et ne se mesurait nulle part : chaque
+## tuile de bord était peinte sur un fond d'herbe, si bien qu'une case d'eau
+## collée à une plage affichait six pixels de prairie entre les deux. Trois
+## promesses le tiennent maintenant fermé.
+func _test_edge_pairs() -> bool:
+	print_rich("[color=cyan]--- Test: Transitions entre terrains ---[/color]")
+	var ok := true
+
+	# 1. Le jeu de paires est complet : tout couple (terrain, fond) qu'un
+	#    plateau peut produire a bien ses quinze tuiles sur le disque. Une
+	#    absence ne casse rien — on retombe sur l'herbe — mais elle ramène
+	#    silencieusement le défaut, donc elle se compte ici.
+	var masks: Array[String] = [
+		"n", "e", "s", "w", "ne", "es", "sw", "nw", "ns", "ew",
+		"nes", "esw", "nsw", "new", "nesw",
+	]
+	var missing: Array[String] = []
+	var pairs := 0
+	for terrain: int in TacticsAutoTiler.EDGE_SETS:
+		for background: int in TacticsAutoTiler.BACKGROUND_SETS:
+			if background == terrain:
+				continue
+			for mask: String in masks:
+				pairs += 1
+				var path: String = TacticsAutoTiler._edge_paths(
+					terrain, mask, background)[0]
+				if not ResourceLoader.exists(path):
+					missing.append(path.get_file())
+	if not missing.is_empty():
+		print_rich("[color=red]  FAIL: %d tuile(s) de paire manquante(s) : %s…[/color]"
+			% [missing.size(), ", ".join(missing.slice(0, 3))])
+		print_rich("[color=red]         relance : python3 art/bords-paires.py[/color]")
+		ok = false
+	else:
+		print_rich("  OK: %d transitions par paire sur le disque "
+			% pairs + "(chaque terrain bordé sur chaque fond)")
+
+	# 2. La bonne tuile est choisie : l'eau qui s'arrête au nord contre du sable
+	#    prend `water_sand_n`, et non plus `water_n` et son fond d'herbe.
+	var chosen: String = TacticsAutoTiler._edge_paths(
+		_MD.TerrainType.WATER, "n", _MD.TerrainType.SAND)[0]
+	if not chosen.ends_with("edges-pairs/water_sand_n.png"):
+		print_rich("[color=red]  FAIL: rive d'eau sur sable → %s[/color]" % chosen)
+		ok = false
+	else:
+		print_rich("  OK: une rive d'eau bordée de sable prend water_sand_n")
+
+	# 3. Le repli tient : un voisin qui ne sait pas faire fond — l'herbe, un mur —
+	#    rend exactement la tuile d'avant, à fond d'herbe. Aucune régression
+	#    possible sur les cartes qui ne bordent que des plaines.
+	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.WALL, -1]:
+		var fallback: Array[String] = TacticsAutoTiler._edge_paths(
+			_MD.TerrainType.WATER, "n", neighbor)
+		if fallback.size() != 1 or not fallback[0].ends_with("edges/water_n.png"):
+			print_rich("[color=red]  FAIL: voisin %d → %s[/color]" % [neighbor, str(fallback)])
+			ok = false
+	if ok:
+		print_rich("  OK: herbe, mur ou rien du tout → la tuile d'origine, inchangée")
+
+	# 4. Et le matériau se bâtit vraiment dans les deux cas.
+	var paired: StandardMaterial3D = TacticsAutoTiler.overlay_material(
+		_MD.TerrainType.WATER, "n", _MD.TerrainType.SAND)
+	var plain: StandardMaterial3D = TacticsAutoTiler.overlay_material(
+		_MD.TerrainType.WATER, "n", _MD.TerrainType.GRASS)
+	if not paired or not plain or paired == plain:
+		print_rich("[color=red]  FAIL: les deux calques ne se bâtissent pas séparément[/color]")
+		ok = false
+	else:
+		print_rich("  OK: deux calques distincts, chacun mis en cache sous son fond")
+
+	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
 ## Décor des cases : ce qui pousse dessus, et ce qui ne doit jamais gêner.
 ##
 ## Trois promesses tenues ici plutôt qu'à l'œil : chaque terrain reçoit ce qui
@@ -354,10 +431,11 @@ func _test_props() -> bool:
 	for kind: String in batches:
 		counts[kind] = batches[kind].size()
 	var expected := {
-		"trunk": 1, "canopy": 1, "rock": 2, "merlon": 1,
+		"trunk": 1, "canopy": 1, "rock": 2,
+		"wall_base": 1, "wall_body": 1, "wall_crenel": 3,
 		"house_wall": 1, "house_roof": 1, "keep": 1,
-		"pier": 2, "column": 2, "rubble": 1,
-		"tower_shaft": 1, "tower_roof": 1,
+		"pier": 2, "lintel": 2, "column": 2, "rubble": 1,
+		"tower_base": 1, "tower_shaft": 1, "tower_merlon": 4, "tower_roof": 1,
 		"deck": 1, "railing": 2,
 		"reed": 3,
 	}
@@ -376,7 +454,8 @@ func _test_props() -> bool:
 		ok = false
 	else:
 		print_rich("  OK: seize terrains, chacun sa garniture (village → maison, "
-			+ "fortin → donjon et bannière, tour → fût et toit, pont → platelage…)")
+			+ "fortin → donjon et bannière, tour → assise, fût, merlons et flèche, "
+			+ "mur → semelle, chemin de ronde et créneaux, pont → platelage…)")
 		print_rich("  OK: eau, chemin, fosse et neige restent nus")
 
 	# Rien ne dépasse la hauteur d'un pion. Tous les maillages font une unité de
@@ -516,7 +595,46 @@ func _check_orientation() -> bool:
 	else:
 		print_rich("  OK: le pont pose ses garde-corps le long de sa travée")
 
+	ok = _check_crenels_line_up() and ok
 	return ok
+
+
+## Un rempart de plusieurs cases porte une seule dentelure, pas une par case.
+##
+## C'est toute la raison des trois créneaux au pas d'un tiers de case : posés au
+## quart ou au hasard, deux cases voisines recolleraient deux motifs, et le
+## rempart redeviendrait le damier qu'on cherche à effacer. On mesure donc le
+## pas entre créneaux successifs le long du mur — il doit être constant, y
+## compris à la jointure des deux cases.
+func _check_crenels_line_up() -> bool:
+	var wall_cells: Array = []
+	for i in 3:
+		wall_cells.append({
+			"cell": Vector2i(i, 0),
+			"terrain": _MD.TerrainType.WALL,
+			"top": Vector3(float(i), 0.0, 0.0),
+		})
+	var crenels: Array = TacticsProps.placements(wall_cells, 1.0).get("wall_crenel", [])
+
+	var xs: Array[float] = []
+	for xf: Transform3D in crenels:
+		xs.append(xf.origin.x)
+	xs.sort()
+
+	var steps: Array[float] = []
+	for i in range(1, xs.size()):
+		steps.append(xs[i] - xs[i - 1])
+	var regular: bool = xs.size() == 9 and not steps.is_empty()
+	for step: float in steps:
+		regular = regular and absf(step - steps[0]) < 0.001
+
+	if not regular:
+		print_rich("[color=red]  FAIL: la dentelure se recolle d'une case à l'autre : %s[/color]"
+			% str(steps))
+		return false
+	print_rich("  OK: trois cases de rempart, neuf créneaux au pas régulier de %.2f case"
+		% steps[0])
+	return true
 
 
 ## Une arène qui porte déjà des tuiles posées à la main, et un MapData.
