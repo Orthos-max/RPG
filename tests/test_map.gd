@@ -15,6 +15,7 @@ func _init() -> void:
 	all_ok = _test_framing() and all_ok
 	all_ok = _test_props() and all_ok
 	all_ok = _test_edge_pairs() and all_ok
+	all_ok = _test_edge_ownership() and all_ok
 	all_ok = _test_arena_regeneration() and all_ok
 
 	if all_ok:
@@ -395,6 +396,215 @@ func _test_edge_pairs() -> bool:
 
 	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
 	return ok
+
+
+## Une frontière, une seule bande — et c'est le terrain dominant qui la porte.
+##
+## Le défaut se voyait à l'œil et ne se mesurait nulle part, comme celui d'au
+## dessus : chaque case portait sa propre transition, si bien qu'une plage collée
+## à la mer montrait un bout d'eau à droite pendant que la mer montrait un bout
+## de sable à gauche. Deux dessins pour une seule limite, donc un double liseré,
+## et deux versions de la même ligne qui ne se recollaient jamais.
+##
+## [constant TacticsAutoTiler.TERRAIN_PRIORITY] tranche : le plus haut des deux
+## terrains dessine, l'autre se tait. On l'éprouve à trois hauteurs — la règle
+## seule, trois voisinages nommés, puis l'invariant sur un plateau qui mélange
+## les seize terrains.
+func _test_edge_ownership() -> bool:
+	print_rich("[color=cyan]--- Test: Qui porte la transition ---[/color]")
+	var ok := true
+
+	# 1. La règle seule. L'eau porte contre tout, la prairie contre rien, et un
+	#    terrain sans bords ne porte jamais — mais ne dispense pas son voisin.
+	for other: int in TacticsAutoTiler.TERRAIN_PRIORITY:
+		if other == _MD.TerrainType.WATER:
+			continue
+		if not TacticsAutoTiler.carries(_MD.TerrainType.WATER, other) \
+				or TacticsAutoTiler.carries(other, _MD.TerrainType.WATER):
+			print_rich("[color=red]  FAIL: l'eau ne l'emporte pas sur %s[/color]"
+				% _MD.type_key(other))
+			ok = false
+		if other == _MD.TerrainType.GRASS:
+			continue
+		if TacticsAutoTiler.carries(_MD.TerrainType.GRASS, other) \
+				or not TacticsAutoTiler.carries(other, _MD.TerrainType.GRASS):
+			print_rich("[color=red]  FAIL: la prairie et %s se disputent leur bord[/color]"
+				% _MD.type_key(other))
+			ok = false
+	var sans_bords: Array[int] = [
+		_MD.TerrainType.WALL, _MD.TerrainType.GATE, _MD.TerrainType.TOWER,
+		_MD.TerrainType.RUINS, _MD.TerrainType.BRIDGE, _MD.TerrainType.PIT,
+	]
+	for bare: int in sans_bords:
+		if TacticsAutoTiler.carries(bare, _MD.TerrainType.GRASS) \
+				or TacticsAutoTiler.carries(bare, _MD.TerrainType.WATER):
+			print_rich("[color=red]  FAIL: %s porte une transition[/color]" % _MD.type_key(bare))
+			ok = false
+		if not TacticsAutoTiler.carries(_MD.TerrainType.SAND, bare):
+			print_rich("[color=red]  FAIL: le sable ne borde pas %s[/color]" % _MD.type_key(bare))
+			ok = false
+	for terrain: int in _MD.all_types():
+		if TacticsAutoTiler.carries(terrain, terrain):
+			print_rich("[color=red]  FAIL: %s se borde lui-même[/color]" % _MD.type_key(terrain))
+			ok = false
+	if ok:
+		print_rich("  OK: l'eau porte toujours sa rive, la prairie ne porte jamais rien, "
+			+ "mur et pont ne portent pas mais laissent border")
+
+	# 2. Trois voisinages nommés, sur de vraies tuiles habillées par le service.
+	var herbe: int = _MD.TerrainType.GRASS
+	var eau: int = _MD.TerrainType.WATER
+	var sable: int = _MD.TerrainType.SAND
+	var cases: Array = [
+		{
+			"nom": "une case d'herbe cernée d'eau ne porte rien",
+			"carte": [[eau, eau,   eau],
+					  [eau, herbe, eau],
+					  [eau, eau,   eau]],
+			"attendu": "",
+		},
+		{
+			"nom": "une case d'eau cernée d'herbe porte ses quatre rives",
+			"carte": [[herbe, herbe, herbe],
+					  [herbe, eau,   herbe],
+					  [herbe, herbe, herbe]],
+			"attendu": "nesw",
+		},
+		{
+			"nom": "du sable avec l'eau au nord et la prairie à l'est ne porte qu'à l'est",
+			"carte": [[sable, eau,   sable],
+					  [sable, sable, herbe],
+					  [sable, sable, sable]],
+			"attendu": "e",
+		},
+	]
+	for entry: Dictionary in cases:
+		var built: Dictionary = _tiled_grid(entry["carte"])
+		TacticsAutoTiler.apply_to_grid(built["grid"])
+		var bands: String = _bands_of(built["grid"].tile_at_cell(Vector2i(1, 1)))
+		if bands != str(entry["attendu"]):
+			print_rich("[color=red]  FAIL: %s → « %s » (attendu « %s »)[/color]" % [
+				entry["nom"], bands, str(entry["attendu"])])
+			ok = false
+		else:
+			print_rich("  OK: %s" % entry["nom"])
+		(built["root"] as Node).free()
+
+	# 3. L'invariant, sur un plateau qui mélange les seize terrains : aucune
+	#    frontière n'est dessinée deux fois, et celle qui l'est une fois l'est par
+	#    le dominant. C'est la promesse qui tient tout le reste fermé — elle vaut
+	#    pour un carrefour de quatre terrains comme pour une côte.
+	var terrains: Array = _MD.all_types()
+	var board: Array = []
+	for row: int in 4:
+		var line: Array = []
+		for col: int in 4:
+			line.append(terrains[(row * 4 + col) % terrains.size()])
+		board.append(line)
+	var mixed: Dictionary = _tiled_grid(board)
+	var grid: BattleGrid = mixed["grid"]
+	TacticsAutoTiler.apply_to_grid(grid)
+
+	var opposite := {"n": "s", "s": "n", "e": "w", "w": "e"}
+	var doubled: Array[String] = []
+	var wrong: Array[String] = []
+	var drawn := 0
+	for row: int in 4:
+		for col: int in 4:
+			var cell := Vector2i(col, row)
+			var tile: Node = grid.tile_at_cell(cell)
+			for side: Array in TacticsAutoTiler.SIDES:
+				var letter: String = str(side[0])
+				var other: Node = grid.tile_at_cell(cell + (side[1] as Vector2i))
+				if not other or int(other.terrain_type) == int(tile.terrain_type):
+					continue
+				# Chaque frontière est vue deux fois ; on ne l'examine que de son
+				# côté nord ou ouest, sinon les comptes doublent.
+				if letter == "s" or letter == "e":
+					continue
+				var mine: bool = tile.get_node_or_null("AutoTile_%s" % letter) != null
+				var theirs: bool = other.get_node_or_null(
+					"AutoTile_%s" % str(opposite[letter])) != null
+				var frontier: String = "%s|%s" % [
+					_MD.type_key(int(tile.terrain_type)), _MD.type_key(int(other.terrain_type))]
+
+				if mine and theirs:
+					doubled.append(frontier)
+					continue
+
+				# Le dominant dessine, et lui seul — sur le fond de l'autre, du
+				# côté qui les sépare.
+				var here: int = int(tile.terrain_type)
+				var there: int = int(other.terrain_type)
+				var i_win: bool = TacticsAutoTiler.carries(here, there)
+				var top: int = here if i_win else there
+				var bottom: int = there if i_win else here
+				var bearer_side: String = letter if i_win else str(opposite[letter])
+				if (mine and not i_win) or (theirs and i_win):
+					wrong.append(frontier)
+					continue
+
+				# Sauf quand la tuile n'existe pas : la prairie n'a pas de bord à
+				# fond d'herbe, et le repli d'avant laisse alors la case nue.
+				var expected: bool = TacticsAutoTiler.overlay_material(
+					top, bearer_side, bottom) != null
+				if expected != (mine or theirs):
+					wrong.append(frontier)
+				elif expected:
+					drawn += 1
+
+	if not doubled.is_empty():
+		print_rich("[color=red]  FAIL: %d frontière(s) dessinée(s) des deux côtés : %s[/color]"
+			% [doubled.size(), ", ".join(doubled.slice(0, 3))])
+		ok = false
+	elif not wrong.is_empty():
+		print_rich("[color=red]  FAIL: %d frontière(s) portée(s) par le mauvais terrain : %s[/color]"
+			% [wrong.size(), ", ".join(wrong.slice(0, 3))])
+		ok = false
+	else:
+		print_rich("  OK: seize terrains mêlés, %d frontières dessinées, aucune deux fois"
+			% drawn)
+	(mixed["root"] as Node).free()
+
+	print_rich("  [b]%s[/b]" % ("[color=green]PASS[/color]" if ok else "[color=red]FAIL[/color]"))
+	return ok
+
+
+## Un plateau de tuiles réelles, indexé comme en bataille.
+##
+## [TacticsAutoTiler] habille des [TacticsTile] posées dans un [BattleGrid] : on
+## lui en donne, plutôt que de réimplémenter sa décision dans le test. Les cases
+## sont d'une unité de côté, en (colonne, ligne) — la ligne 0 au plus petit `z`,
+## comme les pose l'arène, donc le nord est bien en haut du tableau.
+## [param rows] Les terrains, ligne par ligne.
+func _tiled_grid(rows: Array) -> Dictionary:
+	var root := Node3D.new()
+	var grid := BattleGrid.new()
+	grid.tile_size = 1.0
+	for row: int in rows.size():
+		var line: Array = rows[row]
+		for col: int in line.size():
+			var tile := TacticsTile.new()
+			tile.name = "Tile_%d_%d" % [col, row]
+			tile.terrain_type = int(line[col])
+			var top := MeshInstance3D.new()
+			top.name = "Tile"
+			top.mesh = BoxMesh.new()
+			tile.add_child(top)
+			root.add_child(tile)
+			grid.add_tile(tile, Vector3(float(col), 0.0, float(row)))
+	return {"root": root, "grid": grid}
+
+
+## Les côtés qu'une case porte réellement, lus sur ses nœuds de calque.
+func _bands_of(tile: Node) -> String:
+	var sides: String = ""
+	if not tile:
+		return sides
+	for side: Array in TacticsAutoTiler.SIDES:
+		if tile.get_node_or_null("AutoTile_%s" % str(side[0])):
+			sides += str(side[0])
+	return sides
 
 
 ## Décor des cases : ce qui pousse dessus, et ce qui ne doit jamais gêner.

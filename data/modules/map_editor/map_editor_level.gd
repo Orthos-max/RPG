@@ -260,15 +260,19 @@ func _apply_autotile(body: StaticBody3D, pos: Vector2i, terrain: int, thickness:
 
 ## Le masque d'une case dans la grille du document, dans l'ordre n, e, s, w.
 ##
-## Même logique que [method TacticsAutoTiler.mask_at] : hors grille compte
-## comme le même terrain, et `fill` quand le terrain se poursuit partout.
+## Même logique que [method TacticsAutoTiler.mask_at], et la règle du porteur
+## vient de là plutôt que d'être réécrite ici : un côté n'est retenu que si le
+## terrain de la case l'emporte sur son voisin ([method TacticsAutoTiler.carries]),
+## sans quoi c'est le voisin qui dessinera la frontière — et une carte peinte avec
+## deux liserés se jouerait avec un seul. Hors grille ne se porte pas, et `fill`
+## quand la case n'a aucun côté à elle.
 func _editor_mask(pos: Vector2i, terrain: int) -> String:
 	var mask: String = ""
 	for side: Array in TacticsAutoTiler.SIDES:
 		var neighbor: Vector2i = pos + (side[1] as Vector2i)
 		if not doc.in_bounds(neighbor):
 			continue
-		if doc.terrain_at(neighbor) != terrain:
+		if TacticsAutoTiler.carries(terrain, doc.terrain_at(neighbor)):
 			mask += str(side[0])
 	return mask if not mask.is_empty() else "fill"
 
@@ -516,14 +520,27 @@ func _clear_blocked(pos: Vector2i) -> String:
 	return message
 
 
-## Redessine les cases touchées par un geste.
+## Redessine les cases touchées par un geste, **et leurs voisines**.
+##
+## La couronne n'est pas une précaution : une frontière se dessine d'un seul côté
+## ([method TacticsAutoTiler.carries]), et le côté peut changer de case sans que
+## celle-ci change de terrain. Peindre la mer contre une plage donne sa rive à la
+## mer et retire la sienne à la plage — que la plage n'ait pas été touchée par le
+## pinceau ne la dispense pas d'être redessinée, sinon sa bande reste à l'écran
+## jusqu'au prochain chargement de la carte.
 ##
 ## Décor et repères se recalculent pour toute la carte, pas case par case : la
 ## garniture d'une case dépend de ses voisines (une porte s'aligne sur son
 ## rempart). Pendant un trait de pinceau, on s'en dispense — [method _end_stroke]
 ## le fait une fois, au relâchement.
 func _refresh_cells(cells: Array[Vector2i]) -> void:
+	var touched: Dictionary = {}
 	for pos: Vector2i in cells:
+		touched[pos] = true
+		for side: Array in TacticsAutoTiler.SIDES:
+			touched[pos + (side[1] as Vector2i)] = true
+
+	for pos: Vector2i in touched:
 		var body: Node = _tiles.get(_key(pos), null)
 		if body:
 			_apply_tile(body as StaticBody3D, pos)

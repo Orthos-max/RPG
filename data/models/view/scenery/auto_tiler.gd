@@ -47,11 +47,39 @@ extends RefCounted
 ## masque savait pourtant tout ce qu'il fallait ; c'est le calque unique qui ne
 ## pouvait pas le dire.
 ##
-## Chaque côté bordé reçoit donc **sa** bande ([method band_mesh]), texturée de
+## Chaque côté porté reçoit donc **sa** bande ([method band_mesh]), texturée de
 ## la tuile à masque simple de ce côté et du fond de son voisin **réel** :
 ## `sand_water_e` à droite, `sand_forest_w` à gauche. Le centre de la case n'est
 ## couvert par rien et garde le matériau de terrain — il n'a pas de transition à
 ## montrer. `fill`, donc, ne pose plus aucun calque.
+##
+## ## Une frontière, une seule bande
+##
+## Chaque case portait alors la sienne, et les deux côtés d'une même frontière
+## étaient dessinés deux fois : le sable montrait sa lisière d'eau à l'est
+## pendant que la mer montrait sa grève de sable à l'ouest, dos à dos. Deux
+## transitions pour une seule limite, donc un double liseré, et deux dessins qui
+## ne racontent pas la même chose de la même ligne. Le masque disait « mon
+## terrain s'arrête ici » ; les deux voisines le disaient en même temps, et
+## toutes deux avaient raison.
+##
+## Une frontière n'a donc plus qu'un porteur, et [constant TERRAIN_PRIORITY] dit
+## lequel : le plus haut des deux terrains. La règle est locale et symétrique —
+## les deux cases la lisent chacune de leur côté et en tirent la même conclusion,
+## sans avoir à se consulter ni à s'accorder sur un ordre de passage.
+##
+## Le rang va du terrain qui se pose sur le paysage à celui qui le termine : un
+## fortin est bâti sur la prairie, un chemin la traverse, une plage la borde, un
+## bois la mange, la neige et le marais la recouvrent, l'eau l'arrête. Le plus
+## haut dessine son propre contour, ce qui donne exactement la lecture qu'on
+## attend d'un tableau : la rive appartient à l'étang, la lisière au bois, la
+## grève à la mer.
+##
+## La prairie est à zéro et ne porte donc jamais rien, quels que soient ses
+## voisins — c'est le parti du pack rappelé plus haut, tenu jusqu'au bout. Un
+## terrain sans bords — mur, pont, fosse — ne porte rien non plus (il n'a rien à
+## porter), mais il ne dispense pas son voisin : il compte pour moins que tout le
+## reste, si bien qu'une plage collée à un rempart borde quand même.
 ##
 ## Deux bandes se croisent au coin, et la seconde recouvre la première ; chacune
 ## est posée un cheveu plus haut que la précédente ([constant SIDE_LIFT]) pour
@@ -81,10 +109,10 @@ extends RefCounted
 
 const MapDataClass = preload("res://data/models/world/map/map_data.gd")
 
-## Préfixe des nœuds de calque : un par côté bordé, `AutoTile_n`, `AutoTile_e`…
+## Préfixe des nœuds de calque : un par côté porté, `AutoTile_n`, `AutoTile_e`…
 ##
 ## Cherchés et reposés à l'identique d'une bataille à l'autre, et retirés dès que
-## leur côté cesse de border — l'éditeur repeint une voisine, la bande s'en va.
+## leur côté cesse d'être porté — l'éditeur repeint une voisine, la bande s'en va.
 const OVERLAY_NODE: String = "AutoTile"
 
 ## Terrains qui reçoivent des bords, et le jeu de tuiles qui les porte.
@@ -110,6 +138,38 @@ const EDGE_SETS: Dictionary = {
 	MapDataClass.TerrainType.FORT: "fort",
 	MapDataClass.TerrainType.SNOW: "snow",
 	MapDataClass.TerrainType.SWAMP: "swamp",
+}
+
+## Rang d'un terrain absent de [constant TERRAIN_PRIORITY] : sous la prairie.
+##
+## Mur, porte, tour, ruine, pont, fosse : ils n'ont pas de bords, donc rien à
+## porter. Les mettre en dessous de tout plutôt que hors du jeu est ce qui fait
+## qu'une plage bordant un rempart borde quand même — leur voisin, lui, a bien
+## une transition à montrer, et personne d'autre ne la montrera.
+const NO_PRIORITY: int = -1
+
+## Qui, de deux terrains voisins, dessine la frontière qui les sépare.
+##
+## Les deux cases lisent cette table chacune de son côté : celle qui a le rang le
+## plus haut porte la bande, l'autre ne montre rien de ce côté-là. C'est ce qui
+## garantit une seule transition par limite au lieu des deux qui se recouvraient.
+##
+## L'ordre va du terrain posé sur le paysage à celui qui l'arrête. La prairie
+## ouvre à zéro et ne porte donc jamais rien : elle est le fond de tout le monde.
+## L'eau ferme la marche et porte donc toujours sa rive, y compris contre un
+## marais ou de la neige — c'est le terrain dont la limite est la plus nette à
+## l'œil, et celui qu'on regarde en premier sur une carte.
+const TERRAIN_PRIORITY: Dictionary = {
+	MapDataClass.TerrainType.GRASS: 0,
+	MapDataClass.TerrainType.FORT: 1,
+	MapDataClass.TerrainType.VILLAGE: 2,
+	MapDataClass.TerrainType.PATH: 3,
+	MapDataClass.TerrainType.SAND: 4,
+	MapDataClass.TerrainType.FOREST: 5,
+	MapDataClass.TerrainType.MOUNTAIN: 6,
+	MapDataClass.TerrainType.SNOW: 7,
+	MapDataClass.TerrainType.SWAMP: 8,
+	MapDataClass.TerrainType.WATER: 9,
 }
 
 ## Dossier des tuiles de bord, à fond d'herbe — le repli de toute paire absente.
@@ -199,11 +259,12 @@ static func apply_to_grid(grid: BattleGrid) -> void:
 				apply_to_tile(grid, cell, tile as TacticsTile)
 
 
-## Habille une case : une bande par côté bordé, chacune sur le fond de son voisin.
+## Habille une case : une bande par côté porté, chacune sur le fond de son voisin.
 ##
-## Les côtés qui ne bordent plus rien — ou dont la tuile manque — perdent la
-## leur : l'éditeur repeint une voisine, et la rive s'efface sans laisser de
-## calque orphelin derrière elle.
+## Les côtés qu'elle ne porte plus — parce qu'ils ne bordent rien, parce que le
+## voisin l'emporte désormais, ou parce que la tuile manque — perdent la leur :
+## l'éditeur repeint une voisine, et la rive s'efface sans laisser de calque
+## orphelin derrière elle.
 static func apply_to_tile(grid: BattleGrid, cell: Vector2i, tile: TacticsTile) -> void:
 	var top: MeshInstance3D = tile.get_node_or_null("Tile") as MeshInstance3D
 	if not top or not top.mesh:
@@ -255,14 +316,41 @@ static func apply_to_tile(grid: BattleGrid, cell: Vector2i, tile: TacticsTile) -
 
 
 #region Choix de la tuile
-## Le masque d'une case : les côtés où son terrain s'arrête.
+## Le rang d'un terrain dans la règle du porteur.
+##
+## [constant NO_PRIORITY] pour tout terrain sans bords : il ne l'emporte sur
+## personne, pas même sur un autre terrain sans bords.
+static func priority_of(terrain: int) -> int:
+	return int(TERRAIN_PRIORITY.get(terrain, NO_PRIORITY))
+
+
+## Cette case dessine-t-elle la frontière qui la sépare de ce voisin ?
+##
+## Le seul juge de « qui porte quoi », et le seul endroit où la question se
+## tranche. L'éditeur de cartes l'appelle aussi ([MapEditorLevel]) : la même règle
+## écrite deux fois aurait divergé au premier terrain ajouté, et la carte peinte
+## aurait cessé de ressembler à la carte jouée.
+##
+## Faux quand les deux terrains sont le même — leurs rangs sont égaux, et une
+## frontière entre une case et son semblable n'existe pas.
+static func carries(terrain: int, neighbor: int) -> bool:
+	return priority_of(terrain) > priority_of(neighbor)
+
+
+## Le masque d'une case : les côtés dont **elle** porte la bande.
+##
+## C'étaient les côtés où son terrain s'arrête, ce qui en faisait dessiner deux
+## par frontière. Ce sont maintenant ceux où il s'arrête **et** l'emporte sur ce
+## qui commence ([method carries]) : la case d'eau porte sa rive, la plage d'en
+## face ne porte rien, et la limite n'est tracée qu'une fois.
 ##
 ## Les lettres sortent dans l'ordre n, e, s, w — celui des noms de fichiers.
-## `fill` quand le terrain se poursuit de tous les côtés.
+## `fill` quand la case n'a aucun côté à porter, qu'elle soit au milieu de son
+## terrain ou cernée de plus fort qu'elle.
 ##
-## **Hors grille compte comme le même terrain.** Une rive dessinée au bord du
-## plateau montrerait de l'herbe là où il n'y a rien du tout : le damier s'arrête
-## sur le vide, et le flanc de la case dit déjà la coupure.
+## **Hors grille ne se porte pas.** Une rive dessinée au bord du plateau
+## montrerait de l'herbe là où il n'y a rien du tout : le damier s'arrête sur le
+## vide, et le flanc de la case dit déjà la coupure.
 static func mask_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> String:
 	if not grid or not EDGE_SETS.has(terrain):
 		return "fill"
@@ -270,18 +358,22 @@ static func mask_at(grid: BattleGrid, cell: Vector2i, terrain: int) -> String:
 	var mask: String = ""
 	for side: Array in SIDES:
 		var neighbor: Node = grid.tile_at_cell(cell + (side[1] as Vector2i))
-		if neighbor and int(neighbor.terrain_type) != terrain:
+		if neighbor and carries(terrain, int(neighbor.terrain_type)):
 			mask += str(side[0])
 	return mask if not mask.is_empty() else "fill"
 
 
 ## Ce qui borde une case, **côté par côté** : `{"n": WATER, "w": FOREST}`.
 ##
-## [method mask_at] dit de quels côtés le terrain s'arrête ; celui-ci dit ce qui
-## commence alors, et le dit pour chacun. C'était un seul terrain — le voisin
+## [method mask_at] dit quels côtés la case porte ; celui-ci dit ce qui commence
+## de l'autre côté, et le dit pour chacun. C'était un seul terrain — le voisin
 ## dominant — tant qu'une case n'avait qu'un calque : une plage entre mer et
 ## bois bordait alors des deux côtés sur le même fond, et l'un des deux voisins
 ## était toujours démenti.
+##
+## Il répond pour **tous** les côtés qui bordent autre chose, portés ou non : le
+## fond d'une bande est le voisin réel de ce côté, et savoir qui dessine la
+## frontière est l'affaire de [method carries], pas la sienne.
 ##
 ## Le terrain est rendu tel quel, sans regarder [constant BACKGROUND_SETS] : un
 ## voisin qui ne sait pas faire fond — un mur, une porte — n'est pas une absence
