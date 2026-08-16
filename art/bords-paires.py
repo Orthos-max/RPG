@@ -91,9 +91,19 @@ AVANTS: dict[str, str] = {
 
 ## Les fonds disponibles, et la tuile de remplissage qui les peint.
 ##
+## Mêmes clés que `TacticsAutoTiler.BACKGROUND_SETS` — un fond ajouté là est à
+## ajouter ici, sans quoi le rendu ira chercher une paire qui n'existe pas.
+##
 ## L'herbe n'y est pas, et c'est délibéré : elle est le fond des tuiles
 ## d'origine, donc le cas que le repli couvre déjà. En engendrer la paire
 ## reviendrait à recopier `edges/` en huit exemplaires.
+##
+## Le hameau, le fortin et la ruine y sont depuis le 2026-08-16. Les trois
+## étaient dans `AVANTS` — ils bordaient les autres — sans être des fonds : un
+## bois collé à un hameau montrait donc sa lisière sur de l'herbe, six pixels de
+## prairie entre deux terrains qui n'en ont ni l'un ni l'autre. Le défaut était
+## exactement celui que ce script a été écrit pour corriger, resté ouvert sur
+## trois terrains.
 FONDS: dict[str, str] = {
     "water": "terrain_outdoor_water.png",
     "forest": "terrain_outdoor_forest.png",
@@ -102,6 +112,9 @@ FONDS: dict[str, str] = {
     "snow": "terrain_outdoor_snow.png",
     "swamp": "terrain_outdoor_swamp.png",
     "mountain": "terrain_mountain_rock.png",
+    "village": "terrain_outdoor_hamlet.png",
+    "fort": "terrain_outdoor_flagstone.png",
+    "ruins": "terrain_outdoor_ruins.png",
     "gate": "terrain_outdoor_gate.png",
     "tower": "terrain_outdoor_tower.png",
     "wall": "terrain_outdoor_wall.png",

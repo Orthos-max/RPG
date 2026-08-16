@@ -374,7 +374,7 @@ func _test_edge_pairs() -> bool:
 	# 3. Le repli tient : un voisin qui ne sait pas faire fond — l'herbe, une
 	#    ruine — rend exactement la tuile d'avant, à fond d'herbe. Aucune
 	#    régression possible sur les cartes qui ne bordent que des plaines.
-	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.RUINS, -1]:
+	for neighbor: int in [_MD.TerrainType.GRASS, _MD.TerrainType.BRIDGE, -1]:
 		var fallback: Array[String] = TacticsAutoTiler._edge_paths(
 			_MD.TerrainType.WATER, "n", neighbor)
 		if fallback.size() != 1 or not fallback[0].ends_with("edges/water_n.png"):
@@ -432,7 +432,7 @@ func _test_edge_ownership() -> bool:
 				% _MD.type_key(other))
 			ok = false
 	var sans_bords: Array[int] = [
-		_MD.TerrainType.RUINS, _MD.TerrainType.BRIDGE, _MD.TerrainType.PIT,
+		_MD.TerrainType.BRIDGE, _MD.TerrainType.PIT,
 	]
 	for bare: int in sans_bords:
 		if TacticsAutoTiler.carries(bare, _MD.TerrainType.GRASS) \

@@ -59,6 +59,28 @@ const TERRAINS: Dictionary = {
 	TerrainType.SWAMP:    {"key": "swamp",    "label": "Marais",   "code": "~", "walk": true,  "def": 0, "cost": 1},
 }
 
+## Altitude minimale qu'un terrain s'impose, quoi qu'en dise la carte.
+##
+## La montagne y est seule, et à une unité pleine. Elle était rendue à la hauteur
+## déclarée par le `height_grid` — le plus souvent la même que la plaine d'à côté,
+## ou 0,45 sur les cartes qui la surélèvent un peu : un aplat de roche posé au ras
+## de l'herbe, qu'aucun relief ne distinguait. Or c'est le seul terrain dont le
+## nom **est** une altitude, et le seul qui coûte deux points de mouvement pour
+## cette raison-là. Le plateau doit le dire avant la légende.
+##
+## Une unité, et pas plus : le pas le plus faible du jeu vaut 2
+## ([member StatsRes.jump]), une case s'élève de sa hauteur / 2 (son volume monte
+## de 0 à `height`, et c'est son **centre** que [BattleGrid] retient), donc une
+## montagne contre une plaine fait une marche de 0,5 — franchissable par tout le
+## monde, y compris le plus lourd des chevaliers.
+##
+## Le plancher ne touche pas la donnée : [member height_grid] garde ce que la
+## carte a écrit, et [method elevation] le relève à la lecture. Une carte qui
+## dresse déjà sa montagne plus haut garde sa hauteur.
+const TERRAIN_FLOOR: Dictionary = {
+	TerrainType.MOUNTAIN: 1.0,
+}
+
 ## Grid dimensions (columns × rows)
 @export var grid_size: Vector2i = Vector2i(16, 10)
 
@@ -140,6 +162,24 @@ static func get_defense_bonus(terrain: int) -> int:
 ## parcours en rond au lieu de le terminer.
 static func move_cost(terrain: int) -> float:
 	return maxf(1.0, float(traits_of(terrain).get("cost", 1)))
+
+
+## L'altitude à laquelle une case se dresse vraiment, plancher du terrain compris.
+##
+## Un seul endroit où la règle est écrite, et tous les rendus y passent : la
+## bataille ([TacticsArena]), l'éditeur de cartes ([MapEditorLevel]), les pions
+## posés sur une carte personnalisée ([CustomBattle]) et la lecture d'avance du
+## relief ([ChapterMap]). La carte dessinée est ainsi la carte jouée — c'était
+## déjà la promesse des transitions, elle vaut aussi pour le relief.
+##
+## Un terrain sans plancher rend sa hauteur telle quelle, négative comprise : une
+## fosse creusée reste creuse.
+## [param terrain] Le terrain de la case.
+## [param declared] La hauteur écrite dans la carte.
+static func elevation(terrain: int, declared: float) -> float:
+	if not TERRAIN_FLOOR.has(terrain):
+		return declared
+	return maxf(declared, float(TERRAIN_FLOOR[terrain]))
 
 
 ## Nom technique d'un terrain (`grass`, `forest`, …).

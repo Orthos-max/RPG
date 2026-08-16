@@ -178,8 +178,12 @@ static func camp_offset(camp: Node, level: Node) -> Vector3:
 static func world_position(doc: MapDocument, pos: Vector2i) -> Vector3:
 	var ts: float = doc.tile_size
 	var half := Vector2(float(doc.grid_size.x) / 2.0, float(doc.grid_size.y) / 2.0)
+	# Le plancher du terrain compris : une montagne se dresse d'une unité même
+	# quand la carte la laisse au ras de l'herbe ([method MapData.elevation]), et
+	# un pion posé à la hauteur déclarée y naîtrait sous la roche.
+	var height: float = MapData.elevation(doc.terrain_at(pos), doc.height_at(pos))
 	return Vector3(
 		(float(pos.x) - half.x + 0.5) * ts,
-		doc.height_at(pos) + PAWN_LIFT,
+		height + PAWN_LIFT,
 		(float(pos.y) - half.y + 0.5) * ts
 	)

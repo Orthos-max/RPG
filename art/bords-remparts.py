@@ -99,10 +99,10 @@ HERBE = "terrain_outdoor_grass.png"
 
 ## Les fonds, et la tuile de remplissage qui les peint.
 ##
-## Les sept premiers sont ceux de `TacticsAutoTiler.BACKGROUND_SETS` — les seuls
-## que le rendu ira chercher. Le hameau et le fortin suivent, comme dans
-## `bords-prairie.py` : le jour où ils deviendront des fonds, la maçonnerie
-## n'aura pas à être réengendrée.
+## Mêmes clés que `TacticsAutoTiler.BACKGROUND_SETS` — les seules que le rendu
+## ira chercher. Le hameau et le fortin y étaient d'avance, engendrés le jour où
+## le jeu ne savait pas encore s'en servir comme fond ; ils en sont depuis le
+## 2026-08-16, et la ruine avec eux.
 FONDS: dict[str, str] = {
     "water": "terrain_outdoor_water.png",
     "forest": "terrain_outdoor_forest.png",
@@ -113,6 +113,7 @@ FONDS: dict[str, str] = {
     "mountain": "terrain_mountain_rock.png",
     "village": "terrain_outdoor_hamlet.png",
     "fort": "terrain_outdoor_flagstone.png",
+    "ruins": "terrain_outdoor_ruins.png",
     "gate": "terrain_outdoor_gate.png",
     "tower": "terrain_outdoor_tower.png",
     "wall": "terrain_outdoor_wall.png",
