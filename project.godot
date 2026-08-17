@@ -19,19 +19,23 @@ config/description="Tactical RPG au tour par tour — le camp adverse est pilot�
 config/version="0.1.0"
 run/main_scene="res://assets/scene/main.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
-config/icon="res://assets/textures/ui/icons/icon.png"
-; Pas de logo Godot au lancement : un fondu sombre, le temps du chargement.
-boot_splash/show_image=false
 boot_splash/bg_color=Color(0.043, 0.051, 0.078, 1)
+boot_splash/show_image=false
+config/icon="res://assets/textures/ui/icons/icon.png"
+
+[autoload]
+
+GameSession="*res://data/services/session/game_session.gd"
+Network="*res://data/services/network/net_service.gd"
+Campaign="*res://data/services/campaign/campaign_state.gd"
+BattleRecorder="*res://data/services/combat/battle_log.gd"
+Audio="*res://data/services/audio/audio_service.gd"
+CielAI="*res://data/modules/ai/ciel_ai.gd"
 
 [debug]
 
-; Journal sur disque : sans lui, un plantage chez un joueur ne laisse aucune
-; trace exploitable — la fenêtre se ferme et l'erreur part avec elle. Godot écrit
-; dans `user://logs/`, à côté des sauvegardes (voir docs/INSTALL.md).
 file_logging/enable_file_logging=true
 file_logging/max_log_files=10
-
 gdscript/warnings/untyped_declaration=1
 gdscript/warnings/inferred_declaration=1
 gdscript/warnings/unsafe_cast=1
@@ -39,12 +43,6 @@ gdscript/warnings/unsafe_call_argument=1
 
 [display]
 
-; L'interface est posée en pixels absolus autour d'un écran de référence
-; (data/main.gd place le titre à 160 px du haut, les boutons à 140 px du bas).
-; Sans mise à l'échelle, ces distances restent fixes : en plein écran 1080p ou
-; plus, le menu se tasse en haut d'un écran vide. « canvas_items » redimensionne
-; l'interface avec la fenêtre, « expand » laisse le jeu occuper les formats
-; larges sans bandes noires.
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
@@ -197,15 +195,8 @@ toggle_grid={
 ]
 }
 
-[autoload]
-
-GameSession="*res://data/services/session/game_session.gd"
-Network="*res://data/services/network/net_service.gd"
-Campaign="*res://data/services/campaign/campaign_state.gd"
-BattleRecorder="*res://data/services/combat/battle_log.gd"
-Audio="*res://data/services/audio/audio_service.gd"
-CielAI="*res://data/modules/ai/ciel_ai.gd"
-
 [rendering]
 
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+rendering/textures/vram_compression/import_etc2_astc=true
