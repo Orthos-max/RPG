@@ -64,7 +64,7 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 	if not CombatCalc:
 		push_error("FECombatCalculator not loaded! Falling back to flat damage.")
 		target_pawn.stats.apply_to_curr_health(-pawn.stats.attack_power)
-		_check_death(target_pawn)
+		_check_death(target_pawn, _get_name(pawn))
 		return
 	
 	# --- L'échange : assaut, riposte, et second coup du plus rapide ---
@@ -155,10 +155,13 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 		_award_support_points(target_pawn)
 
 	# --- Morts ---
+	# Le tueur est nommé : c'est l'autre bout de l'échange qu'on vient de résoudre,
+	# et personne d'autre ne le saura après coup. Le bilan détaillé
+	# ([BattleReport]) en fait sa colonne « Kills ».
 	if defender_fell:
-		_check_death(target_pawn)
+		_check_death(target_pawn, attacker_name)
 	if attacker_fell:
-		_check_death(pawn)
+		_check_death(pawn, defender_name)
 
 
 ## Les coups portés par un camp, mis en images ([BattleVFX] s'occupe du reste).
@@ -255,7 +258,9 @@ func _resolve_heal(healer: TacticsPawn, target: TacticsPawn) -> void:
 
 
 ## Handle a pawn's death — remove from scene after a brief delay
-func _check_death(p: TacticsPawn) -> void:
+##
+## [param killer] Nom affiché de qui l'a mis à terre, quand on le connaît.
+func _check_death(p: TacticsPawn, killer: String = "") -> void:
 	# Only process if dead
 	if p.is_alive():
 		return
@@ -266,7 +271,7 @@ func _check_death(p: TacticsPawn) -> void:
 	BattleVFX.play_death(p)
 
 	# Journal de bataille : la mort est l'événement le plus utile à Ciel.
-	_record(&"record_death", [_get_name(p), team_name_for_camp(p.get_parent()), ""])
+	_record(&"record_death", [_get_name(p), team_name_for_camp(p.get_parent()), killer])
 
 	# Make invisible and non-interactive
 	p.visible = false

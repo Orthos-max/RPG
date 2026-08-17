@@ -58,6 +58,18 @@ var _deploying: bool = false
 ## unité qui disparaît laisse son dernier état, PV à zéro compris.
 var _last_seen: Dictionary = {}
 
+## Qui a pris part à la bataille, `nom affiché` → `{"team": …, "class_id": …}`.
+##
+## Le journal de [BattleRecorder] ne connaît que des noms ; le bilan détaillé
+## ([BattleReport]) veut aussi la classe et le camp de chacun — et la liste
+## complète des combattants, car une unité qui n'a ni frappé ni été frappée
+## mérite quand même sa ligne au bilan.
+##
+## Relevé à chaque frame, et pour tous les camps, exactement pour la raison qui
+## vaut à [member _last_seen] de l'être : un pion tombé quitte la scène une
+## demi-seconde après sa chute, et le bilan ne se prend qu'à la fin du chapitre.
+var _combatants: Dictionary = {}
+
 ## État de chaque unité à son entrée en lice, `id` → instantané.
 ##
 ## Le pendant de [member _last_seen] au premier instant : sans ce point de
@@ -90,6 +102,7 @@ func _process(delta: float) -> void:
 	# d'évaluation. Retenir au même rythme que ce délai, c'est jouer à pile ou
 	# face sur chaque mort.
 	_remember_player_units()
+	_remember_combatants()
 	_count_turns()
 
 	_accum += delta
@@ -187,6 +200,33 @@ func battle_summary() -> Dictionary:
 	summary["turns"] = turn
 	summary["exp_gained"] = _exp_gained()
 	return summary
+
+
+## Roster de la bataille, pour le bilan détaillé de [BattleReport].
+##
+## À appeler **avant** de décharger le niveau, comme [method battle_summary] :
+## les unités encore en scène s'y ajoutent au passage.
+func battle_roster() -> Dictionary:
+	_remember_combatants()
+	return _combatants.duplicate(true)
+
+
+## Retient le camp et la classe de chaque pion encore en scène, tous camps confondus.
+func _remember_combatants() -> void:
+	if not level or not is_instance_valid(level):
+		return
+	for camp: Node3D in level.camps:
+		if not is_instance_valid(camp):
+			continue
+		var team: String = TacticsPawnCombatService.team_name_for_camp(camp)
+		for p in camp.get_children():
+			if not (p is TacticsPawn) or not is_instance_valid(p) or not p.stats:
+				continue
+			if p.is_queued_for_deletion():
+				continue
+			_combatants[EXECUTOR.display_name(p)] = {
+				"team": team, "class_id": int(p.stats.character_class),
+			}
 
 
 ## XP accumulée par l'ensemble du camp depuis le début de la bataille.
@@ -650,8 +690,10 @@ func _start_deployment() -> void:
 		# le roster n'a pas retenus, ceux d'avant le déploiement — n'a rien à
 		# faire dans la mémoire des morts : ils n'ont pas combattu.
 		_last_seen.clear()
-		# Ni dans le bilan : l'XP se compte à partir d'ici.
-		_exp_baseline.clear())
+		# Ni dans le bilan : l'XP se compte à partir d'ici, et le bilan détaillé
+		# ne doit lister que les unités réellement entrées en lice.
+		_exp_baseline.clear()
+		_combatants.clear())
 	_deploying = true
 	add_child(phase)
 

@@ -24,6 +24,7 @@ const CharStats = preload("res://data/modules/stats/stats.gd")
 const Calc = preload("res://data/services/combat/fe_combat.gd")
 const SPLIT = preload("res://data/models/world/combat/team/army_split.gd")
 const HISTORY = preload("res://data/modules/ui/battle_history.gd")
+const REPORT = preload("res://data/modules/ui/battle_report.gd")
 const SPEED = preload("res://data/modules/ui/battle_speed.gd")
 const BattleLogRef = preload("res://data/services/combat/battle_log.gd")
 
@@ -65,6 +66,7 @@ func _init() -> void:
 	_test_path_field()
 	_test_traversal_rules()
 	_test_charter()
+	_test_battle_report()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -3315,4 +3317,120 @@ func _test_battle_summary() -> void:
 		clean_labels.append(str(row[0]))
 	_check("Ennemis vaincus" in clean_labels and "Alliés tombés" in clean_labels,
 		"les deux lignes existent même à zéro", str(clean_labels))
+#endregion
+
+
+#region 26. Le bilan détaillé, unité par unité
+## Le bilan de fin de chapitre donnait des totaux d'armée : tant de dégâts, tant
+## d'ennemis vaincus. Il ne disait pas par qui — la seule question qui décide du
+## déploiement suivant. [BattleReport] relit le même journal, mais nom par nom.
+func _test_battle_report() -> void:
+	print("📊 Test 26: le bilan détaillé, unité par unité")
+
+	var events: Array = [
+		{"kind_name": "turn_start", "team": "player", "turn": 1},
+		{"kind_name": "attack", "attacker": "Elyan", "defender": "Brigand",
+			"damage": 12, "hit": true, "crit": true},
+		{"kind_name": "attack", "attacker": "Brigand", "defender": "Elyan",
+			"damage": 5, "hit": true, "crit": false},
+		# Un coup manqué : le journal en note quand même les dégâts espérés, et
+		# les compter serait annoncer des dégâts jamais portés.
+		{"kind_name": "attack", "attacker": "Elyan", "defender": "Brigand",
+			"damage": 11, "hit": false, "crit": false},
+		{"kind_name": "heal", "healer": "Lyra", "target": "Elyan", "amount": 8,
+			"target_hp": 30},
+		{"kind_name": "attack", "attacker": "Garde", "defender": "Brigand",
+			"damage": 9, "hit": true, "crit": false},
+		{"kind_name": "death", "pawn": "Brigand", "team": "opponent", "killer": "Garde"},
+		{"kind_name": "attack", "attacker": "Archer", "defender": "Lyra",
+			"damage": 7, "hit": true, "crit": false},
+		# Mort sans tueur nommé (replay d'avant que le journal l'écrive) : c'est le
+		# dernier coup porté qui doit la désigner.
+		{"kind_name": "death", "pawn": "Lyra", "team": "player", "killer": ""},
+	]
+	var roster: Dictionary = {
+		"Elyan": {"team": "player", "class_id": CDB.Id.LORD},
+		"Lyra": {"team": "player", "class_id": CDB.Id.CLERIC},
+		"Garde": {"team": "player", "class_id": CDB.Id.KNIGHT},
+		# Entrée en lice sans donner ni recevoir un coup : elle a droit à sa ligne.
+		"Renfort": {"team": "player", "class_id": CDB.Id.CAVALIER},
+		"Brigand": {"team": "opponent", "class_id": CDB.Id.BRIGAND},
+		"Archer": {"team": "opponent", "class_id": CDB.Id.ARCHER},
+	}
+
+	var lines: Array = REPORT.aggregate(events, roster)
+	var by_name: Dictionary = {}
+	for line: Dictionary in lines:
+		by_name[str(line["name"])] = line
+
+	_check(lines.size() == 6, "une ligne par unité, y compris celle qui n'a rien fait",
+		str(lines.size()))
+
+	# --- Les totaux, unité par unité ---
+	var elyan: Dictionary = by_name.get("Elyan", {})
+	_check(int(elyan.get("damage_dealt", -1)) == 12,
+		"les dégâts d'Elyan ignorent son coup manqué", str(elyan.get("damage_dealt")))
+	_check(int(elyan.get("damage_taken", -1)) == 5, "Elyan a encaissé 5",
+		str(elyan.get("damage_taken")))
+	_check(int(elyan.get("healing_received", -1)) == 8, "Elyan a reçu 8 PV de soin",
+		str(elyan.get("healing_received")))
+	_check(int(elyan.get("attacks_made", 0)) == 2 and int(elyan.get("hits", 0)) == 1
+			and int(elyan.get("misses", 0)) == 1 and int(elyan.get("crits", 0)) == 1,
+		"deux assauts d'Elyan : un critique, un dans le vide")
+
+	var lyra: Dictionary = by_name.get("Lyra", {})
+	_check(int(lyra.get("healing_done", -1)) == 8 and int(lyra.get("healing_received", -1)) == 0,
+		"le soin compte pour qui le prodigue, pas pour qui le donne et le reçoit")
+	_check(int(lyra.get("deaths", 0)) == 1 and not bool(lyra.get("alive", true)),
+		"Lyra est tombée")
+
+	var brigand: Dictionary = by_name.get("Brigand", {})
+	_check(int(brigand.get("damage_taken", -1)) == 21,
+		"le brigand a encaissé 12 + 9", str(brigand.get("damage_taken")))
+	_check(int(brigand.get("attacks_taken", 0)) == 3,
+		"les trois assauts subis sont comptés, manqué compris",
+		str(brigand.get("attacks_taken")))
+
+	# --- Les kills, nommés ou déduits ---
+	_check(int(by_name.get("Garde", {}).get("kills", 0)) == 1,
+		"le tueur nommé par le journal touche son kill")
+	_check(int(by_name.get("Archer", {}).get("kills", 0)) == 1,
+		"sans tueur nommé, le dernier coup porté désigne le kill")
+	_check(int(elyan.get("kills", 0)) == 0,
+		"celui qui a entamé le brigand ne récolte pas le kill d'un autre")
+
+	var renfort: Dictionary = by_name.get("Renfort", {})
+	_check(int(renfort.get("damage_dealt", -1)) == 0 and bool(renfort.get("alive", false)),
+		"l'unité restée en retrait figure au bilan, à zéro")
+
+	# --- Le tri : les alliés d'abord, puis du plus au moins de dégâts ---
+	var order: Array = []
+	for line: Dictionary in lines:
+		order.append(str(line["name"]))
+	_check(order == ["Elyan", "Garde", "Lyra", "Renfort", "Archer", "Brigand"],
+		"les alliés d'abord, chaque camp trié par dégâts infligés", str(order))
+
+	# --- Les libellés ---
+	_check(REPORT.headers().size() == REPORT.row(elyan).size(),
+		"autant de cases que d'en-têtes")
+	_check(REPORT.row(elyan) == ["Elyan", "Lord", "12", "5", "0 (+8 reçus)", "0", "En vie"],
+		"la ligne d'Elyan se lit telle quelle", str(REPORT.row(elyan)))
+	_check(REPORT.row(lyra)[4] == "8" and REPORT.row(lyra)[6] == "Tombé",
+		"la soigneuse affiche ses soins, et son statut la dit tombée",
+		str(REPORT.row(lyra)))
+	_check(str(by_name.get("Brigand", {}).get("class_name", "")) == "Brigand",
+		"la classe vient du roster de bataille, pas du journal")
+
+	# --- Sans roster : le camp se déduit des morts, la classe reste inconnue ---
+	var bare: Array = REPORT.aggregate(events)
+	var bare_by_name: Dictionary = {}
+	for line: Dictionary in bare:
+		bare_by_name[str(line["name"])] = line
+	_check(str(bare_by_name.get("Lyra", {}).get("team", "")) == "player"
+			and str(bare_by_name.get("Brigand", {}).get("team", "")) == "opponent",
+		"le camp d'une unité tombée se lit dans sa mort")
+	_check(str(bare_by_name.get("Elyan", {}).get("class_name", "")) == REPORT.UNKNOWN_CLASS,
+		"une classe qu'aucun roster ne donne s'affiche en tiret")
+	_check(REPORT.aggregate([]).is_empty(),
+		"un journal vide ne rend aucune ligne")
 #endregion

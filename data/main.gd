@@ -17,6 +17,7 @@ const NetMirrorClass = preload("res://data/modules/net/net_mirror.gd")
 const ScreenFaderClass = preload("res://data/modules/ui/fader.gd")
 const MinimapClass = preload("res://data/modules/ui/minimap.gd")
 const BattleHistoryClass = preload("res://data/modules/ui/battle_history.gd")
+const BattleReportClass = preload("res://data/modules/ui/battle_report.gd")
 const BattleSpeedClass = preload("res://data/modules/ui/battle_speed.gd")
 const ThreatRangeClass = preload("res://data/modules/ui/threat_range.gd")
 const EnemyPeekClass = preload("res://data/modules/ui/enemy_peek.gd")
@@ -437,6 +438,9 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 	# Le bilan se prend **avant** tout déchargement : il compte les unités encore
 	# en scène et l'XP qu'elles ont gagnée depuis leur entrée en lice.
 	var summary: Dictionary = _runner.battle_summary() if _runner else BattleStats.empty()
+	# Le détail unité par unité se relève au même instant, et pour la même raison :
+	# le roster de bataille est dans la scène, l'écran de fin viendra après.
+	var report: Array = _build_battle_report()
 
 	# Une carte d'essai ne touche pas à la campagne : ni XP, ni or, ni progression.
 	if _custom_map:
@@ -446,7 +450,7 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 			"⚔️ Victoire — %s" % document.name if victory else "💀 Défaite — %s" % document.name,
 			"%s\n\nCarte d'essai : rien n'a été reporté dans ta campagne." % reason,
 			func() -> void: show_editor(document),
-			BattleStats.rows(summary))
+			BattleStats.rows(summary), _report_buttons(report))
 		return
 
 	var campaign: Node = _campaign()
@@ -485,7 +489,7 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 		_show_message("⚔️ Victoire — %s" % chapter_title,
 			"%s\n\n%s\n\nObjectifs secondaires :\n%s" % [
 				reason, outro, "\n".join(lines)
-			], show_prep, BattleStats.rows(summary))
+			], show_prep, BattleStats.rows(summary), _report_buttons(report))
 	else:
 		# Défaite : pas un sou de plus, mais la bourse reste affichée — le joueur
 		# retentera le chapitre et voudra savoir avec quoi il repart.
@@ -495,16 +499,56 @@ func _on_chapter_finished(victory: bool, bonuses: Array, reason: String) -> void
 		# Recommencer n'est proposé que si l'instantané de début de chapitre est
 		# bien celui de *ce* chapitre : un fichier laissé par une autre partie
 		# renverrait le joueur ailleurs, et « recommencer » deviendrait un piège.
-		var retry: Array = []
+		var extra: Array = _report_buttons(report)
 		if campaign.has_chapter_autosave(campaign.chapter_index):
-			retry.append(["↻ Recommencer le chapitre",
+			extra.append(["↻ Recommencer le chapitre",
 				func() -> void: _transition(_retry_chapter)])
 
 		_show_message("💀 Défaite — %s" % chapter_title,
 			"%s\n\nLes unités tombées le restent si la mort permanente est active.\nTu peux retenter le chapitre." % reason,
-			show_prep, BattleStats.rows(summary), retry)
+			show_prep, BattleStats.rows(summary), extra)
 
 	unload_level()
+
+
+## Bilan détaillé de la bataille, unité par unité ([BattleReport]).
+##
+## À prendre **avant** [method unload_level] : le journal survivrait au niveau
+## (il vit dans l'autoload), mais pas le roster de bataille, qui se lit sur les
+## pions encore en scène.
+func _build_battle_report() -> Array:
+	var recorder: Node = get_node_or_null("/root/BattleRecorder")
+	if not recorder:
+		return []
+	return BattleReportClass.aggregate(recorder.events,
+		_runner.battle_roster() if _runner else {})
+
+
+## Le bouton « Détails de la bataille » de l'écran de fin — aucun si rien à dire.
+##
+## Rendu sous forme de liste pour se brancher tel quel sur le paramètre `extra`
+## de [method _show_message], à côté du « Recommencer » de la défaite.
+func _report_buttons(report: Array) -> Array:
+	if report.is_empty() or not BattleReportClass.available():
+		return []
+	return [["📊 Détails de la bataille", func() -> void: _show_battle_report(report)]]
+
+
+## Ouvre (ou referme) le tableau du bilan détaillé par-dessus l'écran de fin.
+##
+## Le panneau est monté sous l'écran courant, et non sous [Main] : il disparaît
+## donc avec lui au premier changement d'écran, sans qu'on ait à y penser.
+func _show_battle_report(report: Array) -> void:
+	var host: Node = _ui if _ui and is_instance_valid(_ui) else self
+	var existing: Node = host.get_node_or_null("BattleReport")
+	if existing:
+		existing.toggle()
+		return
+
+	var panel: CanvasLayer = BattleReportClass.new()
+	panel.name = "BattleReport"
+	panel.entries = report
+	host.add_child(panel)
 
 
 ## Relance le chapitre en cours tel qu'il a commencé.
