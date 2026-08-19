@@ -1,145 +1,106 @@
 #!/usr/bin/env python3
-"""Fabrique les deux sprites d'un **coffre** posé sur une case.
+"""Coffres pixel art 32x32, palette Velmar (nuit et or).
 
-    python3 art/dessiner-coffres.py
-
-Les cartes portaient du décor ([TacticsDecor]) et des volumes de terrain
-([TacticsProps]) : rien qu'on puisse ramasser. [BattleChests] pose maintenant
-des coffres sur des cases choisies par le chapitre, et il lui faut deux images —
-fermé, puis ouvert, parce qu'un coffre qui disparaît une fois vidé ne dit pas au
-joueur qu'il est passé par là.
-
-## Dessinés, pas découpés
-
-Contrairement au buisson ou aux cailloux de `dessiner-decor.py`, le pack SSCAP
-ne fournit aucun coffre : celui-ci est donc dessiné pixel par pixel, dans la
-palette que ce script-là a relevée sur les tuiles du pack — le bois d'un
-tonneau, le fer de ses cercles — plus l'or du jeu (`Toast.C_GOLD`, `#f5c842`),
-qui est déjà la couleur de tout ce qui se gagne.
-
-## Deux règles héritées de `dessiner-decor.py`
-
-- **Rogné à son contenu** (`getbbox`) : [TacticsChests] pose le sprite par sa
-  base, donc une rangée de pixels transparents sous le coffre le ferait léviter.
-- **La lumière vient du nord-ouest**, comme celle du plateau
-  ([method TacticsScenery.configure_light]) : le dessus des ferrures capte le
-  jour, la face avant reste plus sourde.
+Génère chest.png (fermé) et chest_open.png (ouvert) dans
+assets/textures/chests/. Style : caisse de bois sombre, ferrures dorées,
+couvercle bombé, ombre portée ; ouvert = couvercle relevé + trésor doré.
 """
+from PIL import Image, ImageDraw
 
-from __future__ import annotations
+S = 32  # taille de la texture
 
-import sys
-from pathlib import Path
-
-try:
-    from PIL import Image, ImageDraw
-except ImportError:  # pragma: no cover - dépendance d'atelier, pas de jeu
-    sys.exit("Pillow manquant : python3 -m pip install Pillow")
-
-RACINE = Path(__file__).resolve().parent.parent
-SORTIE = RACINE / "assets" / "textures" / "chests"
-
-## Palette : le bois et le fer de `dessiner-decor.py`, l'or des bandeaux du jeu.
-BOIS_DOUVE = (128, 90, 52, 255)
-BOIS_SOMBRE = (92, 62, 36, 255)
-BOIS_CLAIR = (160, 118, 70, 255)
-FER_CERCLE = (86, 82, 78, 255)
-OR_VIF = (245, 200, 66, 255)
-OR_SOMBRE = (186, 142, 40, 255)
-OR_PALE = (252, 232, 150, 255)
-NOIR_FOND = (38, 26, 18, 255)
+# Palette
+WOOD_DARK = (58, 36, 20)
+WOOD = (78, 49, 26)
+WOOD_LIGHT = (104, 66, 34)
+GOLD = (212, 175, 55)
+GOLD_LIGHT = (245, 230, 163)
+GOLD_DARK = (154, 123, 30)
+BLACK = (12, 10, 8)
+SHADOW = (0, 0, 0, 70)
+INNER = (22, 14, 8)
+COIN = (240, 200, 90)
 
 
-def _neuf(largeur: int, hauteur: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
-    image = Image.new("RGBA", (largeur, hauteur), (0, 0, 0, 0))
-    return image, ImageDraw.Draw(image)
+def shadow(d: ImageDraw.ImageDraw) -> None:
+    """Ombre portée ovale sous le coffre."""
+    for dx in range(6, 26):
+        h = 3 - abs(dx - 15) // 5
+        for dy in range(h):
+            d.point((dx, 30 + dy), fill=SHADOW)
 
 
-def _rogner(image: Image.Image) -> Image.Image:
-    """Le sprite ramené à ses pixels visibles — sa base devient son bas."""
-    boite = image.getbbox()
-    return image.crop(boite) if boite else image
+def closed() -> Image.Image:
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    shadow(d)
+    # Corps de la caisse (8..23 x, 17..28 y)
+    for x in range(8, 24):
+        for y in range(17, 29):
+            base = WOOD if (x - y) % 5 != 0 else WOOD_DARK
+            d.point((x, y), fill=base)
+    # Bords du corps (liseré sombre)
+    d.rectangle([8, 17, 23, 17], fill=BLACK)
+    d.rectangle([8, 28, 23, 28], fill=BLACK)
+    # Couvercle bombé (7..24 x, 9..18 y)
+    for x in range(7, 25):
+        # hauteur du couvercle : plus haut au centre
+        top = 9 + abs(x - 15) // 3
+        for y in range(top, 19):
+            d.point((x, y), fill=WOOD_LIGHT if (x + y) % 4 != 0 else WOOD)
+    d.rectangle([7, 9, 24, 9], fill=WOOD_LIGHT)
+    # Arête du couvercle
+    d.rectangle([7, 18, 24, 18], fill=BLACK)
+    # Ferrures dorées : bande centrale + montants + loquet
+    d.rectangle([7, 20, 24, 21], fill=GOLD)
+    d.rectangle([8, 20, 9, 28], fill=GOLD)
+    d.rectangle([22, 20, 23, 28], fill=GOLD)
+    # Loquet / serrure centrale
+    d.rectangle([13, 22, 18, 26], fill=GOLD_LIGHT)
+    d.rectangle([14, 23, 17, 25], fill=BLACK)
+    d.point((15, 24), fill=GOLD_LIGHT)
+    # Rivets dorés sur le couvercle
+    for rx in (9, 12, 15, 18, 21):
+        d.point((rx, 12), fill=GOLD_LIGHT)
+        d.point((rx, 15), fill=GOLD_DARK)
+    return img
 
 
-def _caisse(dessin: ImageDraw.ImageDraw, haut: int) -> None:
-    """Le corps du coffre : deux douves, deux ferrures d'angle, un pied sombre.
-
-    `haut` est la rangée où la face avant commence — le couvercle occupe ce qui
-    est au-dessus, et il n'est pas au même endroit selon que le coffre est
-    ouvert.
-    """
-    dessin.rectangle([2, haut, 13, 15], fill=BOIS_DOUVE)
-    # Les douves : deux traits verticaux suffisent à ce que la face ne se lise
-    # pas comme une planche unique.
-    for x in (6, 10):
-        dessin.line([(x, haut + 1), (x, 14)], fill=BOIS_SOMBRE)
-    # Les ferrures d'angle, et le pied qui pose la caisse au sol.
-    dessin.rectangle([2, haut, 3, 15], fill=FER_CERCLE)
-    dessin.rectangle([12, haut, 13, 15], fill=FER_CERCLE)
-    dessin.line([(2, 15), (13, 15)], fill=NOIR_FOND)
-
-
-def coffre_ferme() -> Image.Image:
-    """Coffre fermé : couvercle bombé, sangle d'or, serrure au milieu."""
-    image, dessin = _neuf(16, 16)
-    _caisse(dessin, 9)
-
-    # Le couvercle : un demi-cylindre posé sur la caisse. C'est le bombement qui
-    # distingue un coffre d'une caisse — une caisse à couvercle plat ne s'ouvre
-    # pas. Il déborde d'un pixel de chaque côté, comme un vrai couvercle.
-    dessin.chord([1, 3, 14, 13], 180, 360, fill=BOIS_CLAIR)
-    dessin.rectangle([1, 8, 14, 9], fill=BOIS_CLAIR)
-    # Le jour vient du nord-ouest : la crête gauche capte la lumière, le bas du
-    # couvercle et sa jointure avec la caisse restent dans l'ombre.
-    dessin.arc([1, 3, 14, 13], 190, 265, fill=OR_PALE)
-    dessin.line([(1, 9), (14, 9)], fill=NOIR_FOND)
-    dessin.line([(1, 8), (1, 9)], fill=BOIS_SOMBRE)
-    dessin.line([(14, 8), (14, 9)], fill=BOIS_SOMBRE)
-
-    # La sangle d'or, du haut du couvercle au pied, et la serrure qu'elle porte.
-    dessin.line([(7, 4), (7, 15)], fill=OR_SOMBRE)
-    dessin.line([(8, 4), (8, 15)], fill=OR_VIF)
-    dessin.rectangle([6, 9, 9, 12], fill=OR_VIF)
-    dessin.rectangle([6, 9, 9, 12], outline=OR_SOMBRE)
-    dessin.point([(7, 11), (8, 11)], fill=NOIR_FOND)
-    return _rogner(image)
+def opened() -> Image.Image:
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    shadow(d)
+    # Couvercle relevé à l'arrière (4..27 x, 4..15 y, en biais)
+    for x in range(4, 28):
+        for y in range(6, 16):
+            d.point((x, y), fill=WOOD_LIGHT if (x + y) % 4 != 0 else WOOD)
+    d.rectangle([4, 6, 27, 6], fill=WOOD_LIGHT)
+    d.rectangle([4, 15, 27, 15], fill=BLACK)
+    # Intérieur de la caisse (8..23 x, 17..28 y)
+    for x in range(8, 24):
+        for y in range(17, 29):
+            d.point((x, y), fill=WOOD_DARK if (x - y) % 5 != 0 else WOOD)
+    d.rectangle([8, 17, 23, 17], fill=BLACK)
+    d.rectangle([8, 28, 23, 28], fill=BLACK)
+    # Cavité sombre (10..21 x, 19..26 y)
+    d.rectangle([10, 19, 21, 26], fill=INNER)
+    # Trésor : pièces dorées
+    for px, py in [(12, 24), (14, 25), (17, 24), (19, 25), (13, 22), (16, 21), (18, 22)]:
+        d.point((px, py), fill=COIN)
+    d.point((14, 23), fill=GOLD_LIGHT)
+    d.point((17, 22), fill=GOLD_LIGHT)
+    # Ferrures dorées sur les bords
+    d.rectangle([8, 19, 9, 27], fill=GOLD)
+    d.rectangle([22, 19, 23, 27], fill=GOLD)
+    d.point((8, 18), fill=GOLD_DARK)
+    d.point((23, 18), fill=GOLD_DARK)
+    return img
 
 
-def coffre_ouvert() -> Image.Image:
-    """Coffre ouvert : couvercle rabattu en arrière, fond vidé de son or.
+import os
 
-    Il reste deux ou trois pièces au fond plutôt qu'un trou noir : à la taille
-    où le joueur le voit, un coffre vide et une caisse renversée se ressemblent
-    trop — et c'est justement le coffre qu'on veut reconnaître de loin, pour ne
-    pas y revenir.
-    """
-    image, dessin = _neuf(16, 16)
-    _caisse(dessin, 9)
-
-    # Le couvercle rabattu : il pivote sur la charnière (l'arête haute de la
-    # caisse) et part vers l'arrière, donc vers le haut de l'image sous cette
-    # caméra. Trapèze plutôt que rectangle : c'est la fuite qui dit qu'il est
-    # couché et non dressé.
-    dessin.polygon([(2, 8), (13, 8), (11, 3), (4, 3)], fill=BOIS_SOMBRE)
-    dessin.line([(4, 3), (11, 3)], fill=BOIS_CLAIR)
-    dessin.line([(2, 8), (13, 8)], fill=FER_CERCLE)
-
-    # L'intérieur béant, sous la charnière, et ce qu'il en reste au fond.
-    dessin.rectangle([3, 9, 12, 11], fill=NOIR_FOND)
-    dessin.point([(5, 10), (9, 10), (11, 11)], fill=OR_SOMBRE)
-    dessin.point([(6, 11), (10, 10)], fill=OR_VIF)
-    return _rogner(image)
-
-
-def main() -> int:
-    SORTIE.mkdir(parents=True, exist_ok=True)
-    for nom, fabrique in (("chest", coffre_ferme), ("chest_open", coffre_ouvert)):
-        image = fabrique()
-        image.save(SORTIE / f"{nom}.png")
-        print(f"  ✓ {nom}.png  ({image.width}×{image.height})")
-    print(f"Coffres écrits dans {SORTIE.relative_to(RACINE)}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "textures", "chests")
+os.makedirs(OUT, exist_ok=True)
+closed().save(os.path.join(OUT, "chest.png"))
+opened().save(os.path.join(OUT, "chest_open.png"))
+print("textures 32x32 générées dans", os.path.abspath(OUT))
