@@ -31,9 +31,8 @@ const HOST_NAME: StringName = &"Chests"
 ## Dossier des sprites, produits par `art/dessiner-coffres.py`.
 const CHEST_DIR: String = "res://assets/textures/chests/"
 
-## Sprite d'un coffre fermé, puis ouvert.
+## Sprite d'un coffre (fermé). Un coffre ouvert n'a pas de sprite : il disparaît.
 const CLOSED: String = "chest"
-const OPENED: String = "chest_open"
 
 ## Hauteur du coffre au sol, en unités monde (pour une case de 1).
 ##
@@ -81,12 +80,14 @@ static func place(arena: Node3D, chests: BattleChests) -> void:
 	arena.add_child(root)
 
 	for cell: Vector2i in chests.cells():
+		if not chests.is_closed(cell):
+			continue  # Un coffre ouvert n'a pas de sprite : il a disparu.
 		var tile: Node3D = TacticsGrid.find_tile(arena, cell.x, cell.y)
 		if not tile:
 			push_warning("[TacticsChests] Coffre en (%d, %d) : la carte n'a pas cette case."
 				% [cell.x, cell.y])
 			continue
-		var sprite: Sprite3D = _sprite(chests.is_closed(cell))
+		var sprite: Sprite3D = _sprite()
 		if not sprite:
 			return  # Texture absente : aucun coffre ne se posera, inutile d'insister.
 		sprite.name = "Chest_%d_%d" % [cell.x, cell.y]
@@ -96,7 +97,8 @@ static func place(arena: Node3D, chests: BattleChests) -> void:
 		_sprites[cell] = sprite
 
 
-## Fait passer le coffre d'une case à l'état ouvert.
+## Fait disparaître le coffre d'une case : il n'y a pas de visuel « ouvert »,
+## le coffre s'évanouit quand on le ramasse.
 ##
 ## Sans effet si aucun sprite n'a été posé là — le cas de tous les tests et de
 ## tout lancement `--headless`.
@@ -104,15 +106,9 @@ static func mark_opened(cell: Vector2i) -> void:
 	var sprite: Variant = _sprites.get(cell)
 	if not (sprite is Sprite3D) or not is_instance_valid(sprite as Sprite3D):
 		return
-	var opened: Texture2D = chest_texture(OPENED)
-	if not opened:
-		return
 	var node: Sprite3D = sprite as Sprite3D
-	node.texture = opened
-	# La texture ouverte n'a pas la même hauteur que la fermée : sans ce report,
-	# le coffre changerait de taille et de niveau en s'ouvrant.
-	node.pixel_size = HEIGHT / float(opened.get_height())
-	node.offset = Vector2(0.0, opened.get_height() / 2.0)
+	node.visible = false
+	_sprites.erase(cell)
 
 
 ## Oublie les coffres du plateau précédent.
@@ -126,8 +122,8 @@ static func clear() -> void:
 
 #region Internes
 ## Le sprite d'un coffre, ou `null` si sa texture manque du disque.
-static func _sprite(closed: bool) -> Sprite3D:
-	var texture: Texture2D = chest_texture(CLOSED if closed else OPENED)
+static func _sprite() -> Sprite3D:
+	var texture: Texture2D = chest_texture(CLOSED)
 	if not texture or texture.get_height() <= 0:
 		return null
 

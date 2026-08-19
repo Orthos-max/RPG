@@ -67,33 +67,11 @@ def closed() -> Image.Image:
 
 
 def opened() -> Image.Image:
+    """Inutilisé depuis la simplification (le coffre ouvert disparaît),
+    conservé pour mémoire : c'était le sprite « ouvert » 32x32."""
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     shadow(d)
-    # Couvercle relevé à l'arrière (4..27 x, 4..15 y, en biais)
-    for x in range(4, 28):
-        for y in range(6, 16):
-            d.point((x, y), fill=WOOD_LIGHT if (x + y) % 4 != 0 else WOOD)
-    d.rectangle([4, 6, 27, 6], fill=WOOD_LIGHT)
-    d.rectangle([4, 15, 27, 15], fill=BLACK)
-    # Intérieur de la caisse (8..23 x, 17..28 y)
-    for x in range(8, 24):
-        for y in range(17, 29):
-            d.point((x, y), fill=WOOD_DARK if (x - y) % 5 != 0 else WOOD)
-    d.rectangle([8, 17, 23, 17], fill=BLACK)
-    d.rectangle([8, 28, 23, 28], fill=BLACK)
-    # Cavité sombre (10..21 x, 19..26 y)
-    d.rectangle([10, 19, 21, 26], fill=INNER)
-    # Trésor : pièces dorées
-    for px, py in [(12, 24), (14, 25), (17, 24), (19, 25), (13, 22), (16, 21), (18, 22)]:
-        d.point((px, py), fill=COIN)
-    d.point((14, 23), fill=GOLD_LIGHT)
-    d.point((17, 22), fill=GOLD_LIGHT)
-    # Ferrures dorées sur les bords
-    d.rectangle([8, 19, 9, 27], fill=GOLD)
-    d.rectangle([22, 19, 23, 27], fill=GOLD)
-    d.point((8, 18), fill=GOLD_DARK)
-    d.point((23, 18), fill=GOLD_DARK)
     return img
 
 
@@ -102,5 +80,4 @@ import os
 OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "textures", "chests")
 os.makedirs(OUT, exist_ok=True)
 closed().save(os.path.join(OUT, "chest.png"))
-opened().save(os.path.join(OUT, "chest_open.png"))
 print("textures 32x32 générées dans", os.path.abspath(OUT))
