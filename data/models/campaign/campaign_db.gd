@@ -46,6 +46,14 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 3,
 		"reward_gold": 300,
 		"recommended_level": 1,
+		# Deux détours et un pont : le corridor de l'est (12, 5), la rive
+		# sud-ouest qu'on n'atteint qu'en traversant (3, 8), et le fortin que les
+		# morts-vivants gardent (11, 8).
+		"chests": [
+			{"col": 12, "row": 5, "gold": 80},
+			{"col": 3, "row": 8, "gold": 100},
+			{"col": 11, "row": 8, "item": "Vulnerary"},
+		],
 	},
 	{
 		"id": "ch02",
@@ -71,6 +79,14 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 4,
 		"reward_gold": 450,
 		"recommended_level": 4,
+		# Le hameau du nord (3, 1) se prend en chemin ; les ruines (8, 10) sont
+		# l'autre passage sous le rempart, celui que la porte fait oublier ; le
+		# fortin (0, 15) est planté au milieu du camp de Garrick.
+		"chests": [
+			{"col": 3, "row": 1, "gold": 70},
+			{"col": 8, "row": 10, "item": "Concoction"},
+			{"col": 0, "row": 15, "gold": 120},
+		],
 	},
 	{
 		"id": "ch03",
@@ -93,6 +109,14 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 4,
 		"reward_gold": 600,
 		"recommended_level": 7,
+		# Deux coffres dans la cour même (5, 3) et (10, 6) — on tient le siège, on
+		# a le temps de les ouvrir. Le troisième est au hameau (2, 6), dehors :
+		# huit tours à survivre, et il faut sortir pour l'avoir.
+		"chests": [
+			{"col": 5, "row": 3, "gold": 90},
+			{"col": 10, "row": 6, "item": "Vulnerary"},
+			{"col": 2, "row": 6, "gold": 110},
+		],
 	},
 	{
 		"id": "ch04",
@@ -122,6 +146,15 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 5,
 		"reward_gold": 700,
 		"recommended_level": 10,
+		# Le camp est à l'est, le poste à prendre à l'ouest : deux des trois
+		# coffres sont de l'autre côté de la rivière, au hameau du nord (2, 1) et
+		# dans l'angle sud-ouest (1, 9). Le troisième (13, 8) est du bon côté,
+		# mais en contrebas du camp : il coûte le tour d'un traînard.
+		"chests": [
+			{"col": 13, "row": 8, "gold": 90},
+			{"col": 2, "row": 1, "gold": 130},
+			{"col": 1, "row": 9, "item": "Concoction"},
+		],
 	},
 	{
 		"id": "ch05",
@@ -150,6 +183,15 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 5,
 		"reward_gold": 900,
 		"recommended_level": 13,
+		# Un coffre par salle, du seuil au sanctuaire : les ruines de la première
+		# (1, 1), le renfoncement nord de la deuxième (9, 1), et le fond de la
+		# troisième (12, 10), à un pas de la porte — celui-là, on le paie d'un
+		# tour de plus sous les yeux du gardien.
+		"chests": [
+			{"col": 1, "row": 1, "gold": 80},
+			{"col": 9, "row": 1, "item": "Elixir"},
+			{"col": 12, "row": 10, "gold": 150},
+		],
 	},
 	{
 		"id": "ch06",
@@ -182,6 +224,15 @@ const CHAPTERS: Array[Dictionary] = [
 		"deploy_slots": 5,
 		"reward_gold": 1000,
 		"recommended_level": 15,
+		# Escorter, c'est avancer : les coffres tirent dans le sens de la marche.
+		# (3, 3) se prend au départ sans quitter la colonne, (9, 11) demande un
+		# détour par le bord sud, et (14, 9) attend sur la crête même — celui-là,
+		# on l'a en arrivant, ou on ne l'a pas.
+		"chests": [
+			{"col": 3, "row": 3, "gold": 80},
+			{"col": 9, "row": 11, "item": "Vulnerary"},
+			{"col": 14, "row": 9, "gold": 140},
+		],
 	},
 ]
 

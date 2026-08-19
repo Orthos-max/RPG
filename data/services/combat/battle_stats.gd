@@ -67,6 +67,10 @@ static func from_events(events: Array, player_names: Array = []) -> Dictionary:
 					out["enemies_defeated"] = int(out["enemies_defeated"]) + 1
 			"turn_start":
 				out["turns"] = maxi(int(out["turns"]), int(event.get("turn", 0)))
+			"chest":
+				# Seul l'or entre au bilan : un objet est parti dans un sac, pas
+				# dans la bourse, et le report de fin de chapitre le suivra là.
+				out["gold_gained"] = int(out["gold_gained"]) + int(event.get("gold", 0))
 
 	return out
 

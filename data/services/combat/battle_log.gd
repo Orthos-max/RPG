@@ -25,6 +25,7 @@ enum Kind {
 	PROMOTION = 6,
 	COMMAND_REJECTED = 7,
 	OBJECTIVE = 8,
+	CHEST = 9,
 }
 
 ## Tous les événements de la partie courante
@@ -94,6 +95,18 @@ func record_death(pawn: String, team: String, killer: String = "") -> void:
 	record(Kind.DEATH, {"pawn": pawn, "team": team, "killer": killer})
 
 
+## Un coffre vidé — l'or et l'objet passent par ici, et nulle part ailleurs.
+##
+## Le bandeau ([Toast]), la ligne d'historique ([BattleHistory]) et l'or du bilan
+## ([BattleStats]) se déduisent tous de cet événement : [BattleChests] verse la
+## récompense, le journal la raconte. Une seule source, donc jamais deux comptes
+## qui divergent.
+func record_chest(pawn: String, col: int, row: int, gold: int, item: String) -> void:
+	record(Kind.CHEST, {
+		"pawn": pawn, "cell": {"col": col, "row": row}, "gold": gold, "item": item,
+	})
+
+
 func record_rejected_command(action: String, code: int, reason: String) -> void:
 	record(Kind.COMMAND_REJECTED, {"action": action, "code": code, "reason": reason})
 
@@ -147,4 +160,5 @@ static func kind_name(kind: int) -> String:
 		Kind.PROMOTION: return "promotion"
 		Kind.COMMAND_REJECTED: return "command_rejected"
 		Kind.OBJECTIVE: return "objective"
+		Kind.CHEST: return "chest"
 		_: return "event"

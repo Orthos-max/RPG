@@ -90,6 +90,7 @@ func _ready() -> void:
 	_apply_roster()
 	await _apply_deployment_tiles()
 	_mark_seize_point()
+	_arm_chests()
 	_start_deployment()
 
 
@@ -314,6 +315,27 @@ func _mark_seize_point() -> void:
 		return
 	_seize_tile.seize_point = true
 	print_rich("[color=yellow]⚑ Point de commandement : case (%d, %d)[/color]" % [target.x, target.y])
+
+
+## Arme les coffres du chapitre, puis les pose sur le plateau.
+##
+## Deux gestes et deux responsables : [BattleChests] tient la règle — où sont les
+## coffres, ce qu'ils contiennent, lesquels sont ouverts — et [TacticsChests] ne
+## fait qu'en montrer l'état. Le partage est celui de [BattleGrid] et des tuiles.
+##
+## Ici, et pas dans [TacticsLevel] : un coffre appartient au **chapitre**, pas à
+## la carte, qui est partagée. Une escarmouche sur la même scène ne doit rien
+## trouver par terre.
+##
+## Après [method _mark_seize_point] et avant le déploiement : les tuiles sont
+## posées (le sprite a besoin du dessus de sa case), et le joueur voit les
+## coffres pendant qu'il choisit où entrer en lice.
+func _arm_chests() -> void:
+	var chests: BattleChests = BattleChests.arm(chapter.chests if chapter else [])
+	if level and level.arena:
+		TacticsChests.place(level.arena, chests)
+	if chests.closed_count() > 0:
+		print_rich("[color=yellow]🧰 %d coffre(s) sur la carte[/color]" % chests.closed_count())
 
 
 ## Un tour complet = les deux camps ont épuisé leurs actions (le niveau les réinitialise).

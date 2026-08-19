@@ -698,6 +698,14 @@ func unload_level() -> void:
 	# aucune — c'est ce que `BattleGrid.current` doit dire.
 	BattleGrid.current = null
 
+	# Les coffres suivent la même règle, et pour la même raison : leurs sprites
+	# meurent avec l'arène, et « ce coffre est-il ouvert ? » n'a plus de sens hors
+	# bataille. C'est aussi ce qui repose les coffres fermés quand on recommence
+	# un chapitre après une défaite — l'or de la bataille perdue est reparti avec
+	# l'instantané de début de chapitre.
+	BattleChests.current = null
+	TacticsChests.clear()
+
 
 func _enable_3d_camera(enabled: bool) -> void:
 	var cam: Node = get_node_or_null("Camera/TacticsCamera")

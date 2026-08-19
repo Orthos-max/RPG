@@ -127,3 +127,8 @@ func check_movement_completion(pawn: TacticsPawn) -> void:
 	if not pawn.res.can_move:
 		pawn.res.set_moving(false)
 		pawn.character.adjust_to_center(pawn)
+		# Arrivé à destination, le pion ramasse ce qu'il y a sous ses pieds.
+		# Après le recentrage, jamais avant : c'est lui qui fait tomber le pion
+		# sur le centre de sa case, donc lui qui décide de la case que
+		# [method BattleChests.collect] lira.
+		BattleChests.collect(pawn)

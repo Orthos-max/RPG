@@ -71,7 +71,7 @@ static func post(text: String, tint: Color = C_GOLD) -> void:
 ## les tient déjà tous. Un bandeau par déplacement rendrait le plateau illisible.
 static func describe(event: Dictionary) -> String:
 	match str(event.get("kind_name", "")):
-		"level_up", "promotion":
+		"level_up", "promotion", "chest":
 			# La ligne existe déjà, mot pour mot, dans le journal de bataille.
 			return HistoryClass.describe(event)
 		"attack":
@@ -86,7 +86,11 @@ static func describe(event: Dictionary) -> String:
 
 ## Couleur du bandeau, selon ce qu'il annonce.
 static func tint_for(event: Dictionary) -> Color:
-	return C_CRIT if str(event.get("kind_name", "")) == "attack" else C_GOLD
+	match str(event.get("kind_name", "")):
+		"attack": return C_CRIT
+		# Un coffre à objet se lit comme un objet obtenu — même vert qu'à l'achat.
+		"chest": return C_ITEM if not str(event.get("item", "")).is_empty() else C_GOLD
+	return C_GOLD
 
 
 ## Bandeau d'un objet obtenu — achat à l'intendance, ramassage en bataille.

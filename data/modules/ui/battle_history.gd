@@ -19,6 +19,7 @@ extends CanvasLayer
 
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 const ClassDataClass = preload("res://data/models/world/stats/class_data.gd")
+const ChestDataClass = preload("res://data/models/campaign/chest_data.gd")
 
 ## La touche qui ouvre et referme le panneau.
 const TOGGLE_KEY: Key = KEY_H
@@ -99,6 +100,13 @@ static func describe(event: Dictionary) -> String:
 			return "⚑  %s — %s" % [
 				"Victoire" if won else "Défaite", str(event.get("reason", "")),
 			]
+		"chest":
+			var cell: Dictionary = event.get("cell", {})
+			return "🧰  %s ouvre un coffre en (%d, %d) — %s" % [
+				str(event.get("pawn", "?")),
+				int(cell.get("col", -1)), int(cell.get("row", -1)),
+				ChestDataClass.reward_label(event),
+			]
 		"command_rejected":
 			return "⚠  Ordre refusé (%s) : %s" % [
 				str(event.get("action", "?")), str(event.get("reason", "")),
@@ -126,7 +134,7 @@ static func _attack_line(event: Dictionary) -> String:
 ## Couleur d'une ligne, selon ce qu'elle raconte.
 static func tint(event: Dictionary) -> Color:
 	match str(event.get("kind_name", "")):
-		"turn_start", "objective", "level_up", "promotion":
+		"turn_start", "objective", "level_up", "promotion", "chest":
 			return C_GOLD
 		"death":
 			return C_ACCENT

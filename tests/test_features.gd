@@ -27,6 +27,8 @@ const HISTORY = preload("res://data/modules/ui/battle_history.gd")
 const REPORT = preload("res://data/modules/ui/battle_report.gd")
 const SPEED = preload("res://data/modules/ui/battle_speed.gd")
 const BattleLogRef = preload("res://data/services/combat/battle_log.gd")
+const PAWN_SCENE = preload("res://data/modules/tactics/level/pawn/pawn.tscn")
+const EXPERTISE_SCENE = preload("res://data/modules/stats/expertise/expertise.tscn")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -67,6 +69,7 @@ func _init() -> void:
 	_test_traversal_rules()
 	_test_charter()
 	_test_battle_report()
+	await _test_chests()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -3433,4 +3436,314 @@ func _test_battle_report() -> void:
 		"une classe qu'aucun roster ne donne s'affiche en tiret")
 	_check(REPORT.aggregate([]).is_empty(),
 		"un journal vide ne rend aucune ligne")
+#endregion
+
+
+#region 30. Coffres
+## Les coffres : ce qu'un chapitre déclare, ce que le plateau en fait, ce qu'un
+## pion y trouve.
+##
+## Tout se vérifie sans monter la moindre carte : [ChestData] et [BattleChests]
+## ne connaissent que des coordonnées, et [TacticsChests] ne pose rien sans
+## écran. Seul le ramassage a besoin d'un pion — on lui en fabrique un, avec sa
+## case et sa grille, ce qui reste très en deçà d'une bataille.
+func _test_chests() -> void:
+	print("\n🧰 Test 30: coffres")
+
+	_check_chest_declarations()
+	_check_chest_state()
+	await _check_chest_pickup()
+	_check_chest_journal()
+	_check_chapter_chests()
+
+
+## Une déclaration mal formée est écartée, pas corrigée.
+func _check_chest_declarations() -> void:
+	var parsed: Array = ChestData.parse([
+		{"col": 2, "row": 3, "gold": 90},
+		{"col": 4, "row": 1, "item": "vulnerary"},  # la casse ne compte pas
+		{"col": 2, "row": 3, "gold": 500},          # doublon de case
+		{"col": -1, "row": 0, "gold": 50},          # hors carte
+		{"col": 9, "row": 9, "item": "Épée du destin"},  # objet hors catalogue
+		{"col": 8, "row": 8},                       # ni or ni objet
+		{"row": 4, "gold": 10},                     # sans colonne
+		"un coffre",                                # même pas un dictionnaire
+	])
+	_check(parsed.size() == 2, "seules les deux déclarations valides passent (%d)" % parsed.size(),
+		str(parsed))
+	if parsed.size() != 2:
+		return
+
+	_check(parsed[0]["cell"] == Vector2i(2, 3) and int(parsed[0]["gold"]) == 90
+			and str(parsed[0]["item"]).is_empty(),
+		"un coffre à or n'annonce aucun objet", str(parsed[0]))
+	_check(str(parsed[1]["item"]) == "Vulnerary" and int(parsed[1]["gold"]) == 0,
+		"un coffre à objet ne verse pas d'or, et l'objet est celui du catalogue",
+		str(parsed[1]))
+	_check(ChestData.reward_label(parsed[0]) == "+90 or"
+			and ChestData.reward_label(parsed[1]) == ITEMS.label("Vulnerary"),
+		"le libellé dit ce qu'on trouve, dans les mots du catalogue")
+
+
+## L'état d'une bataille : qui est fermé, qui s'ouvre, et une seule fois.
+func _check_chest_state() -> void:
+	var chests: BattleChests = BattleChests.arm([
+		{"col": 1, "row": 1, "gold": 60},
+		{"col": 5, "row": 2, "item": "Concoction"},
+	])
+	_check(BattleChests.current == chests, "les coffres armés deviennent ceux de la bataille")
+	_check(chests.cells().size() == 2 and chests.closed_count() == 2,
+		"deux coffres posés, deux fermés")
+	_check(chests.is_closed(Vector2i(1, 1)) and not chests.is_closed(Vector2i(3, 3)),
+		"une case sans coffre n'est pas « un coffre fermé »")
+	_check(chests.at(Vector2i(3, 3)).is_empty(), "une case sans coffre ne rend rien")
+
+	var first: Dictionary = chests.open_at(Vector2i(1, 1))
+	_check(bool(first["ok"]) and int(first["gold"]) == 60, "le coffre rend ses 60 or", str(first))
+	_check(not chests.is_closed(Vector2i(1, 1)) and chests.closed_count() == 1,
+		"il reste ouvert derrière lui")
+	_check(not bool(chests.open_at(Vector2i(1, 1))["ok"]),
+		"un deuxième passage sur un coffre ouvert ne rend rien")
+	_check(not bool(chests.open_at(Vector2i(7, 7))["ok"]),
+		"une case sans coffre ne rend rien non plus")
+
+	# Sans écran, la pose est un non-événement : c'est ce qui rend tout le reste
+	# vérifiable en `--headless`.
+	TacticsChests.place(null, chests)
+	TacticsChests.mark_opened(Vector2i(1, 1))
+	_ok("la pose et l'ouverture visuelles ne demandent rien à un plateau absent")
+
+
+## Le ramassage, avec un vrai pion sur une vraie case.
+func _check_chest_pickup() -> void:
+	var campaign: Node = root.get_node_or_null("Campaign")
+	if not campaign:
+		_ko("Autoload Campaign", "introuvable")
+		return
+
+	# Une grille 3×1 : trois cases, trois coffres possibles, aucun plateau.
+	var camp := Node3D.new()
+	camp.name = "TacticsPlayer"  # le camp du joueur se lit sur le nom du nœud
+	root.add_child(camp)
+
+	var grid := BattleGrid.new()
+	var tiles: Array[TacticsTile] = []
+	for col: int in 3:
+		var tile := TacticsTile.new()
+		tile.position = Vector3(float(col) - 1.0, 0.0, 0.0)
+		camp.add_child(tile)
+		grid.add_tile(tile, tile.position)
+		tiles.append(tile)
+	BattleGrid.current = grid
+
+	var gold_chest: Vector2i = grid.cell_of(tiles[0])
+	var item_chest: Vector2i = grid.cell_of(tiles[1])
+	var chests: BattleChests = BattleChests.arm([
+		{"col": gold_chest.x, "row": gold_chest.y, "gold": 120},
+		{"col": item_chest.x, "row": item_chest.y, "item": "Vulnerary"},
+	])
+
+	var pawn: TacticsPawn = PAWN_SCENE.instantiate() as TacticsPawn
+	# Le pion lit $Expertise/Stats dans son _ready : l'expertise doit être en
+	# place AVANT que le pion rejoigne l'arbre (pattern de chapter_runner).
+	var expertise: Node = EXPERTISE_SCENE.instantiate()
+	expertise.name = "Expertise"
+	expertise.starting_stats = load("res://data/models/world/stats/hero/lord.tres")
+	pawn.add_child(expertise)
+	camp.add_child(pawn)
+	await create_timer(0.1).timeout
+	# Le pion n'a rien à jouer ici : sans cela, son service tournerait à chaque
+	# frame physique en réclamant l'arène et les contrôles d'une bataille.
+	pawn.set_physics_process(false)
+	if not pawn.stats:
+		_ko("pion de test", "sans fiche de stats")
+		pawn.queue_free()
+		camp.queue_free()
+		BattleGrid.current = null
+		return
+	pawn.stats.curr_health = maxi(1, pawn.stats.curr_health)
+	pawn.stats.items = []
+
+	# --- Coffre à or ---
+	var purse: int = int(campaign.gold)
+	pawn.global_position = tiles[0].position
+	var got: Dictionary = BattleChests.collect(pawn)
+	_check(bool(got["ok"]) and int(got["gold"]) == 120 and got["cell"] == gold_chest,
+		"le pion posé sur un coffre l'ouvre et rend ses 120 or", str(got))
+	_check(int(campaign.gold) == purse + 120,
+		"l'or va à la campagne (%d → %d)" % [purse, int(campaign.gold)])
+	_check(not chests.is_closed(gold_chest), "le coffre reste ouvert derrière lui")
+
+	# --- Deuxième passage : rien ---
+	var again: Dictionary = BattleChests.collect(pawn)
+	_check(not bool(again["ok"]) and int(campaign.gold) == purse + 120,
+		"repasser dessus ne redonne rien", str(again))
+
+	# --- Coffre à objet ---
+	pawn.global_position = tiles[1].position
+	var found: Dictionary = BattleChests.collect(pawn)
+	_check(bool(found["ok"]) and str(found["item"]) == "Vulnerary"
+			and int(found["gold"]) == 0,
+		"le coffre à objet rend son objet et pas un sou", str(found))
+	_check(pawn.stats.items.has("Vulnerary"), "l'objet est entré dans le sac du pion",
+		str(pawn.stats.items))
+	_check(int(campaign.gold) == purse + 120, "et la bourse n'a pas bougé")
+
+	# --- Case nue ---
+	pawn.global_position = tiles[2].position
+	_check(not bool(BattleChests.collect(pawn)["ok"]),
+		"une case sans coffre ne donne rien")
+
+	# --- Sac plein : le coffre reste fermé plutôt que d'avaler l'objet ---
+	var full_cell: Vector2i = grid.cell_of(tiles[2])
+	BattleChests.arm([{"col": full_cell.x, "row": full_cell.y, "item": "Elixir"}])
+	pawn.stats.items = []
+	for _i: int in ITEMS.MAX_ITEMS:
+		pawn.stats.items.append("Vulnerary")
+	var refused: Dictionary = BattleChests.collect(pawn)
+	_check(not bool(refused["ok"]) and not str(refused["reason"]).is_empty()
+			and BattleChests.current.is_closed(full_cell),
+		"sac plein : le coffre attend plutôt que de s'évaporer (%s)" % str(refused["reason"]))
+
+	# --- Le camp du joueur, et lui seul ---
+	var enemy_camp := Node3D.new()
+	enemy_camp.name = "TacticsOpponent"
+	root.add_child(enemy_camp)
+	pawn.reparent(enemy_camp, false)
+	pawn.stats.items = []
+	pawn.global_position = tiles[2].position
+	_check(not bool(BattleChests.collect(pawn)["ok"])
+			and BattleChests.current.is_closed(full_cell),
+		"un pion adverse laisse le coffre fermé")
+
+	pawn.queue_free()
+	enemy_camp.queue_free()
+	camp.queue_free()
+	BattleGrid.current = null
+	BattleChests.current = null
+
+
+## Ce que le journal fait d'un coffre ouvert : une ligne, un bandeau, une ligne
+## de bilan — tous déduits du même événement.
+func _check_chest_journal() -> void:
+	var log := BattleLogRef.new()
+	log.start_battle({})
+	log.record_chest("Elyan", 3, 8, 120, "")
+	log.record_chest("Lyra", 5, 2, 0, "Vulnerary")
+
+	var events: Array = log.events
+	_check(events.size() == 2 and str(events[0]["kind_name"]) == "chest",
+		"le journal connaît le coffre comme un événement à part entière")
+
+	var line: String = HISTORY.describe(events[0])
+	_check(line.contains("Elyan") and line.contains("(3, 8)") and line.contains("+120 or"),
+		"l'historique dit qui, où et combien : « %s »" % line)
+	_check(HISTORY.describe(events[1]).contains(ITEMS.label("Vulnerary")),
+		"un coffre à objet nomme l'objet, dans les mots du catalogue",
+		HISTORY.describe(events[1]))
+
+	# Le bandeau reprend la ligne de l'historique, et se teinte selon la trouvaille.
+	_check(Toast.describe(events[0]) == line, "le bandeau dit exactement la même chose")
+	_check(Toast.tint_for(events[1]) == Toast.C_ITEM
+			and Toast.tint_for(events[0]) == Toast.C_GOLD,
+		"l'objet se lit en vert, l'or en doré")
+
+	var summary: Dictionary = BattleStats.from_events(events, ["Elyan", "Lyra"])
+	_check(int(summary["gold_gained"]) == 120,
+		"seul l'or des coffres entre au bilan (%d)" % int(summary["gold_gained"]))
+
+	log.free()
+
+
+## Chaque coffre déclaré tombe sur une case où un allié peut réellement aller.
+##
+## Un coffre sous un mur, sur le point de commandement ou sous un pion du
+## déploiement serait un trésor injouable : le joueur ne le verrait jamais
+## s'ouvrir, et rien d'autre que ce test ne le lui dirait.
+func _check_chapter_chests() -> void:
+	var total: int = 0
+	for i: int in CAMPAIGN_DB.count():
+		var chapter: ChapterData = CAMPAIGN_DB.get_chapter(i)
+		var declared: Array = ChestData.parse(chapter.chests)
+		_check(declared.size() == chapter.chests.size() and declared.size() >= 2,
+			"%s : %d coffre(s), tous bien formés" % [chapter.id, declared.size()],
+			str(chapter.chests))
+
+		var map: Dictionary = CMAP.read(chapter)
+		var grid_size: Vector2i = map.get("grid_size", Vector2i.ZERO)
+		var seize: Vector2i = OBJ.seize_target(chapter.objective)
+		var occupied: Dictionary = _pawn_cells_of(chapter.scene_path, grid_size)
+
+		for chest: Dictionary in declared:
+			var cell: Vector2i = chest["cell"]
+			var where: String = "%s (%d, %d)" % [chapter.id, cell.x, cell.y]
+			total += 1
+
+			_check(cell.x < grid_size.x and cell.y < grid_size.y,
+				"%s : dans la grille %s" % [where, str(grid_size)])
+			_check(MAP_DATA.is_walkable(CMAP.terrain_at(map, cell)),
+				"%s : sur une case praticable (%s)" % [
+					where, MAP_DATA.type_label(CMAP.terrain_at(map, cell))])
+			_check(not (cell in map.get("starts", [])),
+				"%s : hors des cases de départ" % where)
+			_check(not (cell in map.get("slots", [])),
+				"%s : hors de la zone de déploiement" % where)
+			_check(cell != seize, "%s : pas sur le point de commandement" % where)
+			_check(not occupied.has(cell),
+				"%s : aucune unité n'est posée dessus au déploiement" % where)
+	_check(total >= 12, "la campagne compte %d coffres" % total)
+
+
+## Cases occupées par un pion au chargement d'une carte, lues dans la scène.
+##
+## Sans monter la bataille : la scène empaquetée porte déjà les transformations
+## de chaque instance de `pawn.tscn`, et la grille se déduit de la taille de la
+## carte — c'est la même conversion que [method BattleGrid.coord_at_position],
+## pour une carte centrée sur l'origine.
+func _pawn_cells_of(scene_path: String, grid_size: Vector2i) -> Dictionary:
+	var out: Dictionary = {}
+	var packed: PackedScene = load(scene_path)
+	if packed:
+		_walk_pawns(packed.get_state(), Transform3D(), out, grid_size)
+	return out
+
+
+func _walk_pawns(state: SceneState, prefix: Transform3D, out: Dictionary,
+		grid_size: Vector2i) -> void:
+	if not state:
+		return
+	var locals: Dictionary = {}
+	for i: int in state.get_node_count():
+		var value: Variant = _node_transform(state, i)
+		locals[str(state.get_node_path(i))] = value if value is Transform3D else Transform3D()
+
+	for i: int in state.get_node_count():
+		var nested: PackedScene = state.get_node_instance(i)
+		if not nested:
+			continue
+		var world: Transform3D = prefix * _composed_transform(str(state.get_node_path(i)), locals)
+		if nested.resource_path.ends_with("pawn.tscn"):
+			out[Vector2i(
+				int(round(world.origin.x + float(grid_size.x) / 2.0 - 0.5)),
+				int(round(world.origin.z + float(grid_size.y) / 2.0 - 0.5)))] = true
+		else:
+			_walk_pawns(nested.get_state(), world, out, grid_size)
+
+
+## Transformation d'un nœud dans sa scène, ses parents compris.
+func _composed_transform(path: String, locals: Dictionary) -> Transform3D:
+	var total := Transform3D()
+	var walked: String = ""
+	for part: String in path.split("/"):
+		walked = part if walked.is_empty() else "%s/%s" % [walked, part]
+		total = total * (locals.get(walked, Transform3D()) as Transform3D)
+	return total
+
+
+## La propriété `transform` d'un nœud d'une scène empaquetée, ou `null`.
+func _node_transform(state: SceneState, index: int) -> Variant:
+	for j: int in state.get_node_property_count(index):
+		if str(state.get_node_property_name(index, j)) == "transform":
+			return state.get_node_property_value(index, j)
+	return null
 #endregion

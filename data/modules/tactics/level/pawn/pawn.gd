@@ -129,6 +129,11 @@ func reset_turn() -> void:
 
 ## Ends the pawn's turn
 func end_pawn_turn() -> void:
+	# Attendre sur un coffre l'ouvre aussi. Un pion peut finir son tour sur une
+	# case sans y être arrivé en marchant — déployé dessus, ou revenu après une
+	# annulation : la fin de mouvement ne suffit donc pas à couvrir le cas. Le
+	# double appel est sans effet, un coffre ouvert ne se rouvre pas.
+	BattleChests.collect(self)
 	res.end_pawn_turn()
 	# Award support points for adjacent allies at end of turn
 	_check_support_adjacency()

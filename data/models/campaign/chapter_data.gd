@@ -40,6 +40,13 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 @export var recruits: Array[String] = []
 ## Or gagné à la victoire
 @export var reward_gold: int = 300
+## Coffres posés sur la carte : `[{col, row, gold}]` ou `[{col, row, item}]`.
+##
+## Ils vivent ici, et non dans le `.tres` de la carte : le terrain est partagé
+## entre les chapitres — et verrouillé par les tests — alors que ce qu'on trouve
+## dessus appartient au chapitre. [ChestData] les nettoie, [BattleChests] les
+## arme au chargement du niveau.
+@export var chests: Array = []
 ## Niveau conseillé (affiché sur l'écran de préparation)
 @export var recommended_level: int = 1
 
@@ -63,6 +70,7 @@ static func from_dict(data: Dictionary) -> ChapterData:
 	c.deploy_tiles = data.get("deploy_tiles", [])
 	c.use_roster = bool(data.get("use_roster", true))
 	c.reward_gold = int(data.get("reward_gold", 300))
+	c.chests = data.get("chests", [])
 	c.recommended_level = int(data.get("recommended_level", 1))
 
 	var lines: Array[String] = []
