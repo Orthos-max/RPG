@@ -338,12 +338,31 @@ func _arm_chests() -> void:
 		print_rich("[color=yellow]🧰 %d coffre(s) sur la carte[/color]" % chests.closed_count())
 
 
-## Un tour complet = les deux camps ont épuisé leurs actions (le niveau les réinitialise).
+## Un tour complet = **tous** les camps ont épuisé leurs actions (le niveau les
+## réinitialise ensuite).
+##
+## Tous, et non le seul duo joueur/adversaire : à trois armées (M5) l'invité joue
+## entre les deux ([member TacticsLevel.camps] donne l'ordre réel), et l'ignorer
+## avançait le compteur alors qu'il lui restait des unités à jouer. Un tour de
+## trop, donc une victoire volée à un objectif « survivre N tours » et un bonus de
+## rapidité faussé. [TurnBanner] consultait déjà les trois ; ce compteur était le
+## dernier à n'en connaître que deux.
+##
+## Passer par `camps` protège au passage d'une carte sans camp rouge : la liste
+## ne contient que les camps réellement montés, là où `level.opponent` valait
+## `null` et faisait échouer [method TacticsParticipant.can_act] sur un `null`.
 func _count_turns() -> void:
 	if not level.participant or not is_instance_valid(level.participant):
 		return
-	var anyone_can_act: bool = level.participant.can_act(level.player) \
-		or level.participant.can_act(level.opponent)
+	if level.camps.is_empty():
+		return  # Niveau pas encore en place : il n'y a pas de tour à compter.
+
+	var anyone_can_act: bool = false
+	for camp: Node3D in level.camps:
+		if is_instance_valid(camp) and level.participant.can_act(camp):
+			anyone_can_act = true
+			break
+
 	if not anyone_can_act:
 		if not _turn_counted:
 			turn += 1

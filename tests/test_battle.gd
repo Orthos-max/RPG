@@ -151,6 +151,8 @@ func _run() -> void:
 				and snapshot["enemy_units"].size() == enemy_pawns,
 			"instantané d'objectif cohérent")
 
+	_check_third_camp_turn(level, runner)
+
 	_check_arena_binding(main, level)
 	await _check_framing(main, level)
 
@@ -238,6 +240,85 @@ func _run() -> void:
 
 	main.queue_free()
 	await physics_frame
+
+
+## Un troisième camp compte comme les deux autres — tour et fin de tour (M5).
+##
+## Deux endroits ne connaissaient que le duo joueur / camp rouge :
+##   - [method ChapterRunner._count_turns] avançait le compteur dès que ces
+##     deux-là avaient fini, alors que l'invité avait encore des unités à jouer —
+##     un tour de trop pour un objectif « survivre N tours » comme pour le bonus
+##     de rapidité ;
+##   - [method CielAI._do_end_turn] clôturait toujours le camp rouge, y compris
+##     quand Ciel jouait l'invité : le camp rouge perdait son tour sans avoir bougé.
+##
+## Aucune carte livrée n'a de troisième armée : on lui en emprunte une au camp
+## rouge, exactement comme [method TacticsLevel._spawn_guest_camp], et on la rend
+## à la fin. **Rien n'attend ici** : une seule frame physique suffirait au niveau
+## pour réinitialiser tous les tours et effacer ce qu'on mesure.
+func _check_third_camp_turn(level: Node, runner: Node) -> void:
+	if not level or not runner or not level.participant or level.camps.is_empty():
+		_ko("Trois camps : niveau prêt", "niveau, arbitre ou camps manquants")
+		return
+
+	var reds: Array = []
+	for p in level.opponent.get_children():
+		if p is TacticsPawn and is_instance_valid(p):
+			reds.append(p)
+	if reds.size() < 2:
+		_ko("Trois camps : deux pions adverses à partager", "%d disponible(s)" % reds.size())
+		return
+
+	var borrowed: TacticsPawn = reds[0]
+	var witness: TacticsPawn = reds[1]
+	var home: Node = borrowed.get_parent()
+
+	var guest := Node3D.new()
+	guest.set_script(load("res://data/modules/tactics/level/participants/opponent/tactics_opponent.gd"))
+	guest.name = TeamData.camp_node_name(TeamData.Side.GUEST)
+	level.participant.add_child(guest)
+	borrowed.reparent(guest, true)
+	level.camps.append(guest)
+
+	# --- Ciel clôt le tour du camp qui joue, pas celui du camp rouge ---
+	var ciel: Node = root.get_node_or_null("CielAI")
+	if ciel:
+		borrowed.reset_turn()
+		witness.reset_turn()
+		ciel._opponent = guest
+		ciel._do_end_turn(level.participant.res)
+		_check(not borrowed.can_act(),
+			"Ciel jouant l'invité clôt le tour de l'invité")
+		_check(witness.can_act(),
+			"et laisse au camp rouge le tour qu'il n'a pas encore joué")
+		ciel._opponent = null
+
+	# --- Le compteur de tours attend l'invité ---
+	for camp: Node3D in [level.player, level.opponent]:
+		for p in camp.get_children():
+			if p is TacticsPawn and is_instance_valid(p):
+				p.end_pawn_turn()
+	borrowed.reset_turn()
+
+	var before: int = runner.turn
+	runner._count_turns()
+	_check(runner.turn == before,
+		"le tour n'avance pas tant que l'invité a une unité à jouer",
+		"tour %d → %d" % [before, runner.turn])
+
+	borrowed.end_pawn_turn()
+	runner._count_turns()
+	_check(runner.turn == before + 1,
+		"il avance dès que les trois camps ont joué",
+		"tour %d → %d" % [before, runner.turn])
+
+	# --- Le pion rentre chez lui, le camp d'emprunt disparaît ---
+	level.camps.erase(guest)
+	borrowed.reparent(home, true)
+	guest.free()
+	for camp: Node3D in level.camps:
+		if is_instance_valid(camp):
+			level.participant.reset_turn(camp)
 
 
 ## Chapitre à « prise de point » : la case existe, elle est marquée, et Ciel la voit.

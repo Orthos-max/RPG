@@ -511,10 +511,23 @@ func _do_end_pawn(pawn: TacticsPawn, pr: TacticsParticipantResource) -> void:
 	_idle_frames = 0
 
 
+## Clôt le tour du camp qui joue.
+##
+## **Le camp qui joue**, et non `level.opponent` : à trois armées (M5), Ciel tient
+## aussi bien le camp rouge que l'invité, et [member _opponent] est précisément le
+## camp que [method handle_opponent_turn] vient de recevoir — c'est déjà lui que
+## lisent [method acting_side] et le repli sur l'IA locale. Clore le tour du camp
+## rouge pendant que l'invité jouait lui volait son tour : ses pions étaient
+## déclarés joués sans avoir bougé, tandis que l'invité, lui, gardait la main.
 func _do_end_turn(pr: TacticsParticipantResource) -> void:
-	var level: TacticsLevel = _resolve_level()
-	if level and level.opponent and is_instance_valid(level.opponent):
-		for p in level.opponent.get_children():
+	var camp: Node = _opponent if _opponent and is_instance_valid(_opponent) else null
+	if not camp:
+		# Hors tour (commande globale, arrêt) : le camp rouge reste le défaut.
+		var level: TacticsLevel = _resolve_level()
+		if level and level.opponent and is_instance_valid(level.opponent):
+			camp = level.opponent
+	if camp:
+		for p in camp.get_children():
 			if p is TacticsPawn and is_instance_valid(p):
 				p.end_pawn_turn()
 	pr.stage = pr.STAGE_SELECT_PAWN
