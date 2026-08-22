@@ -527,11 +527,16 @@ func set_active_buffs(buffs: Array) -> void:
 ## Grant EXP to this character. Automatically checks for level up.
 ## [param rng] RNG optionnel : passer un générateur graine fixe rend la montée
 ## de niveau déterministe (utilisé par les tests headless).
-## Returns: { gained_exp, leveled_up, new_level, stat_gains }
+## Returns: { gained_exp, leveled_up, new_level, stat_gains, promoted }
 func gain_exp(amount: int, rng: RandomNumberGenerator = null) -> Dictionary:
 	var gained: int = amount
 	exp += gained
-	
+
+	# `_perform_level_up` promeut d'office quand la classe n'a pas d'embranchement.
+	# Sans photo d'avant, l'appelant ne pouvait pas le savoir : `promoted` restait
+	# faux et l'écran de promotion ne s'affichait jamais.
+	var was_promoted: bool = is_promoted
+
 	var result: Dictionary = {
 		"gained_exp": gained,
 		"leveled_up": false,
@@ -539,7 +544,7 @@ func gain_exp(amount: int, rng: RandomNumberGenerator = null) -> Dictionary:
 		"stat_gains": {},
 		"promoted": false,
 	}
-	
+
 	# Check for level up (may trigger multiple if enough EXP)
 	while EXPCalculator.can_level_up(level, exp):
 		var needed: int = EXPCalculator.exp_for_next_level(level)
@@ -550,8 +555,23 @@ func gain_exp(amount: int, rng: RandomNumberGenerator = null) -> Dictionary:
 		# Merge stat gains across multiple levels
 		for stat in gains:
 			result["stat_gains"][stat] = result["stat_gains"].get(stat, 0) + gains[stat]
-	
+
+	result["promoted"] = is_promoted and not was_promoted
 	return result
+
+
+## Les seules statistiques réellement montées, sans les zéros.
+##
+## `stat_gains` liste toutes les statistiques, gagnées ou non ; ce que le joueur
+## veut lire, ce sont les lignes qui bougent. Filtrage ici plutôt que dans
+## chaque affichage.
+static func positive_gains(stat_gains: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for stat: String in stat_gains:
+		var amount: int = int(stat_gains[stat])
+		if amount > 0:
+			out[stat] = amount
+	return out
 
 
 ## Amène l'unité au niveau demandé, en lui faisant gravir les échelons.

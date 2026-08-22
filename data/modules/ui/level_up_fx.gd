@@ -4,8 +4,13 @@ extends CanvasLayer
 ##
 ## Quand une unité monte de niveau ([BattleLog.Kind.LEVEL_UP]) ou est promue
 ## ([BattleLog.Kind.PROMOTION]), un panneau doré apparaît au centre : titre
-## qui rebondit, nom de l'unité, niveau atteint, et une pluie de braises
-## dorées qui montent — dans la même famille que le [TitleBackdrop].
+## qui rebondit, nom de l'unité, niveau atteint, les statistiques gagnées qui
+## s'inscrivent une à une, et une pluie de braises dorées qui montent — dans la
+## même famille que le [TitleBackdrop].
+##
+## Les gains viennent du champ [code]gains[/code] de l'événement, rempli à la
+## source par le service de combat : l'écran ne relance aucun tirage, il lit.
+## Un niveau sans gain (tous les jets ratés) affiche le panneau sans liste.
 ##
 ## L'animation est purement décorative : tout est en [code]mouse_filter =
 ## MOUSE_FILTER_IGNORE[/code], le jeu continue de tourner dessous, et en
@@ -26,8 +31,20 @@ const ENTER: float = 0.55
 const HOLD: float = 1.4
 ## Durée de la sortie (fondu + repli).
 const EXIT: float = 0.45
+## Délai entre deux statistiques gagnées qui s'inscrivent.
+const GAIN_STEP: float = 0.25
+## Durée du fondu d'une ligne de gain (contenue dans [constant GAIN_STEP]).
+const GAIN_FADE: float = 0.18
 
 const ClassDataClass = preload("res://data/models/world/stats/class_data.gd")
+const GlossaryClass = preload("res://data/models/world/stats/stat_glossary.gd")
+
+## Ordre de lecture des gains : les points de vie d'abord, puis les stats
+## réglables dans l'ordre du glossaire. Le joueur les retrouve à la place où la
+## fiche d'unité et l'éditeur les lui montrent déjà.
+## (var et non const : l'addition d'un tableau préchargé n'est pas une
+## expression constante en GDScript.)
+var _gain_order: Array = ["hp"] + GlossaryClass.ORDER
 
 var _queue: Array = []
 var _busy: bool = false
@@ -36,6 +53,7 @@ var _panel: PanelContainer = null
 var _title: Label = null
 var _subtitle: Label = null
 var _detail: Label = null
+var _gains: VBoxContainer = null
 var _particles: CPUParticles2D = null
 
 
@@ -75,6 +93,9 @@ func _build() -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(18)
 	_panel.add_theme_stylebox_override("panel", style)
+	# La liste des gains fait varier la hauteur du panneau d'un niveau à l'autre :
+	# le pivot doit suivre, sinon le rebond part de travers.
+	_panel.resized.connect(_center_pivot)
 	_root.add_child(_panel)
 
 	var column := VBoxContainer.new()
@@ -109,6 +130,13 @@ func _build() -> void:
 	_detail.add_theme_font_size_override("font_size", 16)
 	_detail.add_theme_color_override("font_color", C_GOLD_BRIGHT)
 	column.add_child(_detail)
+
+	_gains = VBoxContainer.new()
+	_gains.name = "Gains"
+	_gains.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gains.alignment = BoxContainer.ALIGNMENT_CENTER
+	_gains.add_theme_constant_override("separation", 2)
+	column.add_child(_gains)
 
 	# Braises dorées qui montent, comme sur l'écran-titre.
 	_particles = CPUParticles2D.new()
@@ -150,6 +178,8 @@ func _listen() -> void:
 
 
 func _on_event(event: Dictionary) -> void:
+	if not _root:  # Headless : rien n'a été construit, on ne joue rien.
+		return
 	match str(event.get("kind_name", "")):
 		"level_up":
 			_queue.append({"promotion": false, "event": event})
@@ -181,6 +211,7 @@ func _show(is_promotion: bool, event: Dictionary) -> void:
 	_title.text = title_text
 	_subtitle.text = pawn
 	_detail.text = detail_text
+	var rows: Array[Label] = _build_gain_rows(event.get("gains", {}))
 
 	# La promotion mérite un peu plus de faste.
 	var gold: Color = C_GOLD_BRIGHT if is_promotion else C_GOLD
@@ -190,7 +221,7 @@ func _show(is_promotion: bool, event: Dictionary) -> void:
 	_particles.amount = 42 if is_promotion else 26
 	_particles.color = gold
 
-	_panel.pivot_offset = _panel.size / 2.0
+	_center_pivot()
 	_panel.scale = Vector2(0.2, 0.2)
 	_panel.modulate.a = 0.0
 	_panel.visible = true
@@ -201,12 +232,55 @@ func _show(is_promotion: bool, event: Dictionary) -> void:
 	tw.tween_property(_panel, "scale", Vector2.ONE, ENTER) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.25)
-	tw.chain().tween_interval(HOLD)
+	tw.chain()
 	tw.set_parallel(false)
+	# Les gains s'inscrivent un par un : le joueur a le temps de les lire, et
+	# une bonne montée de niveau se savoure ligne après ligne.
+	for row: Label in rows:
+		tw.tween_property(row, "modulate:a", 1.0, GAIN_FADE)
+		tw.tween_interval(maxf(0.0, GAIN_STEP - GAIN_FADE))
+	tw.tween_interval(HOLD)
 	tw.tween_property(_panel, "scale", Vector2(1.06, 1.06), EXIT) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(_panel, "modulate:a", 0.0, EXIT)
 	tw.tween_callback(_finish)
+
+
+## Remplit la liste des gains et rend les lignes créées, invisibles pour l'instant.
+##
+## L'ordre suit [constant GAIN_ORDER] plutôt que celui du dictionnaire, et les
+## noms viennent du [StatGlossary] — les mêmes mots que les info-bulles. Sans
+## gain, la liste reste vide et le panneau se resserre.
+func _build_gain_rows(gains: Variant) -> Array[Label]:
+	for old: Node in _gains.get_children():
+		_gains.remove_child(old)
+		old.queue_free()
+
+	var rows: Array[Label] = []
+	if not gains is Dictionary:
+		return rows
+
+	for stat: String in _gain_order:
+		var amount: int = int((gains as Dictionary).get(stat, 0))
+		if amount <= 0:
+			continue
+		var row := Label.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.text = "%s  +%d" % [GlossaryClass.label(stat), amount]
+		row.add_theme_font_size_override("font_size", 15)
+		row.add_theme_color_override("font_color", C_GOLD)
+		row.modulate.a = 0.0
+		_gains.add_child(row)
+		rows.append(row)
+
+	_gains.visible = not rows.is_empty()
+	return rows
+
+
+## Recentre le pivot du panneau sur sa taille courante.
+func _center_pivot() -> void:
+	_panel.pivot_offset = _panel.size / 2.0
 
 
 func _finish() -> void:

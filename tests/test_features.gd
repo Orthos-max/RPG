@@ -3747,3 +3747,87 @@ func _node_transform(state: SceneState, index: int) -> Variant:
 			return state.get_node_property_value(index, j)
 	return null
 #endregion
+
+
+#region 31. Montée de niveau — les gains jusqu'à l'écran
+## Ce que le joueur voit d'une montée de niveau vient d'un seul endroit :
+## l'événement du journal. Le tirage des croissances est consommé au moment du
+## combat ; s'il ne voyage pas avec l'événement, plus personne ne peut le
+## retrouver après coup — ni l'écran doré, ni le replay.
+func _test_level_up_gains() -> void:
+	print("\n⬆️ Test 31: la montée de niveau porte ses gains")
+
+	# --- Les gains bruts se nettoient de leurs zéros ---
+	_check(CharStats.positive_gains({"hp": 1, "str": 0, "spd": 2}) == {"hp": 1, "spd": 2},
+		"seules les statistiques qui montent sont retenues",
+		str(CharStats.positive_gains({"hp": 1, "str": 0, "spd": 2})))
+	_check(CharStats.positive_gains({}).is_empty(),
+		"un niveau sans gain ne produit pas de liste bancale")
+
+	# --- Chaque statistique gagnable a le nom que le glossaire lui donne ---
+	# L'écran nomme les gains avec [StatGlossary] : une stat absente du glossaire
+	# s'afficherait sous sa clé technique (« skl  +1 »), ce que personne ne lit.
+	var unlabelled: Array = []
+	for stat: String in LevelUpFx.new()._gain_order:
+		if not GLOSSARY.has_entry(stat):
+			unlabelled.append(stat)
+	_check(unlabelled.is_empty() and LevelUpFx.new()._gain_order.size() == 8,
+		"les 8 statistiques gagnables portent leur nom du glossaire", str(unlabelled))
+
+	# --- L'événement du journal transporte les gains ---
+	var recorder: Node = root.get_node_or_null("BattleRecorder")
+	if not recorder:
+		_ko("Autoload BattleRecorder", "introuvable")
+		return
+
+	# Croissances tout ou rien : la montée est certaine, et son contenu connu.
+	var winner := TacticsPawn.new()
+	winner.stats = _live("res://data/models/world/stats/hero/lord.tres")
+	winner.stats.override_name = "Elyan"
+	winner.stats.hp_growth = 100
+	winner.stats.str_growth = 100
+	winner.stats.mag_growth = 0
+	winner.stats.skl_growth = 0
+	winner.stats.spd_growth = 0
+	winner.stats.lck_growth = 0
+	winner.stats.def_growth = 0
+	winner.stats.res_growth = 0
+	winner.stats.exp = 99  # Le moindre point d'expérience fait basculer le palier.
+
+	var victim := TacticsPawn.new()
+	victim.stats = _live("res://data/models/world/stats/mob/skeleton.tres")
+
+	var before: int = recorder.events.size()
+	TacticsPawnCombatService.new().award_exp(winner, victim, true)
+
+	var level_ups: Array = []
+	for e: Dictionary in recorder.events.slice(before):
+		if str(e.get("kind_name", "")) == "level_up":
+			level_ups.append(e)
+	_check(level_ups.size() == 1, "la montée de niveau est journalisée une fois",
+		"%d événement(s)" % level_ups.size())
+
+	if not level_ups.is_empty():
+		var event: Dictionary = level_ups[0]
+		var gains: Dictionary = event.get("gains", {})
+		_check(event.has("gains") and gains == {"hp": 1, "str": 1},
+			"l'événement porte les gains, prêts à l'affichage", str(gains))
+		_check(str(event.get("pawn", "")) == "Elyan" and int(event.get("level", 0)) >= 2,
+			"et toujours qui monte, et jusqu'où", str(event))
+
+	winner.free()
+	victim.free()
+
+
+## Le panneau doré ne doit jamais casser, quoi qu'on lui donne — et surtout pas
+## en headless, où il n'a construit aucun nœud.
+func _test_level_up_screen() -> void:
+	var fx: LevelUpFx = LevelUpFx.new()
+	root.add_child(fx)
+	# Sans écran, l'événement est ignoré en silence : ni panneau, ni erreur.
+	fx._on_event({"kind_name": "level_up", "pawn": "Elyan", "level": 4,
+		"gains": {"hp": 1, "str": 1}})
+	fx._on_event({"kind_name": "level_up", "pawn": "Elyan", "level": 5})
+	_check(true, "l'écran de montée de niveau reste muet en headless")
+	fx.queue_free()
+#endregion

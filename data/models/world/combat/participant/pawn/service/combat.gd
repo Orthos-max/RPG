@@ -492,8 +492,12 @@ func award_exp(attacker: TacticsPawn, defender: TacticsPawn, is_kill: bool) -> v
 		# Les messages sont déjà imprimés par gain_exp() ; le journal, lui,
 		# manquait la montée de niveau — elle n'apparaissait ni dans les replays
 		# ni pour l'audio, qui écoute justement ce journal.
+		# Les gains voyagent avec l'événement : l'écran de montée de niveau les
+		# affiche, le replay les garde. Les recalculer à l'arrivée serait
+		# impossible — le tirage est déjà consommé.
 		_record(&"record", [BattleLog.Kind.LEVEL_UP, {
 			"pawn": a_name, "level": attacker.stats.level, "exp": attacker.stats.exp,
+			"gains": Stats.positive_gains(result.get("stat_gains", {})),
 		}])
 		if bool(result.get("promoted", false)):
 			_record(&"record", [BattleLog.Kind.PROMOTION, {
