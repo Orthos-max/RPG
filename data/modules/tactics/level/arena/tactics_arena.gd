@@ -37,12 +37,12 @@ func _ready() -> void:
 ## **Rien n'attend ici, et c'est délibéré.** Cette fonction cédait la main le
 ## temps d'une frame après avoir libéré les tuiles existantes ; `_ready` l'appelle
 ## sans l'attendre, si bien que `serv.setup(self)` passait sur une arène encore
-## vide. Le cas ne se présentait pas — aucune arène livrée n'a à la fois un nœud
-## `Tiles` posé à la main et un `MapData` — mais c'est exactement ce qu'on
-## obtiendrait en convertissant `map_level.tscn`, ce qui reste à faire pour cinq
-## chapitres. Deuxième raison, la même que dans l'éditeur de cartes : un nœud
-## seulement `queue_free` garde son nom jusqu'à la fin de la frame, et le nouveau
-## `Tiles` naîtrait « @Tiles@2 » — introuvable pour tout ce qui le cherche par son nom.
+## vide. Depuis la v0.3.0, tous les chapitres (CH1-CH6) ont leur propre
+## `map_data` via leur arène — la conversion manuelle d'un niveau posé à la main
+## reste un pattern de secours. Deuxième raison, la même que dans l'éditeur de
+## cartes : un nœud seulement `queue_free` garde son nom jusqu'à la fin de la
+## frame, et le nouveau `Tiles` naîtrait « @Tiles@2 » — introuvable pour tout ce
+## qui le cherche par son nom.
 func _generate_from_map_data() -> void:
 	var md = res.map_data  # MapData, dynamically typed to avoid class_name load order issues
 	if not md:
