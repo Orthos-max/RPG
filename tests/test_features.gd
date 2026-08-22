@@ -3830,4 +3830,15 @@ func _test_level_up_screen() -> void:
 	fx._on_event({"kind_name": "level_up", "pawn": "Elyan", "level": 5})
 	_check(true, "l'écran de montée de niveau reste muet en headless")
 	fx.queue_free()
+
+	# Les braises se montent hors écran : une seule propriété inconnue —
+	# `mouse_filter`, qui n'existe pas sur [CPUParticles2D] — interrompait la
+	# fonction qui les posait, et avec elle tout le reste de la construction du
+	# panneau, abonnement au journal compris. L'animation ne jouait jamais.
+	var sparks: CPUParticles2D = LevelUpFx.build_sparks()
+	_check(sparks != null and sparks.texture != null,
+		"les braises du panneau se construisent sans erreur de propriété",
+		"nulles" if sparks == null else "sans texture")
+	if sparks:
+		sparks.free()
 #endregion

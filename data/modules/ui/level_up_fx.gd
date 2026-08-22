@@ -139,29 +139,40 @@ func _build() -> void:
 	column.add_child(_gains)
 
 	# Braises dorées qui montent, comme sur l'écran-titre.
-	_particles = CPUParticles2D.new()
-	_particles.name = "Sparks"
-	_particles.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_particles.amount = 26
-	_particles.lifetime = 1.1
-	_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	_particles.emission_rect_extents = Vector2(150, 6)
-	_particles.position = Vector2(0, 42)
-	_particles.direction = Vector2(0, -1)
-	_particles.spread = 28.0
-	_particles.gravity = Vector2(0, -160)
-	_particles.initial_velocity_min = 60.0
-	_particles.initial_velocity_max = 140.0
-	_particles.scale_amount_min = 0.6
-	_particles.scale_amount_max = 1.4
-	_particles.color = C_GOLD
-	_particles.texture = _spark_texture()
-	_particles.emitting = false
+	_particles = build_sparks()
 	_root.add_child(_particles)
 
 
+## Les braises dorées, montées à part pour être éprouvables sans écran.
+##
+## [b]Une propriété qui n'existe pas coûte tout le reste de la fonction.[/b] Les
+## braises portaient un `mouse_filter`, qui ne vit que sur les [Control] : Godot
+## refusait l'affectation et **interrompait [method _build] sur place**. Ni
+## braises, ni `_listen()` — l'écran ne s'abonnait donc jamais au journal, et
+## l'animation ne s'est jamais jouée. Une fonction séparée rend la construction
+## vérifiable en `--headless` : elle rend `null` si une ligne casse.
+static func build_sparks() -> CPUParticles2D:
+	var particles := CPUParticles2D.new()
+	particles.name = "Sparks"
+	particles.amount = 26
+	particles.lifetime = 1.1
+	particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	particles.emission_rect_extents = Vector2(150, 6)
+	particles.direction = Vector2(0, -1)
+	particles.spread = 28.0
+	particles.gravity = Vector2(0, -160)
+	particles.initial_velocity_min = 60.0
+	particles.initial_velocity_max = 140.0
+	particles.scale_amount_min = 0.6
+	particles.scale_amount_max = 1.4
+	particles.color = C_GOLD
+	particles.texture = _spark_texture()
+	particles.emitting = false
+	return particles
+
+
 ## Petite boule dorée procédurale, sans fichier externe.
-func _spark_texture() -> Texture2D:
+static func _spark_texture() -> Texture2D:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	for y in 8:
 		for x in 8:
@@ -278,9 +289,19 @@ func _build_gain_rows(gains: Variant) -> Array[Label]:
 	return rows
 
 
-## Recentre le pivot du panneau sur sa taille courante.
+## Recentre le pivot du panneau sur sa taille courante, et pose les braises à son
+## pied.
+##
+## Le panneau est centré par la mise en page ; les braises, elles, vivent en
+## coordonnées d'écran — l'origine d'un [CanvasLayer] est son coin haut-gauche.
+## Sans ce report, elles montaient du coin de l'écran, à moitié dehors, au lieu
+## du bas du panneau.
 func _center_pivot() -> void:
 	_panel.pivot_offset = _panel.size / 2.0
+	# La mise en page peut appeler ceci avant que les braises n'existent : le
+	# panneau se dimensionne dès qu'on lui ajoute sa colonne.
+	if _particles:
+		_particles.position = _panel.position + Vector2(_panel.size.x / 2.0, _panel.size.y)
 
 
 func _finish() -> void:

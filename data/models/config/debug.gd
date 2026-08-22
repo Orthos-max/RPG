@@ -54,14 +54,18 @@ static var debug_dict: Dictionary = {
 		"type": "bool",
 		"bool_strings": ["-> YES", "-x NO"]
 		},
+	# Ces deux-là portaient leur texte sous la clé `string` : les fonctions de
+	# journalisation ne lisent que `message`, et n'avaient donc jamais rien à dire
+	# d'un déplacement d'IA sans destination — l'exact moment où on aurait voulu
+	# les lire.
 	"nearest_target_found": {
 		"tmp": null, "old": null, "type": "concat1",
-		"string": "[ 🏒 ] Destination found: ", 
+		"message": "[ 🏒 ] Destination found: ",
 		"color": "orange"
 		},
 	"nearest_target": {
 		"tmp": null, "old": null, "type": "concat1",
-		"string": "[ 🏒 ] Not moving. No nearest target found for ", 
+		"message": "[ 🏒 ] Not moving. No nearest target found for ",
 		"color": "red"
 		},
 	"quad_snap": {
@@ -124,8 +128,9 @@ static func debug_log_bool(dict_entry: Dictionary, argument: Variant) -> void:
 		var close_color: String = "[/color]"
 		
 		var parse_bool: String = dict_entry.bool_strings[0] if argument else dict_entry.bool_strings[1]
-		
-		if dict_entry.has('message'): # todo: got a crash 'cause no dict_entry.message
+
+		# Une entrée sans texte ne dit rien plutôt que de faire tomber l'appelant.
+		if dict_entry.has('message'):
 			print_rich(open_color, dict_entry.message, "[i][u]", parse_bool, "[/u][/i]", close_color) # Print color-coded message
 		
 	if dict_entry.old == null or dict_entry.old != dict_entry.tmp:
@@ -139,7 +144,8 @@ static func debug_log_concat1(dict_entry: Dictionary, argument: Variant) -> void
 		var open_color: String = "[color=#" + DEBUG_COLORS[dict_entry.color] + "]"
 		var close_color: String = "[/color]"
 		
-		if dict_entry.has('message'): # todo: got a crash 'cause no dict_entry.message
+		# Une entrée sans texte ne dit rien plutôt que de faire tomber l'appelant.
+		if dict_entry.has('message'):
 			print_rich(open_color, dict_entry.message, "[i][u]", dict_entry.tmp, "[/u][/i]", close_color) # Print color-coded message
 		
 	if dict_entry.old == null or dict_entry.old != dict_entry.tmp:
