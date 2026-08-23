@@ -93,6 +93,13 @@ func _build() -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(18)
 	_panel.add_theme_stylebox_override("panel", style)
+	# Masqué dès le montage : un [Control] naît visible, et celui-ci est construit à
+	# l'ouverture du jeu pour ne servir qu'à la première montée de niveau. Sans
+	# cette ligne, son cadre doré vide restait planté au centre de l'écran toute la
+	# partie — au milieu du plateau, où il passait pour un pion mal rendu.
+	# [method _finish] le remasque après chaque animation ; il fallait aussi le
+	# faire avant la première.
+	_panel.visible = false
 	# La liste des gains fait varier la hauteur du panneau d'un niveau à l'autre :
 	# le pivot doit suivre, sinon le rebond part de travers.
 	_panel.resized.connect(_center_pivot)
