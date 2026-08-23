@@ -20,6 +20,7 @@ extends CanvasLayer
 const TeamDataClass = preload("res://data/models/world/combat/team/team_data.gd")
 const ClassDataClass = preload("res://data/models/world/stats/class_data.gd")
 const ChestDataClass = preload("res://data/models/campaign/chest_data.gd")
+const StatusDBClass = preload("res://data/models/world/stats/status_db.gd")
 
 ## La touche qui ouvre et referme le panneau.
 const TOGGLE_KEY: Key = KEY_H
@@ -45,6 +46,7 @@ const C_ACCENT := Color("#e94560")
 const C_TEXT := Color(1, 1, 1, 0.85)
 const C_DIM := Color(1, 1, 1, 0.5)
 const C_HEAL := Color(0.55, 0.9, 0.6)
+const C_AFFLICTED := Color(0.85, 0.5, 0.95)
 
 var _panel: PanelContainer = null
 var _scroll: ScrollContainer = null
@@ -111,7 +113,44 @@ static func describe(event: Dictionary) -> String:
 			return "⚠  Ordre refusé (%s) : %s" % [
 				str(event.get("action", "?")), str(event.get("reason", "")),
 			]
+		"status_applied":
+			var status: String = str(event.get("status", ""))
+			return "%s  %s inflige %s à %s (%d tour%s)" % [
+				StatusDBClass.glyph(status), str(event.get("source", "?")),
+				StatusDBClass.label(status), str(event.get("target", "?")),
+				int(event.get("turns", 1)),
+				"" if int(event.get("turns", 1)) <= 1 else "s",
+			]
+		"status_damage":
+			return _status_damage_line(event)
 	return ""
+
+
+## Ce qu'une affliction a coûté au début d'un tour, et ce qui s'en est dissipé.
+##
+## Les deux tiennent sur la même ligne : « Elyan souffre de Poison — 3 PV
+## (Elyan : 9 PV)  ·  Gel se dissipe ». Séparer les expirations en événement
+## distinct doublerait le nombre de lignes pour une information qui n'existe
+## qu'en creux — on veut la lire, pas la chercher.
+static func _status_damage_line(event: Dictionary) -> String:
+	var pawn: String = str(event.get("pawn", "?"))
+
+	var names: Array[String] = []
+	for raw: Variant in event.get("statuses", []):
+		if typeof(raw) == TYPE_DICTIONARY:
+			names.append(StatusDBClass.label(str((raw as Dictionary).get("status", ""))))
+	var affliction: String = " et ".join(names) if not names.is_empty() else "ses blessures"
+
+	var line: String = "☠  %s souffre de %s — %d PV  (%s : %d PV)" % [
+		pawn, affliction, int(event.get("damage", 0)), pawn, int(event.get("pawn_hp", 0)),
+	]
+
+	var gone: Array[String] = []
+	for raw: Variant in event.get("expired", []):
+		gone.append(StatusDBClass.label(str(raw)))
+	if not gone.is_empty():
+		line += "  ·  %s se dissipe" % " et ".join(gone)
+	return line
 
 
 ## L'assaut, avec ce qui a décidé de son issue : critique, coup redoublé, PV restants.
@@ -142,6 +181,8 @@ static func tint(event: Dictionary) -> Color:
 			return C_HEAL
 		"attack":
 			return C_ACCENT if bool(event.get("crit", false)) else C_TEXT
+		"status_applied", "status_damage":
+			return C_AFFLICTED
 		"move", "command_rejected":
 			return C_DIM
 	return C_TEXT

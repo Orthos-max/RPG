@@ -10,6 +10,8 @@ const COLOR_HEALTHY: Color = Color(0.55, 0.92, 0.6)
 const COLOR_HURT: Color = Color(1.0, 0.78, 0.35)
 const COLOR_CRITICAL: Color = Color(1.0, 0.45, 0.4)
 const COLOR_DIM: Color = Color(0.72, 0.74, 0.8)
+## Couleur des afflictions en cours ([StatusDB])
+const COLOR_AFFLICTED: Color = Color(0.85, 0.5, 0.95)
 
 ## En dessous de ces seuils, la barre change de couleur
 const HURT_RATIO: float = 0.6
@@ -21,6 +23,7 @@ const CRITICAL_RATIO: float = 0.3
 @onready var _combat: Label = $Margin/VBox/Combat
 @onready var _context: Label = $Margin/VBox/Context
 @onready var _skills: Label = $Margin/VBox/Skills
+@onready var _statuses: Label = $Margin/VBox/Statuses
 
 ## Dernière fiche affichée — le survol est évalué à chaque frame, inutile de
 ## reconstruire six chaînes tant que l'unité ne change pas.
@@ -58,6 +61,13 @@ func show_sheet(sheet: Dictionary) -> void:
 	_skills.visible = not skills.is_empty()
 	_skills.text = skills
 	_skills.add_theme_color_override("font_color", COLOR_DIM)
+
+	# Les afflictions en rouge, et seulement quand il y en a : une ligne vide
+	# permanente rongerait la hauteur du panneau pour ne rien dire.
+	var statuses: String = UnitSheet.statuses_line(sheet)
+	_statuses.visible = not statuses.is_empty()
+	_statuses.text = statuses
+	_statuses.add_theme_color_override("font_color", COLOR_AFFLICTED)
 
 	visible = true
 

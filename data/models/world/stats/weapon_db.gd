@@ -12,6 +12,7 @@ extends RefCounted
 ## à une unité ([method Stats.equip]), et l'écran de préparation qui la choisit.
 
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const StatusDBRef = preload("res://data/models/world/stats/status_db.gd")
 
 ## Nombre d'armes transportées par unité. Volontairement plus étroit que
 ## l'inventaire de consommables : choisir son arme doit rester un arbitrage.
@@ -70,6 +71,29 @@ static var DATA: Dictionary = {
 	# --- Bâtons (soignent, ne ripostent pas) ---
 	"heal_staff": {"label": "Bâton de soin", "type": WT.Type.STAFF,
 		"might": 0, "range": 1, "hit": 0, "crit": 0, "weight": 3, "price": 400, "icon": "heal_staff"},
+
+	# --- Armes affligeantes ---
+	# `inflicts` {status, chance, turns} : à chaque coup [b]porté[/b], une chance
+	# sur cent de poser l'affliction ([StatusDB]). Ces armes frappent délibérément
+	# moins fort que leur équivalent de fer — on paie la morsure durable en
+	# puissance immédiate, sans quoi il n'y aurait rien à arbitrer.
+	"poison_blade": {"label": "Lame venimeuse", "type": WT.Type.SWORD,
+		"might": 4, "range": 1, "hit": 5, "crit": 0, "weight": 5, "price": 850,
+		"icon": "iron_sword",
+		"inflicts": {"status": "poison", "chance": 45, "turns": 3}},
+	"blaze": {"label": "Brasier", "type": WT.Type.TOME,
+		"might": 4, "range": 2, "hit": 0, "crit": 0, "weight": 6, "price": 780,
+		"icon": "fire",
+		"inflicts": {"status": "burn", "chance": 35, "turns": 2}},
+	"frost_bow": {"label": "Arc de givre", "type": WT.Type.BOW,
+		"might": 4, "range": 2, "hit": 0, "crit": 0, "weight": 7, "price": 800,
+		"icon": "iron_bow",
+		"inflicts": {"status": "frost", "chance": 40, "turns": 2}},
+	# La paralysie vole un tour entier : elle se paie cher et ne tombe que rarement.
+	"shock_spear": {"label": "Lance fulgurante", "type": WT.Type.LANCE,
+		"might": 5, "range": 1, "hit": -5, "crit": 0, "weight": 9, "price": 1400,
+		"icon": "iron_lance",
+		"inflicts": {"status": "paralyze", "chance": 20, "turns": 1}},
 }
 
 
@@ -135,6 +159,26 @@ static func is_staff(weapon_id: String) -> bool:
 	return weapon_type(weapon_id) == WT.Type.STAFF
 
 
+## L'affliction que cette arme peut poser — dictionnaire vide si elle n'en pose
+## aucune, ce qui est le cas de la quasi-totalité du catalogue.
+## [returns] {status: String, chance: int, turns: int}
+static func inflicts(weapon_id: String) -> Dictionary:
+	var spec: Variant = get_weapon(weapon_id).get("inflicts", {})
+	if typeof(spec) != TYPE_DICTIONARY or (spec as Dictionary).is_empty():
+		return {}
+	var entry: Dictionary = spec
+	return {
+		"status": str(entry.get("status", "")),
+		"chance": clampi(int(entry.get("chance", 0)), 0, 100),
+		"turns": int(entry.get("turns", 0)),
+	}
+
+
+## L'arme pose-t-elle une affliction quand elle touche ?
+static func is_afflicting(weapon_id: String) -> bool:
+	return not inflicts(weapon_id).is_empty()
+
+
 ## Armes vendues en boutique, de la moins chère à la plus chère.
 static func shop_stock() -> Array:
 	var stock: Array = []
@@ -164,4 +208,14 @@ static func describe(weapon_id: String) -> String:
 		parts.append("Crit %+d" % int(w["crit"]))
 	if int(w["weight"]) != 0:
 		parts.append("Poids %d" % int(w["weight"]))
+
+	# L'affliction en dernier : c'est ce qui distingue l'arme, et la boutique doit
+	# le dire avant qu'on la paie — pas après le premier combat.
+	var affliction: Dictionary = inflicts(weapon_id)
+	if not affliction.is_empty():
+		parts.append("%s %s %d%%" % [
+			StatusDBRef.glyph(str(affliction["status"])),
+			StatusDBRef.label(str(affliction["status"])),
+			int(affliction["chance"]),
+		])
 	return "  ".join(parts)

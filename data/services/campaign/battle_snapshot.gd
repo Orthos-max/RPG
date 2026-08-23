@@ -99,6 +99,9 @@ static func _capture_pawn(level: Node, p: TacticsPawn, team: String) -> Dictiona
 		"extra_skills": s.extra_skills.duplicate(),
 		"removed_skills": s.removed_skills.duplicate(),
 		"buffs": s.active_buffs(),
+		# Les afflictions en cours. Sans elles, sauvegarder puis reprendre serait
+		# le meilleur antidote du jeu.
+		"statuses": s.active_statuses(),
 		# Ce qui reste à jouer de ce tour-ci : sans ces deux drapeaux, une reprise
 		# rendrait son tour à une armée qui venait de l'épuiser.
 		"can_move": p.res.can_move if p.res else true,
@@ -192,6 +195,7 @@ static func _apply_pawn(level: Node, p: TacticsPawn, entry: Dictionary) -> void:
 	s.extra_skills = _string_list(entry.get("extra_skills", []))
 	s.removed_skills = _string_list(entry.get("removed_skills", []))
 	s.set_active_buffs(entry.get("buffs", []))
+	s.set_active_statuses(entry.get("statuses", []))
 	_apply_arsenal(s, entry)
 
 	# Le droit de jouer, puis la place sur le plateau.

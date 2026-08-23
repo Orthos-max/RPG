@@ -70,6 +70,7 @@ static func build(stats: Stats, opts: Dictionary = {}) -> Dictionary:
 		"terrain_def": terrain_def,
 		"skills": _skill_names(stats),
 		"items": _item_names(stats),
+		"statuses": stats.active_statuses(),
 	}
 
 
@@ -121,6 +122,15 @@ static func context_line(sheet: Dictionary) -> String:
 static func skills_line(sheet: Dictionary) -> String:
 	var skills: Array = sheet.get("skills", [])
 	return "✨ " + "  ·  ".join(skills) if not skills.is_empty() else ""
+
+
+## Ligne des afflictions en cours ("" si l'unité est saine).
+##
+## « ☠ Poison (2)  ·  ❄ Gel (1) » : le pictogramme, le nom, et surtout les tours
+## restants. Sans le compte à rebours, le joueur ne peut pas décider s'il vaut
+## mieux dépenser un antidote ou serrer les dents.
+static func statuses_line(sheet: Dictionary) -> String:
+	return StatusEffects.summary(sheet.get("statuses", []))
 
 
 #region Internes

@@ -26,6 +26,8 @@ enum Kind {
 	COMMAND_REJECTED = 7,
 	OBJECTIVE = 8,
 	CHEST = 9,
+	STATUS_APPLIED = 10,  ## Une affliction vient d'être posée ([StatusDB])
+	STATUS_DAMAGE = 11,   ## Une affliction se paie au début d'un tour
 }
 
 ## Tous les événements de la partie courante
@@ -89,6 +91,29 @@ func record_attack(attacker: String, defender: String, damage: int, hit: bool,
 
 func record_heal(healer: String, target: String, amount: int, target_hp: int) -> void:
 	record(Kind.HEAL, {"healer": healer, "target": target, "amount": amount, "target_hp": target_hp})
+
+
+## Une affliction posée par un coup ([StatusDB] nomme `status`).
+##
+## `source` est celui qui l'a posée — l'information ne se retrouve nulle part
+## ailleurs une fois l'échange résolu, et c'est elle qui rend la ligne d'historique
+## lisible : « la Lame venimeuse d'Elyan », et non un poison venu de nulle part.
+func record_status_applied(source: String, target: String, status: String, turns: int) -> void:
+	record(Kind.STATUS_APPLIED, {
+		"source": source, "target": target, "status": status, "turns": turns,
+	})
+
+
+## Les PV qu'une affliction coûte au début d'un tour.
+##
+## `statuses` liste ce qui a mordu (une unité peut brûler [i]et[/i] être
+## empoisonnée), et `expired` ce qui s'est dissipé dans la foulée.
+func record_status_damage(pawn: String, damage: int, pawn_hp: int,
+		statuses: Array = [], expired: Array = []) -> void:
+	record(Kind.STATUS_DAMAGE, {
+		"pawn": pawn, "damage": damage, "pawn_hp": pawn_hp,
+		"statuses": statuses, "expired": expired,
+	})
 
 
 func record_death(pawn: String, team: String, killer: String = "") -> void:
@@ -161,4 +186,6 @@ static func kind_name(kind: int) -> String:
 		Kind.COMMAND_REJECTED: return "command_rejected"
 		Kind.OBJECTIVE: return "objective"
 		Kind.CHEST: return "chest"
+		Kind.STATUS_APPLIED: return "status_applied"
+		Kind.STATUS_DAMAGE: return "status_damage"
 		_: return "event"

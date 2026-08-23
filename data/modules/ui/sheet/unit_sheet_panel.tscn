@@ -82,3 +82,9 @@ layout_mode = 2
 mouse_filter = 2
 autowrap_mode = 3
 theme_override_font_sizes/font_size = 13
+
+[node name="Statuses" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 13

@@ -8,6 +8,8 @@ const ClassDataDB = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SkillDB = preload("res://data/models/world/stats/skill_db.gd")
+const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
+const STATUS = preload("res://data/services/combat/status_effects.gd")
 
 #region Identity
 var override_name: String
@@ -76,6 +78,8 @@ var removed_skills: Array = []
 var items: Array = []
 ## Bonus temporaires en cours : [{stat, amount, turns}]
 var _active_buffs: Array = []
+## Afflictions en cours : [{status, turns}] — voir [StatusDB]
+var _statuses: Array = []
 #endregion
 
 #region Growth Rates
@@ -458,6 +462,13 @@ func use_item(item_name: String) -> Dictionary:
 			apply_buff(stat, amount, int(item.get("turns", 2)))
 			return {"ok": true, "item": key, "effect": "buff",
 				"amount": amount, "stat": stat, "reason": ""}
+		ITEMS.Kind.CURE:
+			# L'antidote se boit même sain — c'est un objet consommé pour rien,
+			# pas une erreur : le joueur a le droit de se tromper de bouton.
+			var cured: Dictionary = cure_statuses()
+			return {"ok": true, "item": key, "effect": "cure",
+				"amount": (cured["labels"] as Array).size(),
+				"cured": cured["labels"], "reason": ""}
 		ITEMS.Kind.BOOST:
 			# Gain permanent : les PV max augmentent aussi les PV courants.
 			var stat: String = str(item.get("stat", "str"))
@@ -521,6 +532,124 @@ func set_active_buffs(buffs: Array) -> void:
 			"amount": int(buff.get("amount", 0)),
 			"turns": int(buff.get("turns", 1)),
 		})
+#endregion
+
+
+#region Effets de statut
+## Pose une affliction sur l'unité ([StatusDB] dit ce qu'elle inflige).
+##
+## Le malus de statistique est retiré [b]tout de suite[/b], exactement comme
+## [method apply_buff] ajoute le sien : le calcul de combat et la fiche lisent
+## alors les bons chiffres sans avoir rien à demander à personne.
+## [method tick_statuses] les rendra à l'expiration.
+##
+## Reposer un statut déjà subi ne rejoue pas le malus, il ne fait que rallonger
+## l'agonie — sans quoi deux coups empoisonnés videraient la défense deux fois.
+##
+## [param turns] 0 : la durée par défaut du catalogue s'applique.
+## [returns] {ok, status, turns, refreshed, label} — `ok` faux si statut inconnu.
+func apply_status(status: String, turns: int = 0) -> Dictionary:
+	var result: Dictionary = STATUS.apply(_statuses, status, turns)
+	if not bool(result["applied"]):
+		return {"ok": false, "status": "", "turns": 0, "refreshed": false, "label": ""}
+
+	var key: String = str(result["status"])
+	_statuses = result["entries"]
+	if not bool(result["refreshed"]):
+		_apply_status_mods(key, 1)
+	return {"ok": true, "status": key, "turns": int(result["turns"]),
+		"refreshed": bool(result["refreshed"]), "label": STATUS_DB.label(key)}
+
+
+## Fait vivre les afflictions d'un tour : dégâts, blocage, expirations.
+##
+## Appelée au début du tour de l'unité, aux côtés de [method tick_buffs]. Les PV
+## sont retirés ici même, et le plancher de [constant StatusDB.HP_FLOOR] garantit
+## qu'aucun statut ne tue.
+##
+## [returns] {damage, hp, blocked, expired: Array[String], sources: Array} —
+## `blocked` dit à l'appelant de retirer son tour à l'unité, et `sources` porte
+## le détail ({status, damage}) que le journal de bataille met en mots.
+func tick_statuses() -> Dictionary:
+	var outcome: Dictionary = STATUS.resolve_turn_start(_statuses, hp)
+
+	var lost: int = int(outcome["damage"])
+	if lost > 0:
+		apply_to_curr_health(-lost)
+
+	# Les malus des afflictions dissipées sont rendus, un par un.
+	for key: Variant in outcome["expired"]:
+		_apply_status_mods(str(key), -1)
+
+	_statuses = outcome["entries"]
+	return {
+		"damage": lost,
+		"hp": hp,
+		"blocked": bool(outcome["blocked"]),
+		"expired": outcome["expired"],
+		"sources": outcome["sources"],
+	}
+
+
+## Lève toutes les afflictions et rend les malus (c'est ce que fait un antidote).
+## [returns] {ok, cured: Array[String], labels: Array[String]}
+func cure_statuses() -> Dictionary:
+	var outcome: Dictionary = STATUS.clear(_statuses)
+	var labels: Array[String] = []
+	for key: Variant in outcome["cured"]:
+		_apply_status_mods(str(key), -1)
+		labels.append(STATUS_DB.label(str(key)))
+	_statuses = outcome["entries"]
+	return {"ok": not labels.is_empty(), "cured": outcome["cured"], "labels": labels}
+
+
+## L'unité subit-elle ce statut ?
+func has_status(status: String) -> bool:
+	return STATUS.has(_statuses, status)
+
+
+## Tours restants d'une affliction (0 si l'unité n'en souffre pas).
+func status_turns_left(status: String) -> int:
+	return STATUS.turns_left(_statuses, status)
+
+
+## L'unité est-elle hors d'état d'agir ? (paralysie)
+##
+## Lu au début du tour pour lui retirer ses actions, et par l'IA pour ne pas
+## s'acharner sur une unité qui ne peut de toute façon rien faire.
+func is_incapacitated() -> bool:
+	return STATUS.is_blocking(_statuses)
+
+
+## Afflictions en cours (lecture seule, pour l'UI, l'instantané et CielAI).
+func active_statuses() -> Array:
+	return _statuses.duplicate(true)
+
+
+## Réinstalle les afflictions en cours [b]sans retoucher aux statistiques[/b].
+##
+## Même piège, même porte que [method set_active_buffs] : les chiffres relus dans
+## un instantané portent déjà le malus, puisque [method apply_status] l'a soustrait
+## de la statistique elle-même. Repasser par `apply_status` le compterait deux
+## fois ; ne rien faire rendrait le poison éternel, faute de compte à rebours.
+func set_active_statuses(statuses: Array) -> void:
+	_statuses = STATUS.sanitize(statuses)
+
+
+## Ajoute ([param sign] = 1) ou retire ([param sign] = -1) les malus d'un statut.
+##
+## [b]Rien n'est borné ici[/b], et c'est délibéré : ce qui est retiré à la pose
+## est rendu à l'identique à l'expiration, donc la statistique retrouve toujours
+## exactement sa valeur d'avant. Un plancher à zéro romprait cette symétrie — une
+## unité gelée à 2 de vitesse en ressortirait à 3. Une statistique passée sous
+## zéro ne casse rien : la précision est bornée par [method FECombatCalculator],
+## les dégâts et le critique aussi.
+func _apply_status_mods(status: String, sign: int) -> void:
+	for stat: String in STATUS_DB.MOD_KEYS:
+		var delta: int = STATUS_DB.stat_mod(status, stat) * sign
+		if delta != 0:
+			set(stat, int(get(stat)) + delta)
+	attack_power = get_total_attack()
 #endregion
 
 

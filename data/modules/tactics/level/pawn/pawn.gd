@@ -125,6 +125,33 @@ func reset_turn() -> void:
 	# Les bonus temporaires (garde, toniques) vieillissent d'un tour.
 	if stats:
 		stats.tick_buffs()
+		_resolve_statuses()
+
+
+## Ce que les afflictions coûtent au pion, au début de son tour.
+##
+## L'ordre est celui de [method StatusEffects.resolve_turn_start] : les dégâts
+## d'abord, le tour volé ensuite. Un statut ne tue jamais ([constant
+## StatusDB.HP_FLOOR]) — inutile donc de constater une mort ici.
+##
+## La paralysie retire les deux droits au lieu de passer par
+## [method end_pawn_turn] : celui-ci ouvre les coffres et distribue les points de
+## soutien, deux faveurs qu'une unité paralysée n'a pas gagnées.
+func _resolve_statuses() -> void:
+	var outcome: Dictionary = stats.tick_statuses()
+	if int(outcome["damage"]) <= 0 and not bool(outcome["blocked"]) \
+			and (outcome["expired"] as Array).is_empty():
+		return
+
+	if int(outcome["damage"]) > 0:
+		var recorder: Node = get_node_or_null("/root/BattleRecorder")
+		if recorder:
+			recorder.record_status_damage(display_name(), int(outcome["damage"]),
+				int(outcome["hp"]), outcome["sources"], outcome["expired"])
+
+	if bool(outcome["blocked"]):
+		res.can_move = false
+		res.can_attack = false
 
 
 ## Ends the pawn's turn
