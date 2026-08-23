@@ -340,6 +340,78 @@ func _test_opponent_turn() -> void:
 		"aucun pion adverse n'a bougé")
 	_check(back_to_player, "le tour revient au joueur une fois l'adversaire passé",
 		"la partie est restée sur le camp adverse")
+
+
+## Les gerbes de [BattleVFX] tombent-elles sur la case de leur victime ?
+##
+## Troisième trou de preuve, remonté par Aurèle le 2026-08-23 : toutes les gerbes
+## de la partie se jouaient au même endroit — l'origine du niveau — quelle que
+## soit la case du mort. Rien ne pouvait l'attraper ailleurs qu'ici : [method
+## BattleVFX.host] rend `null` en `--headless`, donc les suites sans fenêtre ne
+## créent jamais la moindre particule.
+##
+## La mesure porte sur les **grains**, pas sur le nœud qui les porte : le nœud
+## était déjà à la bonne place, et c'est précisément ce qui rendait le défaut
+## invisible à toute vérification plus douce. On lit donc le multimesh que le
+## serveur de rendu tient pour ce nœud, et on le ramène en repère monde.
+##
+## Deux victimes, sur deux cases éloignées : une gerbe unique tomberait juste par
+## accident si elle se calait sur la première venue.
+func _test_death_vfx() -> void:
+	var victims: Array[Node3D] = []
+	for at: Vector3 in [Vector3(3.0, 0.0, 4.0), Vector3(9.0, 0.0, 12.0)]:
+		var v := Node3D.new()
+		_level.add_child(v)
+		v.global_position = at
+		victims.append(v)
+	await process_frame
+
+	for v: Node3D in victims:
+		var before: Array = _bursts()
+		BattleVFX.play_death(v)
+		await process_frame
+		await process_frame
+
+		var burst: CPUParticles3D = null
+		for b: CPUParticles3D in _bursts():
+			if not before.has(b):
+				burst = b
+		if not burst:
+			_ko("La mort sème une gerbe", "aucune particule sous BattleVFX")
+			continue
+
+		var aim: Vector3 = v.global_position + Vector3.UP * BattleVFX.TORSO_HEIGHT
+		var seeds: Vector3 = _seed_center(burst)
+		_check(seeds.distance_to(aim) < 0.5,
+			"la gerbe de mort tombe sur la case de la victime (%s)" % v.global_position,
+			"grains semés en %s, attendus vers %s" % [seeds, aim])
+
+	for v: Node3D in victims:
+		v.queue_free()
+
+
+## Les gerbes vivantes sous l'hôte [BattleVFX] de la partie.
+func _bursts() -> Array:
+	var vfx: BattleVFX = BattleVFX.current
+	if not vfx:
+		return []
+	var out: Array = []
+	for c in vfx.get_children():
+		if c is CPUParticles3D:
+			out.append(c)
+	return out
+
+
+## Le point **monde** autour duquel les grains d'une gerbe ont été semés.
+func _seed_center(burst: CPUParticles3D) -> Vector3:
+	var base: RID = burst.get_base()
+	var count: int = RenderingServer.multimesh_get_instance_count(base)
+	if count <= 0:
+		return burst.global_position
+	var center := Vector3.ZERO
+	for i in count:
+		center += RenderingServer.multimesh_instance_get_transform(base, i).origin
+	return burst.global_transform * (center / float(count))
 #endregion
 
 

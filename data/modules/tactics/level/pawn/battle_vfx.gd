@@ -350,6 +350,15 @@ func _burst(tex_name: StringName, at: Vector3, tint: Color, cfg: Dictionary) -> 
 	burst.scale_amount_min = 0.6
 	burst.scale_amount_max = 1.2
 	burst.color = tint
+	# **Éteindre avant d'accrocher.** Un [CPUParticles3D] naît `emitting = true` :
+	# ajouté tel quel, il tire sa gerbe dès son entrée dans l'arbre, donc à
+	# l'origine de [BattleVFX] — la ligne suivante le déplace trop tard, et les
+	# grains, semés en repère **monde** (`local_coords` est faux), restent où ils
+	# sont nés. Le `emitting = true` d'après ne rattrapait rien : la valeur n'ayant
+	# pas changé, le moteur en sortait sans rien relancer. Toutes les gerbes de la
+	# partie — sang, étincelles, poussière d'étoiles, soin — se jouaient donc au
+	# même endroit, quelle que soit la case de la victime.
+	burst.emitting = false
 	add_child(burst)
 	burst.global_position = at
 	burst.emitting = true
