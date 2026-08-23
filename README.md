@@ -42,7 +42,8 @@ chapitre, sauvegarde JSON lisible dans `user://saves/`.
 Cinq familles d'objectifs : rout, boss, survie, protection d'une unité, prise de
 point — plus des objectifs secondaires récompensés en or. Entre deux chapitres,
 l'**intendance** : boutique, armurerie, objets à gain permanent, soins payants,
-recrutement. Les blessures persistent d'un chapitre à l'autre.
+recrutement. Les blessures persistent d'un chapitre à l'autre. Des **coffres**
+sont disséminés sur les maps : or ou objets à ramasser pendant la mission.
 
 ### Combat Fire Emblem complet
 - Formule FE intégrale : précision, esquive, critique, dégâts, **double attaque**,
@@ -56,6 +57,16 @@ recrutement. Les blessures persistent d'un chapitre à l'autre.
 - **Prévision de combat** au survol d'une cible : dégâts, coups, précision,
   critique, PV restants et létalité — **des deux côtés**, riposte comprise.
 - Inventaire limité (5 emplacements), consommables et toniques.
+- **Montée de niveau animée** : les gains de stats s'inscrivent une par une,
+  avec fanfare et braises — et les **promotions** ont leur propre cérémonie.
+- **Quick save / quick load** en plein combat (F5 / F9) et bilan de bataille
+  **détaillé unité par unité** après la mission.
+
+### Son & ambiance
+20 sons procéduraux (coups, critiques, soins, niveaux, interface) et trois
+boucles musicales (titre, bataille, préparation) — générés localement, sans
+aucun droit d'auteur. Particules d'ambiance par terrain : feuilles en forêt,
+flocons en neige, reflets sur l'eau, braises dans les ruines.
 
 ### Le pont CielAI
 Le camp adverse peut être piloté par une IA externe. Le jeu écrit son état complet
