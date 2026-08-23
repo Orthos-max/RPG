@@ -43,6 +43,7 @@ var actions: Dictionary = {
 	"Wait": "_player_wants_to_wait",
 	"Cancel": "_player_wants_to_cancel",
 	"Attack": "_player_wants_to_attack",
+	"Skill": "_player_wants_to_use_skill",
 	"Inventory": "_player_wants_to_open_inventory",
 }
 
@@ -53,6 +54,7 @@ var action_labels: Dictionary = {
 	"Wait": "Attendre",
 	"Cancel": "Retour",
 	"Attack": "Attaquer",
+	"Skill": "Compétence",
 	"Inventory": "Inventaire",
 }
 

@@ -11,12 +11,23 @@ extends RefCounted
 ## une affliction ([StatusDB]), en raccourcissent une, ou rendent des PV entre
 ## deux tours. Elles restent déclarées ici, avec leurs propres clés — `status`,
 ## `status_ward`, `regen` — et leurs propres agrégateurs plus bas.
+##
+## [b]Trois natures, un seul catalogue.[/b] Une passive pèse sur chaque calcul,
+## une compétence à déclenchement se tire au sort pendant l'échange, et une
+## compétence [i]utilisable[/i] ([constant Kind.USABLE]) ne fait rien tant que le
+## joueur ne la lance pas depuis le menu d'actions. Les trois cohabitent ici parce
+## qu'elles se débloquent de la même façon, s'affichent sur la même fiche et se
+## cochent dans le même éditeur ; ce qui les sépare, c'est [b]qui les appelle[/b].
+## Une utilisable n'est jamais agrégée ni tirée : son déclencheur
+## ([constant Trigger.ON_COMMAND]) n'est vrai dans aucun contexte de combat, donc
+## [method is_active] la refuse partout. Sa résolution vit dans [SkillUse].
 
 const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 
 enum Kind {
 	PASSIVE = 0,  ## Modificateurs permanents ou conditionnels
 	ACTIVE = 1,   ## Déclenchement aléatoire pendant le combat (proc)
+	USABLE = 2,   ## Lancée à la demande, depuis le menu d'actions
 }
 
 enum Trigger {
@@ -27,7 +38,25 @@ enum Trigger {
 	WHEN_HP_FULL = 4,    ## PV au maximum
 	ON_TERRAIN = 5,      ## Sur une case au bonus défensif
 	VS_FLYING = 6,       ## Contre une unité volante
+	ON_COMMAND = 7,      ## Jamais d'elle-même : le joueur la lance
 }
+
+#region Compétences utilisables
+## Ce qu'une compétence utilisable ([constant Kind.USABLE]) vise.
+const TARGET_SELF: String = "self"
+const TARGET_ALLY: String = "ally"
+const TARGET_ENEMY: String = "enemy"
+
+## Ce qu'elle fait à sa cible. `damage` peut poser une affliction en plus, quand
+## la compétence déclare un `status` — c'est le cas de « Frappe venimeuse ».
+const EFFECT_DAMAGE: String = "damage"
+const EFFECT_HEAL: String = "heal"
+const EFFECT_STATUS: String = "status"
+
+## Ce qu'elle coûte. `action` clôt le tour de l'unité, comme frapper ou soigner ;
+## une compétence sans coût déclaré ne prend que le droit d'attaquer.
+const COST_ACTION: String = "action"
+#endregion
 
 ## Modificateurs reconnus par le calculateur de combat
 const MOD_KEYS: Array[String] = ["hit", "crit", "avoid", "crit_avoid", "damage", "defense"]
@@ -177,6 +206,41 @@ static var DATA: Dictionary = {
 		"chance": 20,
 	},
 
+	# --- Compétences utilisables ---
+	# Ni permanentes ni tirées au sort : le joueur les lance depuis le menu
+	# d'actions, choisit sa cible, et l'unité y passe son tour. C'est le pendant
+	# « sort » du bâton de soin — sauf qu'il ne demande aucune arme, seulement
+	# d'avoir appris la compétence.
+	#
+	# Le contrat est le même pour toutes : `target` dit qui est visable, `effect`
+	# ce qui arrive à la cible, `power` la part fixe du chiffre (le reste vient de
+	# la fiche du lanceur), `range` la portée en cases, `cost` ce que ça coûte.
+	# [SkillUse] est seul à savoir les résoudre ; ici on ne fait que les déclarer.
+	"venom_strike": {
+		"name": "Frappe venimeuse",
+		"desc": "Frappe un ennemi adjacent et l'empoisonne pour 3 tours.",
+		"kind": Kind.USABLE,
+		"trigger": Trigger.ON_COMMAND,
+		"target": TARGET_ENEMY,
+		"effect": EFFECT_DAMAGE,
+		"power": 6,
+		"range": 1,
+		"status": "poison",
+		"status_turns": 3,
+		"cost": COST_ACTION,
+	},
+	"mend": {
+		"name": "Soin",
+		"desc": "Rend des PV à un allié adjacent, sans dépenser de bâton.",
+		"kind": Kind.USABLE,
+		"trigger": Trigger.ON_COMMAND,
+		"target": TARGET_ALLY,
+		"effect": EFFECT_HEAL,
+		"power": 8,
+		"range": 1,
+		"cost": COST_ACTION,
+	},
+
 	# --- Compétences défensives hors table de modificateurs ---
 	"cold_blood": {
 		"name": "Sang-froid",
@@ -226,6 +290,61 @@ static func all_ids() -> Array[String]:
 	return ids
 
 
+#region Compétences utilisables — lecture du catalogue
+## La compétence se lance-t-elle à la demande ?
+static func is_usable(skill_id: String) -> bool:
+	return int(get_skill(skill_id).get("kind", Kind.PASSIVE)) == Kind.USABLE
+
+
+## Celles de [param skill_ids] qui se lancent à la demande, dans l'ordre donné.
+##
+## C'est ce que le menu d'actions liste, et ce qui décide si le bouton
+## « Compétence » a lieu d'exister pour cette unité.
+static func usable_ids(skill_ids: Array) -> Array[String]:
+	var out: Array[String] = []
+	for id: Variant in skill_ids:
+		var skill_id: String = str(id)
+		if is_usable(skill_id) and not skill_id in out:
+			out.append(skill_id)
+	return out
+
+
+## Qui la compétence peut viser : "self", "ally" ou "enemy" (ennemi par défaut).
+static func target_of(skill_id: String) -> String:
+	return str(get_skill(skill_id).get("target", TARGET_ENEMY))
+
+
+## Ce qu'elle fait à sa cible : "damage", "heal" ou "status".
+static func effect_of(skill_id: String) -> String:
+	return str(get_skill(skill_id).get("effect", EFFECT_DAMAGE))
+
+
+## Part fixe du chiffre — dégâts ou PV rendus avant l'apport de la fiche.
+static func power_of(skill_id: String) -> int:
+	return int(get_skill(skill_id).get("power", 0))
+
+
+## Portée en cases (1 = au contact).
+static func range_of(skill_id: String) -> int:
+	return maxi(1, int(get_skill(skill_id).get("range", 1)))
+
+
+## L'affliction posée, "" si la compétence n'en pose aucune.
+static func status_of(skill_id: String) -> String:
+	return str(get_skill(skill_id).get("status", ""))
+
+
+## Durée de l'affliction posée (0 : celle du catalogue des statuts).
+static func status_turns_of(skill_id: String) -> int:
+	return int(get_skill(skill_id).get("status_turns", 0))
+
+
+## La compétence coûte-t-elle le tour entier, ou seulement le droit de frapper ?
+static func costs_action(skill_id: String) -> bool:
+	return str(get_skill(skill_id).get("cost", "")) == COST_ACTION
+#endregion
+
+
 ## Quand la compétence s'applique, en une phrase.
 ##
 ## Le déclencheur est la moitié de ce qu'il faut savoir : « +2 de défense » ne
@@ -247,6 +366,8 @@ static func trigger_label(skill_id: String) -> String:
 			return "Sur une case qui donne un bonus de défense"
 		Trigger.VS_FLYING:
 			return "Contre une unité volante"
+		Trigger.ON_COMMAND:
+			return "Sur ordre, depuis le menu d'actions"
 	return ""
 
 
@@ -263,9 +384,24 @@ static func tooltip(skill_id: String) -> String:
 		"",
 		"⟶ %s" % trigger_label(skill_id),
 	]
-	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
-		lines.append("⟶ Déclenchement aléatoire, une chance par coup porté.")
+	match int(skill.get("kind", Kind.PASSIVE)):
+		Kind.ACTIVE:
+			lines.append("⟶ Déclenchement aléatoire, une chance par coup porté.")
+		Kind.USABLE:
+			lines.append("⟶ Portée %d · %s" % [range_of(skill_id), _target_label(skill_id)])
+			lines.append("⟶ %s" % ("Consomme le tour" if costs_action(skill_id)
+				else "Consomme l'attaque"))
 	return "\n".join(lines)
+
+
+## Qui la compétence vise, en toutes lettres.
+static func _target_label(skill_id: String) -> String:
+	match target_of(skill_id):
+		TARGET_SELF:
+			return "sur soi"
+		TARGET_ALLY:
+			return "sur un allié"
+	return "sur un ennemi"
 
 
 ## Effet chiffré d'une compétence, en une poignée de caractères.
@@ -279,6 +415,22 @@ static func short_effect(skill_id: String) -> String:
 	var skill: Dictionary = get_skill(skill_id)
 	if skill.is_empty():
 		return ""
+
+	# Une compétence utilisable se lit à son chiffre et à sa portée : c'est tout
+	# ce qu'il faut pour décider de la lancer ou non depuis le menu d'actions.
+	if int(skill.get("kind", Kind.PASSIVE)) == Kind.USABLE:
+		var bits: Array[String] = []
+		match effect_of(skill_id):
+			EFFECT_HEAL:
+				bits.append("+%d PV" % power_of(skill_id))
+			EFFECT_DAMAGE:
+				bits.append("%d dégâts" % power_of(skill_id))
+		var afflicts: String = status_of(skill_id)
+		if STATUS_DB.exists(afflicts):
+			bits.append("%s %s" % [STATUS_DB.glyph(afflicts), STATUS_DB.label(afflicts)])
+		bits.append("portée %d" % range_of(skill_id))
+		return " ".join(bits)
+
 	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
 		# Une compétence affligeante se lit à son affliction, pas à son verbe :
 		# « ☠ Poison 35 % » dit tout ce qu'il faut savoir avant d'engager, là où
@@ -331,6 +483,8 @@ static func short_trigger(skill_id: String) -> String:
 			return "terrain"
 		Trigger.VS_FLYING:
 			return "vs vol"
+		Trigger.ON_COMMAND:
+			return "sur ordre"
 	return ""
 
 
