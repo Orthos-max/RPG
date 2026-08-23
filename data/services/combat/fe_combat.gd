@@ -71,7 +71,10 @@ static func calculate(attacker: Stats, defender: Stats, support_bonuses: Diction
 	result.terrain_defense = terrain_defense
 
 	var atk = attacker.get_attack_stat() + attacker.weapon_might * result.effective_mult
-	var def_stat = defender.res if result.is_magical else defender.def
+	# Défense et adresse passent par les valeurs effectives : c'est là que le
+	# peuple du combattant ([RaceDB]) entre dans le calcul, comme il le fait déjà
+	# dans la précision et l'esquive via les accesseurs dérivés de [Stats].
+	var def_stat = defender.get_defense(result.is_magical)
 
 	# --- Compétences ---
 	# L'attaquant est en position d'attaque, le défenseur en position de défense :
@@ -88,7 +91,7 @@ static func calculate(attacker: Stats, defender: Stats, support_bonuses: Diction
 	result.skill_damage = int(atk_mods["damage"])
 	result.skill_hit = int(atk_mods["hit"]) - int(def_mods["avoid"])
 	result.skill_crit = int(atk_mods["crit"]) - int(def_mods["crit_avoid"])
-	result.procs = SKILLS.active_procs(atk_skills, atk_ctx, attacker.skl)
+	result.procs = SKILLS.active_procs(atk_skills, atk_ctx, attacker.effective("skl"))
 
 	# Weapon triangle damage bonus
 	result.triangle_bonus = WT.get_triangle_damage_bonus(

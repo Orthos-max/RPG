@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_k2p1h")
 override_name = "Chrom"
+race = "human"
 expertise = "Lord"
 strategy = 0
 character_class = 0

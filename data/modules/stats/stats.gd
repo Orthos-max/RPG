@@ -8,6 +8,7 @@ const ClassDataDB = preload("res://data/models/world/stats/class_data.gd")
 const ITEMS = preload("res://data/models/world/stats/item_db.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SkillDB = preload("res://data/models/world/stats/skill_db.gd")
+const RACES = preload("res://data/models/world/stats/race_db.gd")
 const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 const STATUS = preload("res://data/services/combat/status_effects.gd")
 const BOSS = preload("res://data/services/combat/boss_phases.gd")
@@ -17,6 +18,12 @@ const BOSS_DB = preload("res://data/models/world/stats/boss_db.gd")
 var override_name: String
 var expertise: String
 var character_class: int = 0  ## ClassDB.Id
+## Peuple de l'unité ([RaceDB]) — "" pour une unité sans race, donc sans bonus.
+##
+## Vient de la fiche, mais le roster de campagne et l'instantané de bataille la
+## reportent aussi : une race se relit sans risque, puisqu'elle ne s'ajoute
+## jamais aux statistiques stockées ([method effective]).
+var race: String = ""
 var level: int = 1
 var exp: int = 0              ## Current EXP
 var is_promoted: bool = false
@@ -113,6 +120,7 @@ func import_stats(stats: StatsResource) -> void:
 	override_name = stats.override_name
 	expertise = stats.expertise
 	character_class = stats.character_class
+	set_race(stats.race)
 	level = stats.level
 	exp = stats.exp
 	is_promoted = stats.is_promoted
@@ -216,11 +224,65 @@ func apply_to_curr_health(amount: int) -> void:
 	print("Target final health: ", hp)
 
 
+#region Race
+## Déclare le peuple de l'unité ([RaceDB]).
+##
+## La chaîne est ramenée à sa forme canonique et vérifiée ici, une fois pour
+## toutes : partout ailleurs, `race` est soit vide, soit une clé que le catalogue
+## connaît. Une race inconnue est refusée plutôt que portée sans effet — un
+## « Elve » mal tapé sur une fiche resterait sinon muet jusqu'au combat.
+##
+## [returns] false si la race est inconnue (l'unité reste alors sans peuple).
+func set_race(new_race: String) -> bool:
+	var key: String = RACES.canonical_key(new_race)
+	race = key
+	attack_power = get_total_attack()
+	if key.is_empty() and not new_race.strip_edges().is_empty():
+		push_warning("[Stats] Race inconnue sur %s : %s" % [display_name(), new_race])
+		return false
+	return true
+
+
+## Ce que la race ajoute (ou retire) à une statistique — 0 sans peuple.
+func race_mod(stat: String) -> int:
+	return RACES.stat_mod(race, stat)
+
+
+## Valeur de combat effective : la statistique de la fiche, plus sa race.
+##
+## [b]Le seul endroit où une race pèse sur un chiffre.[/b] Les statistiques
+## stockées (`str`, `spd`…) restent celles de la fiche, à la virgule près : ce
+## sont elles que la montée de niveau fait croître, que l'instantané sauvegarde
+## et que l'éditeur montre. Les valeurs dérivées ci-dessous, elles, passent
+## toutes par ici — précision, esquive, critique, attaque, vitesse d'attaque.
+##
+## Ce détour évite le piège des toniques ([method set_active_buffs]) : puisque
+## rien n'est jamais ajouté à la statistique elle-même, relire une race deux fois
+## ne la compte pas deux fois.
+func effective(stat: String) -> int:
+	return int(get(stat)) + race_mod(stat)
+
+
+## Défense opposée à une attaque, race comprise (magique → RÉS, sinon DÉF).
+##
+## Le pendant défensif de [method get_attack_stat], et le chemin qu'emprunte
+## [FECombatCalculator] : lire `def` ou `res` directement laisserait la moitié
+## des races sans effet, celle qui protège.
+func get_defense(magical: bool) -> int:
+	return effective("res") if magical else effective("def")
+
+
+## La race en une ligne pour l'affichage : « Elfe — Adresse +1, Vitesse +1 ».
+func race_summary() -> String:
+	return RACES.summary(race)
+#endregion
+
+
 ## Get the effective attack stat (Str for physical, Mag for magical)
 func get_attack_stat() -> int:
 	if WT.is_magical(weapon_type):
-		return mag
-	return str
+		return effective("mag")
+	return effective("str")
 
 
 ## Get total attack power (stat + weapon might)
@@ -230,27 +292,27 @@ func get_total_attack() -> int:
 
 ## Get base hit rate (arme comprise)
 func get_base_hit() -> int:
-	return skl * 2 + int(lck / 2.0) + weapon_hit
+	return effective("skl") * 2 + int(effective("lck") / 2.0) + weapon_hit
 
 
 ## Get avoid rate
 func get_avoid() -> int:
-	return spd * 2 + lck
+	return effective("spd") * 2 + effective("lck")
 
 
 ## Get critical hit rate (arme comprise)
 func get_crit() -> int:
-	return int(skl / 2.0) + weapon_crit
+	return int(effective("skl") / 2.0) + weapon_crit
 
 
 ## Get critical evade (reduces enemy crit rate)
 func get_crit_evade() -> int:
-	return lck
+	return effective("lck")
 
 
 ## Get attack speed — la vitesse, moins ce que l'arme coûte à porter.
 func get_attack_speed() -> int:
-	return spd - speed_penalty()
+	return effective("spd") - speed_penalty()
 
 
 ## Malus de vitesse d'attaque dû au poids de l'arme.
@@ -259,7 +321,7 @@ func get_attack_speed() -> int:
 ## laisse un guerrier intact. C'est ce qui empêche « la plus grosse arme » d'être
 ## toujours le bon choix, et donne son intérêt au menu d'équipement.
 func speed_penalty() -> int:
-	return maxi(0, weapon_weight - str)
+	return maxi(0, weapon_weight - effective("str"))
 
 
 #region Compétences

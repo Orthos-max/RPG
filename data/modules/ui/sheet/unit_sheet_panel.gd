@@ -18,6 +18,7 @@ const HURT_RATIO: float = 0.6
 const CRITICAL_RATIO: float = 0.3
 
 @onready var _title: Label = $Margin/VBox/Title
+@onready var _race: Label = $Margin/VBox/Race
 @onready var _health: Label = $Margin/VBox/Health
 @onready var _stats: Label = $Margin/VBox/Stats
 @onready var _combat: Label = $Margin/VBox/Combat
@@ -46,6 +47,13 @@ func show_sheet(sheet: Dictionary) -> void:
 	_last = sheet.duplicate(true)
 
 	_title.text = str(sheet["title"])
+
+	# Le peuple sous le nom, et seulement quand l'unité en a un : la plupart des
+	# fiches n'en déclarent pas, et une ligne vide creuserait le panneau pour rien.
+	var race: String = UnitSheet.race_line(sheet)
+	_race.visible = not race.is_empty()
+	_race.text = race
+	_race.add_theme_color_override("font_color", COLOR_DIM)
 
 	var ratio: float = float(sheet["hp_ratio"])
 	_health.text = "PV %d / %d" % [sheet["hp"], sheet["max_hp"]]

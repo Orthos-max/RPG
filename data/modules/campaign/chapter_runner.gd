@@ -768,6 +768,10 @@ static func apply_roster_unit(stats: Stats, unit: Dictionary) -> void:
 	stats.level = int(unit.get("level", stats.level))
 	stats.exp = int(unit.get("exp", stats.exp))
 	stats.character_class = int(unit.get("class_id", stats.character_class))
+	# Une clé absente veut dire « fiche d'avant le catalogue des peuples » : la
+	# race importée du `.tres` est alors la bonne, et on n'y touche pas.
+	if unit.has("race"):
+		stats.set_race(str(unit["race"]))
 	stats.is_promoted = bool(unit.get("is_promoted", stats.is_promoted))
 	stats.max_hp = int(unit.get("max_hp", stats.max_hp))
 	stats.hp = clampi(int(unit.get("hp", stats.max_hp)), 1, stats.max_hp)

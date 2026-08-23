@@ -86,6 +86,9 @@ static func _capture_pawn(level: Node, p: TacticsPawn, team: String) -> Dictiona
 		"hp": s.hp, "max_hp": s.max_hp,
 		"level": s.level, "exp": s.exp,
 		"class_id": s.character_class, "is_promoted": s.is_promoted,
+		# Le peuple ([RaceDB]) : contrairement aux toniques, il se relit sans
+		# précaution — il ne s'est jamais ajouté aux chiffres ci-dessous.
+		"race": s.race,
 		"str": s.str, "mag": s.mag, "skl": s.skl, "spd": s.spd,
 		"lck": s.lck, "def": s.def, "res": s.res,
 		"movement": s.movement,
@@ -188,6 +191,8 @@ static func _apply_pawn(level: Node, p: TacticsPawn, entry: Dictionary) -> void:
 	s.exp = int(entry.get("exp", s.exp))
 	s.character_class = int(entry.get("class_id", s.character_class))
 	s.is_promoted = bool(entry.get("is_promoted", s.is_promoted))
+	if entry.has("race"):
+		s.set_race(str(entry["race"]))
 	for stat: String in ["str", "mag", "skl", "spd", "lck", "def", "res", "movement"]:
 		s.set(stat, int(entry.get(stat, s.get(stat))))
 

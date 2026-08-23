@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_ednwr")
 override_name = "Virion"
+race = "human"
 expertise = "Archer"
 strategy = 3
 character_class = 4

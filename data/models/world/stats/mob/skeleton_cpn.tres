@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1")
 override_name = "Garrick"
+race = "undead"
 expertise = "Brigand Chief"
 strategy = 0
 character_class = 10

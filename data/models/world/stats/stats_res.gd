@@ -11,6 +11,13 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 @export var expertise: String = ""
 @export_enum("Tank", "Flank", "Physical", "Distance", "Support") var strategy: int
 @export var character_class: int = 0  # ClassDB.Id enum
+## Peuple de l'unité (identifiant de [RaceDB]) — "" pour une fiche sans race.
+##
+## Laisser vide n'est pas un oubli : c'est le cas par défaut, celui de toutes les
+## fiches écrites avant le catalogue des peuples, et il ne donne aucun bonus. Une
+## race ne modifie jamais les valeurs ci-dessous ; elle s'ajoute au moment du
+## calcul, dans [method Stats.effective].
+@export var race: String = ""
 @export var level: int = 1
 @export var exp: int = 0  # Current EXP toward next level
 @export_file("*.png") var sprite: String = "res://assets/textures/actor/"

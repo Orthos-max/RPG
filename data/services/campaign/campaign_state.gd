@@ -158,6 +158,9 @@ func unit_from_resource(path: String) -> Dictionary:
 		"name": unit_name,
 		"source": path,
 		"class_id": res.character_class,
+		# Le peuple voyage avec l'unité ([RaceDB]). Sans lui, une recrue perdait sa
+		# race dès le premier chapitre : le roster fait autorité sur la fiche.
+		"race": str(res.race),
 		# L'apparence voyage avec l'unité. Sans elle, une recrue déployée prenait
 		# la figurine du pion de la scène qu'elle occupait : Sully et Cordelia
 		# entraient en bataille sous les traits de quelqu'un d'autre.

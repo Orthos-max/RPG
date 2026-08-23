@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_elfrs")
 override_name = "Elfe Rousse"
+race = "elf"
 expertise = "Archer"
 strategy = 3
 character_class = 4
