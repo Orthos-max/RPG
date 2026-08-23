@@ -138,6 +138,11 @@ static func collect(pawn: TacticsPawn) -> Dictionary:
 		if campaign:
 			campaign.gold = int(campaign.gold) + int(reward["gold"])
 
+	# L'éclat doré sur la case : la récompense se lit à l'écran avant même le
+	# bandeau ([Toast]) — un coffre qui s'ouvre sans que rien ne brille passe
+	# inaperçu au milieu d'une bataille.
+	_chest_glow(pawn)
+
 	# Le déplacement devient définitif : annuler après avoir vidé un coffre
 	# rendrait la case au pion sans lui reprendre le butin. C'est la règle de
 	# Fire Emblem pour un village visité, et le même geste ([PawnMoveMemory]).
@@ -161,6 +166,20 @@ static func collect(pawn: TacticsPawn) -> Dictionary:
 
 
 #region Internes
+## Un éclat doré et des lueurs montantes sur la case du coffre : la récompense
+## se voit à l'écran, même sans lire le bandeau ([Toast]). Sans effet en
+## `--headless` ([method BattleVFX.host] rend `null`), comme tous les effets.
+static func _chest_glow(pawn: TacticsPawn) -> void:
+	if not pawn or not is_instance_valid(pawn):
+		return
+	var vfx: Node = BattleVFX.host(pawn)
+	if not vfx:
+		return
+	var at: Vector3 = pawn.global_position
+	vfx.impact(at + Vector3.UP * 1.0, BattleVFX.Kind.HEAL)
+	vfx.heal_particles(at)
+
+
 ## Ce pion appartient-il au camp du joueur, et est-il encore debout ?
 static func _is_player_pawn(pawn: TacticsPawn) -> bool:
 	if not pawn or not is_instance_valid(pawn) or not pawn.is_alive():
