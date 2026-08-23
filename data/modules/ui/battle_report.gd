@@ -345,11 +345,17 @@ func _build() -> void:
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(backdrop)
 
+	# Un centreur : le panneau grandit avec son contenu (la liste des unités),
+	# et il doit rester centré quelle que soit sa taille. L'ancrer au centre
+	# une fois pour toutes le laisserait déborder à droite et en bas.
+	var center := CenterContainer.new()
+	center.name = "ReportCenter"
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(center)
+
 	_panel = PanelContainer.new()
 	_panel.name = "ReportPanel"
 	_panel.custom_minimum_size = PANEL_SIZE
-	_panel.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	var style := StyleBoxFlat.new()
 	style.bg_color = C_PANEL
 	style.border_color = C_GOLD
@@ -357,7 +363,7 @@ func _build() -> void:
 	style.set_corner_radius_all(4)
 	style.set_content_margin_all(16)
 	_panel.add_theme_stylebox_override("panel", style)
-	_root.add_child(_panel)
+	center.add_child(_panel)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 10)
