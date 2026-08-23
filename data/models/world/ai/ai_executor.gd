@@ -23,7 +23,9 @@ static func pawn_to_unit(arena: Node, pawn: Node, team: String) -> Dictionary:
 		"col": g.x, "row": g.y,
 		"hp": stats.hp, "max_hp": stats.max_hp,
 		"atk": stats.get_total_attack(),
-		"def": stats.def, "res": stats.res,
+		# Les valeurs effectives, race comprise : l'IA estime ses dégâts avec la
+		# même défense que celle que le calculateur lui opposera vraiment.
+		"def": stats.get_defense(false), "res": stats.get_defense(true),
 		"movement": stats.movement,
 		"attack_range": stats.attack_range,
 		"min_range": WT.get_min_range(stats.weapon_type),

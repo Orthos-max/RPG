@@ -14,6 +14,7 @@ const WT = preload("res://data/models/world/stats/weapon_type.gd")
 const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const CD = preload("res://data/models/world/stats/class_data.gd")
 const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
+const RaceDBRef = preload("res://data/models/world/stats/race_db.gd")
 
 
 const MapDataRef = preload("res://data/models/world/map/map_data.gd")
@@ -23,7 +24,7 @@ const MapDataRef = preload("res://data/models/world/map/map_data.gd")
 ##
 ## [param opts] {"terrain": String, "terrain_def": int, "team": String}
 ## [returns] {
-##   name, title, hp, max_hp, hp_ratio, level, class_name, promoted,
+##   name, title, hp, max_hp, hp_ratio, level, class_name, promoted, race,
 ##   stats: [{label, value}], combat: [{label, value}],
 ##   weapon, movement, range, terrain, skills: [String], items: [String]
 ## }
@@ -46,6 +47,11 @@ static func build(stats: Stats, opts: Dictionary = {}) -> Dictionary:
 		"level": stats.level,
 		"class_name": class_label,
 		"promoted": stats.is_promoted,
+		# Le peuple, et ce qu'il vaut. La clé brute voyage aussi : l'étiquette est
+		# faite pour être lue, la clé pour être comparée.
+		"race": stats.race,
+		"race_label": RaceDBRef.label(stats.race),
+		"race_summary": RaceDBRef.summary(stats.race),
 		"stats": [
 			{"label": "FOR", "value": stats.str},
 			{"label": "MAG", "value": stats.mag},
@@ -116,6 +122,17 @@ static func context_line(sheet: Dictionary) -> String:
 			terrain += " 🛡+%d" % int(sheet["terrain_def"])
 		parts.append(terrain)
 	return "     ".join(parts)
+
+
+## Ligne du peuple : « Elfe — Adresse +1, Vitesse +1 ». "" si l'unité n'en a pas.
+##
+## La grille de statistiques juste dessous montre les chiffres **bruts** de la
+## fiche, ceux que la montée de niveau fait croître. Le bonus de race, lui, ne
+## vit que dans les valeurs de combat ([method Stats.effective]) : sans cette
+## ligne, un joueur additionnant lui-même « Adresse × 2 » ne retrouverait pas la
+## précision affichée, et croirait à un bug.
+static func race_line(sheet: Dictionary) -> String:
+	return str(sheet.get("race_summary", ""))
 
 
 ## Ligne des compétences ("" si l'unité n'en a aucune).

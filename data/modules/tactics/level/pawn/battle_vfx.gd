@@ -324,7 +324,7 @@ func _shake_later(delay: float) -> void:
 ## [param cfg] : `amount`, `lifetime`, `speed` ([Vector2] min/max), `spread`,
 ## `gravity`, `size`, `additive`, `radius`.
 func _burst(tex_name: StringName, at: Vector3, tint: Color, cfg: Dictionary) -> void:
-	var mesh: Mesh = _particle_mesh(tex_name, float(cfg.get("size", 0.1)),
+	var mesh: Mesh = particle_mesh(tex_name, float(cfg.get("size", 0.1)),
 		bool(cfg.get("additive", true)))
 	if not mesh:
 		return
@@ -400,7 +400,11 @@ static func _texture(tex_name: StringName) -> Texture2D:
 ##
 ## Le matériau est mis en cache : chacun coûte une compilation de shader, et
 ## une bataille en demanderait un par coup porté.
-static func _particle_mesh(tex_name: StringName, size: float, additive: bool) -> Mesh:
+##
+## Public parce que [StatusVFX] s'en sert aussi : les auras de statut sont des
+## particules comme les autres, et elles ont tout intérêt à partager ce cache
+## plutôt qu'à recompiler les mêmes deux matériaux de leur côté.
+static func particle_mesh(tex_name: StringName, size: float, additive: bool) -> Mesh:
 	var tex: Texture2D = _texture(tex_name)
 	if not tex:
 		return null

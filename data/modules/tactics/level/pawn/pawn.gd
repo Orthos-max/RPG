@@ -25,6 +25,16 @@ func _ready() -> void:
 	serv.setup(self)
 	controls.set_actions_menu_visibility(false, self)
 	show_pawn_stats(false)
+	# Les auras de statut suivent la fiche : le pion écoute les changements
+	# d'afflictions et rafraîchit ses particules ([StatusVFX]).
+	if stats:
+		stats.statuses_changed.connect(_on_statuses_changed)
+		StatusVFX.refresh(self, stats.status_list())
+
+
+## Rafraîchit les auras de statut du pion ([StatusVFX]) à chaque changement.
+func _on_statuses_changed(statuses: Array) -> void:
+	StatusVFX.refresh(self, statuses)
 
 
 ## Processes pawn logic every physics frame

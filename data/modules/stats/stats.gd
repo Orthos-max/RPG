@@ -14,6 +14,17 @@ const STATUS = preload("res://data/services/combat/status_effects.gd")
 const BOSS = preload("res://data/services/combat/boss_phases.gd")
 const BOSS_DB = preload("res://data/models/world/stats/boss_db.gd")
 
+## Émis dès que les afflictions changent : pose, expiration, guérison, relecture.
+##
+## [b]La fiche ne sait pas qu'un écran existe[/b], et ne doit pas l'apprendre :
+## c'est [TacticsPawn] qui écoute et rafraîchit ses auras ([StatusVFX]). Le signal
+## porte la liste après changement, pour éviter un aller-retour à l'écouteur.
+##
+## Il n'est pas émis pour un simple décompte de tours : seule la [i]composition[/i]
+## de la liste intéresse la vue — un poison à 2 tours et le même à 1 tour ont
+## exactement la même aura.
+signal statuses_changed(statuses: Array)
+
 #region Identity
 var override_name: String
 var expertise: String
@@ -635,6 +646,7 @@ func apply_status(status: String, turns: int = 0) -> Dictionary:
 
 	var key: String = str(result["status"])
 	_statuses = result["entries"]
+	statuses_changed.emit(_statuses.duplicate())
 	if not bool(result["refreshed"]):
 		_apply_status_mods(key, 1)
 	return {"ok": true, "status": key, "turns": int(result["turns"]),
@@ -712,6 +724,7 @@ func tick_statuses() -> Dictionary:
 		_apply_status_mods(str(key), -1)
 
 	_statuses = outcome["entries"]
+	statuses_changed.emit(_statuses.duplicate())
 	return {
 		"damage": lost,
 		"hp": hp,
@@ -730,7 +743,13 @@ func cure_statuses() -> Dictionary:
 		_apply_status_mods(str(key), -1)
 		labels.append(STATUS_DB.label(str(key)))
 	_statuses = outcome["entries"]
+	statuses_changed.emit(_statuses.duplicate())
 	return {"ok": not labels.is_empty(), "cured": outcome["cured"], "labels": labels}
+
+
+## La liste courante des afflictions, telle que la vue la consomme.
+func status_list() -> Array:
+	return _statuses.duplicate()
 
 
 ## L'unité subit-elle ce statut ?
