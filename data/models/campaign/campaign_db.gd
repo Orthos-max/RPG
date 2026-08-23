@@ -13,10 +13,13 @@ const STARTING_ROSTER: Array[String] = [
 	"res://data/models/world/stats/hero/lord.tres",
 	"res://data/models/world/stats/hero/cleric.tres",
 	"res://data/models/world/stats/hero/archer.tres",
-	# Placée avant le grand chevalier : le déploiement par défaut prend les
-	# premières du roster, et c'est la seule unité qui porte sa propre planche
-	# ([constant PawnLook.CUSTOM_SHEETS]) — elle doit se voir dès le chapitre 1.
+	# Placées avant le grand chevalier : le déploiement par défaut prend les
+	# premières du roster, et ce sont les deux unités qui portent leur propre
+	# planche ([constant PawnLook.CUSTOM_SHEETS]) — elles doivent se voir dès le
+	# chapitre 1. L'épéiste est la seule à avoir un coup, une blessure et une
+	# chute dessinés : c'est en la regardant se battre qu'on juge du système.
 	"res://data/models/world/stats/hero/elfe_rousse.tres",
+	"res://data/models/world/stats/hero/test_episte.tres",
 	"res://data/models/world/stats/hero/great_knight.tres",
 ]
 
@@ -47,9 +50,11 @@ const CHAPTERS: Array[Dictionary] = [
 			{"kind": OBJ.Bonus.NO_LOSSES},
 			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 8},
 		],
-		# Quatre places, et non trois : l'elfe rousse rejoint la ligne de départ
-		# sans en chasser personne — Chrom, Lissa et Virion la tenaient déjà.
-		"deploy_slots": 4,
+		# Cinq places, et non trois : l'elfe rousse puis l'épéiste rejoignent la
+		# ligne de départ sans en chasser personne — Chrom, Lissa et Virion la
+		# tenaient déjà. Une place par unité à planche maison, sinon la nouvelle
+		# venue arriverait sur le banc et ne se verrait jamais.
+		"deploy_slots": 5,
 		"reward_gold": 300,
 		"recommended_level": 1,
 		# Deux détours et un pont : le corridor de l'est (12, 5), la rive

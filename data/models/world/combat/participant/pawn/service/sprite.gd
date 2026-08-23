@@ -36,13 +36,36 @@ var curr_frame: int = 0
 
 ## L'apparence tirée du pack, ou {} si le pion porte une planche de fiche.
 var _look: Dictionary = {}
-## Les deux planches du pack, déjà chargées : {"idle": Texture2D, "run": Texture2D}
+## Les planches déjà chargées, par boucle : {&"idle": {texture, rows, foot}, …}
+##
+## Le repos et la course y sont toujours ; le coup, la blessure et la chute
+## seulement quand le personnage les a dessinés.
 var _clips: Dictionary = {}
-## La boucle en cours ("idle" ou "run"), et de quoi la dérouler.
-var _clip: String = ""
+## La boucle en cours, et de quoi la dérouler.
+var _clip: StringName = &""
 var _clip_frames: int = 1
 var _clip_fps: float = PawnLook.IDLE_FPS
 var _clip_time: float = 0.0
+## La passe jouée une fois (coup, blessure, chute) et le temps qu'il lui reste.
+##
+## Tant qu'elle court, elle a la main : ni le repos ni la course ne peuvent la
+## couper. C'est la seule règle de priorité du nœud, et elle suffit — le combat
+## ne demande jamais deux passes à la fois.
+var _oneshot: StringName = &""
+var _oneshot_left: float = 0.0
+## Vrai quand la dernière image doit rester à l'écran : un mort ne se relève pas.
+var _oneshot_holds: bool = false
+## Vrai une fois la pose finale atteinte : plus rien ne rhabille la figurine.
+##
+## Le pion continue d'appeler [method start_animator] à chaque image, mort ou
+## vif — sans ce verrou, la chute se jouait bien, puis le cadavre se relevait au
+## repos une image plus tard.
+var _frozen: bool = false
+## De combien la ligne de pieds doit descendre sous le centre du nœud.
+##
+## Ne dépend que de la case et du nœud, jamais de la planche : calculé une fois à
+## l'habillage, il resserre le calcul d'`offset` à chaque changement de boucle.
+var _ground: float = 0.0
 
 
 ## Sets up the pawn sprite with the given stats and expertise
@@ -70,7 +93,21 @@ func setup(stats: Stats, expertise: String) -> void:
 ## Déroule la boucle du pack. Sans pack, il n'y a qu'une image par vue : rien à
 ## faire, et `frame` reste au choix de [method rotate_sprite].
 func _process(delta: float) -> void:
-	if _look.is_empty() or _clip_frames <= 1:
+	if _look.is_empty():
+		return
+
+	# Une passe se déroule sans reboucler : sa dernière image est sa conclusion,
+	# et le modulo la ferait repartir au premier temps du geste.
+	if not _oneshot.is_empty():
+		_oneshot_left -= delta
+		if _oneshot_left > 0.0:
+			_clip_time += delta
+			frame = mini(int(_clip_time * _clip_fps), _clip_frames - 1)
+			return
+		_end_oneshot()
+		return
+
+	if _clip_frames <= 1:
 		return
 	_clip_time += delta
 	frame = int(_clip_time * _clip_fps) % _clip_frames
@@ -87,6 +124,67 @@ func start_animator(move_direction: Vector3, is_jumping: bool) -> void:
 		animator.travel("IDLE")
 	elif is_jumping:
 		animator.travel("JUMP")
+
+
+#region Passes de combat
+## Joue une passe une fois, puis rend la main au repos.
+##
+## C'est la porte d'entrée du combat sur la figurine : [TacticsPawnCombatService]
+## l'appelle au moment du coup, de la blessure et de la chute, sans jamais
+## demander si la planche existe. Elle n'existe pas la plupart du temps — le pack
+## Tiny Swords ne dessine que le repos et la course, une planche de fiche ne
+## dessine rien du tout — et c'est exactement pourquoi l'absence rend 0.0 au lieu
+## de se plaindre : brancher une animation ne doit pas obliger tous les
+## personnages à en avoir une.
+##
+## La chute fait exception à « rend la main au repos » : sa dernière image reste,
+## le temps que le combat retire le pion.
+##
+## [param clip] &"attack", &"die" ou &"hurt".
+## [returns] la durée de la passe en secondes, 0.0 si le personnage ne l'a pas.
+func play_clip(clip: StringName) -> float:
+	if _look.is_empty() or not _clips.has(clip):
+		return 0.0
+
+	var frames: int = _wear_clip(clip)
+	if frames <= 0:
+		return 0.0
+
+	_oneshot = clip
+	_oneshot_holds = clip == &"die"
+	_oneshot_left = float(frames) / maxf(1.0, _clip_fps)
+	return _oneshot_left
+
+
+## Le coup porté. Voir [method play_clip].
+func play_attack() -> float:
+	return play_clip(&"attack")
+
+
+## Le coup encaissé. Voir [method play_clip].
+func play_hurt() -> float:
+	return play_clip(&"hurt")
+
+
+## La chute — la figurine reste sur sa dernière image. Voir [method play_clip].
+func play_die() -> float:
+	return play_clip(&"die")
+
+
+## Range la passe qui vient de finir.
+func _end_oneshot() -> void:
+	var holds: bool = _oneshot_holds
+	_oneshot = &""
+	_oneshot_left = 0.0
+	_oneshot_holds = false
+	if not holds:
+		_play(&"idle")
+		return
+	# Figer, c'est ramener la boucle à une seule image : [method _process] s'arrête
+	# de lui-même, et la pose finale tient jusqu'au prochain habillage.
+	frame = maxi(0, hframes * vframes - 1)
+	_clip_frames = 1
+#endregion
 
 
 ## Rotates the sprite to face the camera and selects the appropriate frame
@@ -141,7 +239,10 @@ func adjust_to_center(pawn: TacticsPawn) -> bool:
 ## La planche de la fiche : une colonne, deux rangées, aucune animation.
 func _wear_stats_sheet(stats: Stats) -> void:
 	_clips.clear()
-	_clip = ""
+	_clip = &""
+	_oneshot = &""
+	_oneshot_left = 0.0
+	_oneshot_holds = false
 	texture = load(stats.sprite) as Texture2D
 	hframes = 1
 	vframes = 2
@@ -150,49 +251,75 @@ func _wear_stats_sheet(stats: Stats) -> void:
 	pixel_size = 0.01
 
 
-## Les deux planches du pack, posées pieds sur la case.
+## Toutes les planches annoncées par [PawnLook], chargées d'un coup.
 ##
-## `offset` se calcule une fois pour toutes : les deux boucles d'une même unité
-## partagent la taille de cellule et la ligne de pieds, donc changer de boucle
-## ne déplace pas la figurine.
+## Le pack n'en donne que deux ; un personnage dessiné pour lui-même peut en
+## donner cinq. Le nœud ne fait pas la différence : il prend ce qu'on lui tend et
+## joue ce qu'il a.
 func _wear_pack_sheets() -> void:
-	_clips = {
-		&"idle": load(str(_look["idle"])) as Texture2D,
-		&"run": load(str(_look["run"])) as Texture2D,
-	}
+	_clips.clear()
+	var sources: Dictionary = _look.get("clips", {})
+	for clip: String in PawnLook.CLIPS:
+		if not sources.has(clip):
+			continue
+		var part: Dictionary = sources[clip]
+		var sheet: Texture2D = load(str(part["file"])) as Texture2D
+		if not sheet:
+			continue
+		_clips[StringName(clip)] = {
+			"texture": sheet, "rows": int(part["rows"]), "foot": int(part["foot"]),
+		}
+
 	pixel_size = float(_look["pixel_size"])
-
-	# Une cellule est carrée : la hauteur d'une rangée donne son côté. Le pack
-	# n'en a qu'une (sa bande est horizontale) ; une planche maison peut empiler
-	# ses images, et annonce alors ses rangées ([constant PawnLook.CUSTOM_SHEETS]).
-	var rows: int = maxi(1, int(_look.get("rows", 1)))
-	var cell: float = float(_clips[&"idle"].get_height()) / float(rows)
 	# Le pied doit tomber à `hover` au-dessus de la case, alors que le nœud est
-	# suspendu à `_base_y` et que la texture est centrée sur lui.
-	var ground: float = (float(_look["hover"]) - _base_y) / pixel_size
-	offset = Vector2(0, float(_look["foot"]) - cell / 2.0 + ground)
+	# suspendu à `_base_y` et que la texture est centrée sur lui. Le reste de
+	# l'`offset` dépend de la planche, et se règle donc à chaque changement de
+	# boucle ([method _wear_clip]) : rien n'oblige une chute à se caler sur un repos.
+	_ground = (float(_look["hover"]) - _base_y) / pixel_size
 
-	_clip = ""
+	_clip = &""
+	_oneshot = &""
+	_oneshot_left = 0.0
+	_oneshot_holds = false
 	_play(&"idle")
 
 
-## Passe à une boucle du pack (sans rien faire si c'est déjà elle).
+## Passe à une boucle (sans rien faire si c'est déjà elle).
+##
+## Une passe en cours ne se laisse pas couper : c'est ici que la marche et le
+## repos, appelés à chaque image par [method start_animator], cessent d'effacer
+## le coup d'épée à peine commencé.
 func _play(clip: StringName) -> void:
-	if _clip == clip or not _clips.has(clip):
+	if not _oneshot.is_empty() or _clip == clip:
 		return
+	_wear_clip(clip)
+
+
+## Pose une planche et prépare son défilé.
+##
+## [returns] le nombre d'images de la boucle, 0 si le personnage ne l'a pas.
+func _wear_clip(clip: StringName) -> int:
+	if not _clips.has(clip):
+		return 0
+
+	var entry: Dictionary = _clips[clip]
+	var sheet: Texture2D = entry["texture"]
 	_clip = clip
-	texture = _clips[clip]
-	# Les cellules sont carrées : le côté est la hauteur divisée par les rangées,
-	# et la largeur dit combien de colonnes suivent. Rien à tenir à jour à la main
-	# quand le pack change le nombre de poses d'une animation — ni quand une
-	# planche maison range ses images en colonne plutôt qu'en bande.
-	vframes = maxi(1, int(_look.get("rows", 1)))
-	var cell: int = maxi(1, texture.get_height() / vframes)
-	hframes = maxi(1, texture.get_width() / cell)
+	texture = sheet
+	# Une cellule est carrée : le côté est la hauteur divisée par les rangées, et
+	# la largeur dit combien de colonnes suivent. Le pack range ses poses en bande
+	# (une rangée), une planche maison les empile (une colonne) — et une planche
+	# plus large que haute, comme la chute de l'épéiste, garde sa marge autour du
+	# personnage sans que rien n'ait à le savoir.
+	vframes = maxi(1, int(entry["rows"]))
+	var cell: int = maxi(1, sheet.get_height() / vframes)
+	hframes = maxi(1, sheet.get_width() / cell)
 	_clip_frames = hframes * vframes
-	_clip_fps = PawnLook.RUN_FPS if clip == &"run" else PawnLook.IDLE_FPS
+	_clip_fps = PawnLook.fps_for(clip)
 	_clip_time = 0.0
 	frame = 0
+	offset = Vector2(0, float(entry["foot"]) - float(cell) / 2.0 + _ground)
+	return _clip_frames
 
 
 ## Le nœud de camp qui porte ce pion (`TacticsPlayer`, `TacticsOpponent`…).

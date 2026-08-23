@@ -30,6 +30,10 @@ func attack_target_pawn(pawn: TacticsPawn, target_pawn: TacticsPawn, delta: floa
 	# que l'étape suivante ne s'ouvre.
 	if is_zero_approx(pawn.res.wait_delay):
 		BattleVFX.lunge(pawn, target_pawn)
+		# Le geste part avec l'élan, pas avec les dégâts : la résolution tombe un
+		# quart de seconde plus tard, en plein milieu du coup. C'est ce décalage
+		# qui fait que l'éclat semble venir de la lame.
+		play_figure(pawn, &"attack")
 
 	# --- Attack animation timing ---
 	# Wait for the attack animation "wind-up" period (0.25s) before resolving combat
@@ -164,6 +168,37 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 		_check_death(pawn, defender_name)
 
 
+#region Passes de figurine
+## Demande une passe d'animation à la figurine d'un pion.
+##
+## Peu de personnages ont un coup, une blessure et une chute dessinés : le pack
+## Tiny Swords ne connaît que le repos et la course, une planche de fiche ne
+## bouge pas du tout. L'appel est donc **toujours** facultatif — figurine absente,
+## méthode absente, planche absente, il rend 0.0 et le combat continue comme
+## avant. C'est ce qui permet de brancher l'animation une fois pour toutes ici,
+## sans conditionner chaque site d'appel à qui la possède.
+##
+## [returns] la durée de la passe en secondes, 0.0 s'il ne s'est rien passé.
+static func play_figure(p: TacticsPawn, clip: StringName) -> float:
+	if not p or not is_instance_valid(p):
+		return 0.0
+	var figure: Node = p.get_node_or_null("Character")
+	if not figure or not figure.has_method(&"play_clip"):
+		return 0.0
+	return float(figure.play_clip(clip))
+
+
+## La même passe, dans [param delay] secondes.
+static func _play_figure_later(p: TacticsPawn, clip: StringName, delay: float) -> void:
+	var loop := Engine.get_main_loop()
+	if not loop is SceneTree:
+		return
+	# Le pion peut tomber avant l'échéance : la validité se revérifie à l'arrivée.
+	(loop as SceneTree).create_timer(delay).timeout.connect(func() -> void:
+		play_figure(p, clip))
+#endregion
+
+
 ## Les coups portés par un camp, mis en images ([BattleVFX] s'occupe du reste).
 ##
 ## Un coup manqué ne montre rien : l'oreille l'apprend déjà (`miss`), et un
@@ -172,6 +207,12 @@ func _show_blows(victim: TacticsPawn, side: Dictionary, magical: bool, delay: fl
 	if not bool(side["hit"]):
 		return
 	BattleVFX.play_strike(victim, magical, bool(side["crit"]), int(side["hits"]), delay)
+	# La blessure suit l'éclat, riposte comprise : jouée tout de suite, elle
+	# précéderait de trois dixièmes le coup censé l'avoir causée.
+	if is_zero_approx(delay):
+		play_figure(victim, &"hurt")
+	else:
+		_play_figure_later(victim, &"hurt", delay)
 
 
 ## Résumé d'un camp dans un échange : a-t-il touché, critiqué, combien de coups.
@@ -270,23 +311,39 @@ func _check_death(p: TacticsPawn, killer: String = "") -> void:
 	# Le son, lui, part du journal ci-dessous — [Audio] l'écoute déjà.
 	BattleVFX.play_death(p)
 
+	# La chute dessinée, quand le personnage en a une : elle décide de combien de
+	# temps le pion reste à l'écran. Sans elle (le pack, une planche de fiche),
+	# `fall` vaut 0 et le retrait garde exactement le rythme qu'il a toujours eu.
+	var fall: float = play_figure(p, &"die")
+
 	# Journal de bataille : la mort est l'événement le plus utile à Ciel.
 	_record(&"record_death", [_get_name(p), team_name_for_camp(p.get_parent()), killer])
 
-	# Make invisible and non-interactive
-	p.visible = false
+	# Non-interactive immediately: la case est libre dès la mort constatée, même si
+	# le corps met encore une demi-seconde à finir de tomber.
 	p.res.can_move = false
 	p.res.can_attack = false
-	
+
 	# Disable collision so tile raycast stops detecting the pawn
 	for child in p.get_children():
 		if child is CollisionShape3D:
 			child.disabled = true
-	
+
 	var tree := p.get_tree()
-	if tree:
-		tree.create_timer(0.5).timeout.connect(p.queue_free)
-	
+	if fall <= 0.0:
+		p.visible = false
+		if tree:
+			tree.create_timer(0.5).timeout.connect(p.queue_free)
+	elif tree:
+		# Le corps tient sa dernière pose avant de s'effacer — la faire disparaître
+		# à la première image de la chute reviendrait à ne pas l'avoir dessinée.
+		tree.create_timer(fall).timeout.connect(func() -> void:
+			if is_instance_valid(p):
+				p.visible = false)
+		tree.create_timer(fall + 0.5).timeout.connect(p.queue_free)
+	else:
+		p.visible = false
+
 	# Check victory condition
 	_check_victory(p)
 

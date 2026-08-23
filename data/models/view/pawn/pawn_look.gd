@@ -35,6 +35,33 @@ const PIXEL_SIZE: float = 0.0125
 const IDLE_FPS: float = 8.0
 const RUN_FPS: float = 12.0
 
+## Les passes jouées une fois, puis rendues : le coup porté, la blessure encaissée,
+## la chute. Elles ne remplacent pas le repos et la course, elles s'y ajoutent —
+## une planche qui n'en a pas continue de tourner en boucle sans rien perdre.
+const ATTACK_FPS: float = 12.0
+const HURT_FPS: float = 12.0
+## Plus lente que les autres : une chute qui défile à douze images vaut un
+## clignotement. À huit, les cinq poses se lisent une par une.
+const DIE_FPS: float = 8.0
+
+## Toutes les boucles connues, dans l'ordre où une planche les déclare.
+##
+## L'ordre n'a d'importance que pour le chargement : `idle` d'abord, car c'est
+## elle qui donne la cellule de référence et le repli de toutes les autres.
+const CLIPS: Array[String] = ["idle", "run", "attack", "die", "hurt"]
+
+## Les boucles qui ne tournent pas : jouées une fois sur ordre du combat.
+const ONESHOT_CLIPS: Array[String] = ["attack", "die", "hurt"]
+
+## Cadence d'une boucle, [constant IDLE_FPS] pour tout ce qui n'est pas nommé.
+static func fps_for(clip: StringName) -> float:
+	match String(clip):
+		"run": return RUN_FPS
+		"attack": return ATTACK_FPS
+		"hurt": return HURT_FPS
+		"die": return DIE_FPS
+		_: return IDLE_FPS
+
 ## De combien une unité volante flotte au-dessus de sa case.
 ##
 ## Le pack n'a ni pégase ni wyverne : sans ce décalage, Cordelia et Sully
@@ -93,13 +120,35 @@ const NAME_UNIT: Dictionary = {
 ## ses cellules carrées — une planche maison, elle, peut empiler ses images, et
 ## une colonne ne se déduit de rien.
 ##
+## Deux écritures cohabitent, et une fiche choisit celle que son dessin mérite :
+##
+## - **Une planche pour tout** — `{rows, foot}` posé à plat. Le repos et la course
+##   la partagent : une figurine sans foulée rejoue son repos en marchant, plus
+##   vite ([constant RUN_FPS]), ce qui vaut mieux qu'une silhouette figée. C'est
+##   le cas de l'elfe rousse, dont les deux poses respirent sans avancer.
+## - **Une planche par boucle** — `{idle: {...}, run: {...}, attack: {...},
+##   die: {...}, hurt: {...}}`, chacune avec ses `rows`, son `foot`, et son `file`
+##   quand ce n'est pas la planche-clé. Seule `idle` est obligatoire : elle sert de
+##   repli à `run` et donne la cellule de référence. Les boucles absentes ne
+##   manquent à personne — [TacticsPawnSprite] ne les jouera simplement jamais.
+##
 ## `rows` est le nombre de rangées de la planche (les colonnes s'en déduisent :
-## une cellule est carrée). `foot` est la rangée de pixels où les pieds touchent
-## le sol, mesurée dans la cellule. Toutes les images servent la boucle de repos :
-## une planche maison n'a pas de course, elle rejoue son repos en marchant — plus
-## vite ([constant RUN_FPS]), ce qui vaut mieux qu'une figurine figée.
+## la hauteur d'une rangée donne le côté de la cellule). `foot` est la rangée de
+## pixels où les pieds touchent le sol, mesurée dans la cellule : elle est relevée
+## **par planche**, car rien n'oblige un dessinateur à caler sa chute sur son repos.
 const CUSTOM_SHEETS: Dictionary = {
 	"res://assets/textures/pawns/elfe_rousse_v2_pawn.png": {"rows": 2, "foot": 127},
+	# L'épéiste : cinq planches dessinées séparément, la première jeu du projet à
+	# avoir un coup, une blessure et une chute. Sa planche de chute est plus large
+	# que les autres (160 au lieu de 128) — le corps s'étale en tombant ; la cellule
+	# se déduit de la hauteur, la largeur n'a donc rien à annoncer.
+	"res://assets/textures/pawns/test_episte_idle.png": {
+		"idle": {"rows": 2, "foot": 120},
+		"run": {"file": "res://assets/textures/pawns/test_episte_walk.png", "rows": 6, "foot": 120},
+		"attack": {"file": "res://assets/textures/pawns/test_episte_attack.png", "rows": 6, "foot": 120},
+		"die": {"file": "res://assets/textures/pawns/test_episte_die.png", "rows": 5, "foot": 120},
+		"hurt": {"file": "res://assets/textures/pawns/test_episte_hurt.png", "rows": 3, "foot": 120},
+	},
 }
 
 ## Couleur du pack par camp.
@@ -132,7 +181,12 @@ const MOB_CASTER_COLOR: String = "Purple"
 ## [param side] un [enum TeamData.Side], tel que
 ## [method TeamData.side_for_camp_node] le rend pour le nœud de camp.
 ## [returns] {idle: String, run: String, foot: int, pixel_size: float,
-## hover: float, rows: int, full_cell: bool}
+## hover: float, rows: int, full_cell: bool, clips: Dictionary}
+##
+## `clips` range chaque boucle disponible sous son nom — `{file, rows, foot}` —
+## et c'est la seule entrée que [TacticsPawnSprite] lit pour s'habiller. Les
+## champs `idle`, `run`, `rows` et `foot` restent au premier plan : ce sont ceux
+## du repos, et les menus ([method still_for_stats]) n'ont besoin de rien d'autre.
 static func for_stats(stats: Stats, side: int) -> Dictionary:
 	if not stats:
 		return {}
@@ -153,14 +207,21 @@ static func for_stats(stats: Stats, side: int) -> Dictionary:
 	if not ResourceLoader.exists(idle) or not ResourceLoader.exists(run):
 		return {}
 
+	# Le pack ne dessine que deux boucles, en bandes d'une seule rangée, et cale
+	# ses deux planches sur la même ligne de pieds.
+	var foot: int = int(unit["foot"])
 	return {
 		"idle": idle,
 		"run": run,
-		"foot": int(unit["foot"]),
+		"foot": foot,
 		"pixel_size": PIXEL_SIZE,
 		"hover": HOVER if CD.is_flying(stats.character_class) else 0.0,
 		"rows": 1,
 		"full_cell": false,
+		"clips": {
+			"idle": {"file": idle, "rows": 1, "foot": foot},
+			"run": {"file": run, "rows": 1, "foot": foot},
+		},
 	}
 
 
@@ -197,7 +258,7 @@ static func still_for_stats(stats: Stats, side: int) -> Texture2D:
 ## désigne une figurine ordinaire.
 ##
 ## Le camp n'entre pas en compte : une planche maison n'a qu'une teinte, celle de
-## son dessin. Le repos et la course sont la même planche — voir [constant
+## son dessin. Le nombre de planches, lui, dépend du personnage — voir [constant
 ## CUSTOM_SHEETS].
 static func _custom_look(stats: Stats) -> Dictionary:
 	var sheet: String = stats.sprite.strip_edges()
@@ -208,16 +269,51 @@ static func _custom_look(stats: Stats) -> Dictionary:
 	if not ResourceLoader.exists(sheet):
 		return {}
 
-	var entry: Dictionary = CUSTOM_SHEETS[sheet]
+	var clips: Dictionary = _custom_clips(sheet, CUSTOM_SHEETS[sheet])
+	# Sans repos, il n'y a pas de figurine : la fiche reprend la main.
+	if not clips.has("idle"):
+		return {}
+
+	var idle: Dictionary = clips["idle"]
 	return {
-		"idle": sheet,
-		"run": sheet,
-		"foot": int(entry["foot"]),
+		"idle": str(idle["file"]),
+		"run": str(clips["run"]["file"]),
+		"foot": int(idle["foot"]),
 		"pixel_size": PIXEL_SIZE,
 		"hover": HOVER if CD.is_flying(stats.character_class) else 0.0,
-		"rows": int(entry["rows"]),
+		"rows": int(idle["rows"]),
 		"full_cell": true,
+		"clips": clips,
 	}
+
+
+## Les boucles déclarées par une entrée de [constant CUSTOM_SHEETS], mises au
+## format commun `{clip: {file, rows, foot}}`.
+##
+## Les deux écritures de la table se rejoignent ici, et une seule règle les
+## sépare : `rows` à plat veut dire « une planche pour tout ». Une planche
+## nommée mais absente du disque est passée sous silence plutôt que de faire
+## échouer l'habillage entier — c'est ce qui permet de brancher une animation
+## avant que son dessin ne soit livré.
+static func _custom_clips(sheet: String, entry: Dictionary) -> Dictionary:
+	if entry.has("rows"):
+		var whole: Dictionary = {"file": sheet, "rows": int(entry["rows"]), "foot": int(entry["foot"])}
+		return {"idle": whole, "run": whole.duplicate()}
+
+	var clips: Dictionary = {}
+	for clip: String in CLIPS:
+		if not entry.has(clip):
+			continue
+		var part: Dictionary = entry[clip]
+		var file: String = str(part.get("file", sheet))
+		if not ResourceLoader.exists(file):
+			continue
+		clips[clip] = {"file": file, "rows": int(part["rows"]), "foot": int(part["foot"])}
+
+	# Une figurine sans foulée marche sur son repos, comme l'elfe rousse.
+	if clips.has("idle") and not clips.has("run"):
+		clips["run"] = clips["idle"].duplicate()
+	return clips
 
 
 ## L'unité du pack : l'intitulé d'abord s'il impose quelque chose, la classe sinon.

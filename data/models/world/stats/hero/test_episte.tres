@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_epste"]
+
+[resource]
+script = ExtResource("1_epste")
+override_name = "Épéiste"
+expertise = "Lord"
+strategy = 0
+character_class = 0
+level = 3
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/pawns/test_episte_idle.png"
+hp = 26
+str = 9
+mag = 0
+skl = 8
+spd = 6
+lck = 5
+def = 9
+res = 3
+movement = 5
+jump = 2.0
+attack_range = 1
+weapon_type = 0
+weapon_might = 5
+weapons = Array[String](["iron_sword"])
+equipped_weapon = "iron_sword"
+hp_growth = 80
+str_growth = 60
+mag_growth = 0
+skl_growth = 55
+spd_growth = 40
+lck_growth = 45
+def_growth = 55
+res_growth = 25
+max_health = 26
+attack_power = 14
