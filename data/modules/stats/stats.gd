@@ -10,6 +10,8 @@ const WEAPONS = preload("res://data/models/world/stats/weapon_db.gd")
 const SkillDB = preload("res://data/models/world/stats/skill_db.gd")
 const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 const STATUS = preload("res://data/services/combat/status_effects.gd")
+const BOSS = preload("res://data/services/combat/boss_phases.gd")
+const BOSS_DB = preload("res://data/models/world/stats/boss_db.gd")
 
 #region Identity
 var override_name: String
@@ -80,6 +82,17 @@ var items: Array = []
 var _active_buffs: Array = []
 ## Afflictions en cours : [{status, turns}] — voir [StatusDB]
 var _statuses: Array = []
+#endregion
+
+#region Boss
+## Identifiant de boss ([BossDB]) — "" pour l'immense majorité des unités.
+##
+## Posé par [ChapterRunner] au chargement du niveau, d'après ce que le chapitre
+## déclare : c'est le chapitre qui couronne son boss, pas la fiche `.tres`, qui
+## est partagée entre sept cartes.
+var boss_id: String = ""
+## Indices des phases déjà franchies ([BossPhases]) — une phase ne tombe qu'une fois.
+var _boss_cleared: Array[int] = []
 #endregion
 
 #region Growth Rates
@@ -156,6 +169,11 @@ func import_stats(stats: StatsResource) -> void:
 	var res_equipped: Variant = stats.get("equipped_weapon")
 	if res_equipped is String and not str(res_equipped).is_empty():
 		equip(str(res_equipped))
+
+	# Une fiche importée est une unité neuve : elle n'est le boss de personne
+	# tant qu'un chapitre ne l'a pas couronnée, et n'a franchi aucune phase.
+	boss_id = ""
+	_boss_cleared = []
 
 	# Croissances de classe : par défaut, class_data.gd fait autorité (P1).
 	if stats.get("use_class_growths") == null or bool(stats.use_class_growths):
@@ -700,6 +718,122 @@ func _apply_status_mods(status: String, sign: int) -> void:
 		if delta != 0:
 			set(stat, int(get(stat)) + delta)
 	attack_power = get_total_attack()
+#endregion
+
+
+#region Phases de boss
+## Cette unité est-elle un boss à phases ?
+func is_boss() -> bool:
+	return BOSS.is_boss(boss_id)
+
+
+## Nom propre du boss tel que [BossDB] l'écrit ("" si l'unité n'en est pas un).
+func boss_name() -> String:
+	return BOSS_DB.boss_name(boss_id) if is_boss() else ""
+
+
+## Titre affiché du boss (« Chef pillard »), "" s'il n'en a pas.
+func boss_title() -> String:
+	return BOSS_DB.title(boss_id) if is_boss() else ""
+
+
+## Forme courante, pour l'affichage : « Phase 2/3 — Rage ». "" hors boss.
+func boss_phase_label() -> String:
+	return BOSS.label_for(boss_id, _boss_cleared)
+
+
+## Phases déjà franchies (lecture seule, pour l'UI et l'instantané de bataille).
+func cleared_boss_phases() -> Array[int]:
+	return _boss_cleared.duplicate()
+
+
+## Réinstalle les phases franchies [b]sans rejouer leurs effets[/b].
+##
+## Même piège, même porte que [method set_active_buffs] : les chiffres relus dans
+## un instantané portent déjà les gains de la rage, puisque
+## [method advance_boss_phases] les a ajoutés à la statistique elle-même. Repasser
+## par la bascule les compterait deux fois ; ne rien faire ferait rugir le boss
+## une seconde fois au premier coup reçu après la reprise.
+func set_cleared_boss_phases(indices: Array) -> void:
+	_boss_cleared = BOSS.sanitize_cleared(indices, BOSS.phase_count(boss_id))
+
+
+## Fait basculer le boss dans toutes les phases que ses PV viennent de franchir.
+##
+## Le seul endroit qui applique les effets d'une phase — et il ne les applique
+## qu'une fois, [BossPhases] tenant le compte de ce qui est déjà tombé. À appeler
+## après [b]tout[/b] ce qui retire des PV : l'échange de coups
+## ([method TacticsPawnCombatService._apply_exchange]) comme les afflictions
+## ([method TacticsPawn._resolve_statuses]). Sans effet sur qui n'est pas un boss,
+## ce qui permet de brancher l'appel sans le conditionner au site d'appel.
+##
+## Les gains sont [b]définitifs[/b] et non des bonus temporaires : un boss enragé
+## le reste jusqu'à sa chute, là où [method apply_buff] s'éteindrait au tour
+## suivant — c'est-à-dire souvent avant que le joueur ait pu le frapper à nouveau.
+##
+## [returns] les phases déclenchées, du seuil le plus haut au plus bas, chacune
+## enrichie de ce qu'elle a réellement fait : {index, number, label, message,
+## threshold, gains, healed: int, learned: Array[String], cured: Array[String],
+## hp, max_hp}. Vide quand rien ne bascule — le cas de très loin le plus fréquent.
+func advance_boss_phases() -> Array:
+	if not is_boss():
+		return []
+
+	var outcome: Dictionary = BOSS.triggered(boss_id, hp, max_hp, _boss_cleared)
+	var fired: Array = outcome["phases"]
+	if fired.is_empty():
+		return []
+	_boss_cleared = outcome["cleared"]
+
+	var report: Array = []
+	for phase: Dictionary in fired:
+		report.append(_apply_boss_phase(phase))
+	return report
+
+
+## Applique une bascule et rend le compte rendu de ce qu'elle a changé.
+##
+## L'ordre est celui-ci, et il compte : les statistiques, puis les afflictions
+## levées, puis le soin, puis les compétences. Soigner avant de lever la brûlure
+## se lirait mal — l'armure revient en même temps que les PV, et le joueur doit
+## voir les deux au même instant.
+##
+## Le soin ne peut pas ressusciter : [method BossPhases.triggered] a déjà refusé
+## de faire basculer un boss à zéro PV.
+func _apply_boss_phase(phase: Dictionary) -> Dictionary:
+	var gains: Dictionary = phase.get("gains", {})
+	for key: String in BOSS_DB.GAIN_KEYS:
+		if gains.has(key):
+			set(key, int(get(key)) + int(gains[key]))
+	attack_power = get_total_attack()
+
+	var cured: Array = []
+	if bool(phase.get("cure", false)):
+		cured = cure_statuses()["labels"]
+
+	var healed: int = 0
+	var ratio: float = float(phase.get("heal", 0.0))
+	if ratio > 0.0:
+		healed = mini(int(round(ratio * float(max_hp))), maxi(0, max_hp - hp))
+		if healed > 0:
+			apply_to_curr_health(healed)
+
+	var learned: Array[String] = []
+	for skill_id: Variant in phase.get("skills", []):
+		if learn_skill(str(skill_id)):
+			learned.append(str(skill_id))
+
+	var report: Dictionary = phase.duplicate(true)
+	# La forme atteinte, et non le nombre de bascules déjà tombées : deux phases
+	# franchies d'un seul coup critique doivent s'annoncer « 2/3 » puis « 3/3 »,
+	# pas « 3/3 » deux fois.
+	report["number"] = int(phase["index"]) + 2
+	report["healed"] = healed
+	report["learned"] = learned
+	report["cured"] = cured
+	report["hp"] = hp
+	report["max_hp"] = max_hp
+	return report
 #endregion
 
 

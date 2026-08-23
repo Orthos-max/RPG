@@ -91,7 +91,27 @@ func _ready() -> void:
 	await _apply_deployment_tiles()
 	_mark_seize_point()
 	_arm_chests()
+	_crown_boss()
 	_start_deployment()
+
+
+## Couronne le boss du chapitre : pose [member Stats.boss_id] sur l'unité que le
+## chapitre désigne (par le nom affiché de sa cible d'objectif), d'après le
+## catalogue [BossDB]. Sans effet quand le chapitre n'a pas de boss.
+func _crown_boss() -> void:
+	var boss_id: String = str(chapter.boss) if chapter else ""
+	if boss_id.is_empty() or not level or not level.opponent:
+		return
+	var target: String = ""
+	if chapter.objective is Dictionary:
+		target = str(chapter.objective.get("target", ""))
+	if target.is_empty():
+		return
+	for p in level.opponent.get_children():
+		if p is TacticsPawn and is_instance_valid(p) and p.stats \
+				and EXECUTOR.display_name(p) == target:
+			p.stats.boss_id = boss_id
+			return
 
 
 func _process(delta: float) -> void:

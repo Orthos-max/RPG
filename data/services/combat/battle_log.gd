@@ -28,6 +28,7 @@ enum Kind {
 	CHEST = 9,
 	STATUS_APPLIED = 10,  ## Une affliction vient d'être posée ([StatusDB])
 	STATUS_DAMAGE = 11,   ## Une affliction se paie au début d'un tour
+	BOSS_PHASE = 12,      ## Un boss franchit un seuil de PV ([BossPhases])
 }
 
 ## Tous les événements de la partie courante
@@ -116,6 +117,28 @@ func record_status_damage(pawn: String, damage: int, pawn_hp: int,
 	})
 
 
+## Un boss vient de franchir un seuil de PV et de changer de forme.
+##
+## L'événement porte le [b]compte rendu de ce qui a réellement été appliqué[/b]
+## ([method Stats.advance_boss_phases]) et non la phase telle qu'elle est écrite
+## au catalogue : le soin est celui qui a tenu sous les PV maximum, les
+## compétences sont celles qui n'étaient pas déjà connues. Un replay relu doit
+## raconter la bataille qui a eu lieu, pas celle que [BossDB] promettait.
+func record_boss_phase(pawn: String, phase: Dictionary) -> void:
+	record(Kind.BOSS_PHASE, {
+		"pawn": pawn,
+		"phase": int(phase.get("number", 0)),
+		"label": str(phase.get("label", "")),
+		"message": str(phase.get("message", "")),
+		"threshold": float(phase.get("threshold", 0.0)),
+		"gains": phase.get("gains", {}),
+		"healed": int(phase.get("healed", 0)),
+		"learned": phase.get("learned", []),
+		"cured": phase.get("cured", []),
+		"pawn_hp": int(phase.get("hp", 0)),
+	})
+
+
 func record_death(pawn: String, team: String, killer: String = "") -> void:
 	record(Kind.DEATH, {"pawn": pawn, "team": team, "killer": killer})
 
@@ -188,4 +211,5 @@ static func kind_name(kind: int) -> String:
 		Kind.CHEST: return "chest"
 		Kind.STATUS_APPLIED: return "status_applied"
 		Kind.STATUS_DAMAGE: return "status_damage"
+		Kind.BOSS_PHASE: return "boss_phase"
 		_: return "event"

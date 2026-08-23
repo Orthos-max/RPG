@@ -23,6 +23,8 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 @export var scene_path: String = "res://assets/maps/level/map_level.tscn"
 ## Objectif principal : {kind, target, turns, col, row}
 @export var objective: Dictionary = {"kind": 0}
+## Identifiant du boss du chapitre ([BossDB]) — "" si le chapitre n'en a pas.
+@export var boss: String = ""
 ## Objectifs secondaires : [{kind, turns}]
 @export var bonus_objectives: Array = []
 ## Nombre d'unités déployables
@@ -65,6 +67,7 @@ static func from_dict(data: Dictionary) -> ChapterData:
 	c.subtitle = str(data.get("subtitle", ""))
 	c.scene_path = str(data.get("scene_path", c.scene_path))
 	c.objective = data.get("objective", {"kind": 0})
+	c.boss = str(data.get("boss", ""))
 	c.bonus_objectives = data.get("bonus_objectives", [])
 	c.deploy_slots = int(data.get("deploy_slots", 3))
 	c.deploy_tiles = data.get("deploy_tiles", [])

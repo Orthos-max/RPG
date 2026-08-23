@@ -148,6 +148,22 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 	elif not str(exchange["counter_reason"]).is_empty():
 		print("↩ pas de riposte de %s : %s" % [defender_name, exchange["counter_reason"]])
 
+	# --- Afflictions, dans les deux sens ---
+	# Après les dégâts, avant les morts : une arme venimeuse n'empoisonne que ce
+	# qui respire encore, et le survivant du tour doit repartir avec son poison.
+	if bool(atk_side["hit"]):
+		_try_afflict(pawn, target_pawn, atk_side["skills"])
+	if bool(def_side["hit"]):
+		_try_afflict(target_pawn, pawn, def_side["skills"])
+
+	# --- Bascules de phase, dans les deux sens ---
+	# Après les afflictions (une phase peut les lever) et avant les morts : un
+	# boss encore debout doit rugir pendant qu'il est encore là. Les deux camps,
+	# parce que rien n'interdit à un boss d'être du côté du joueur, et que
+	# l'appel ne coûte rien à qui n'en est pas un.
+	check_boss_phases(target_pawn)
+	check_boss_phases(pawn)
+
 	# --- XP et soutiens, dans les deux sens ---
 	var defender_fell: bool = not target_pawn.is_alive()
 	var attacker_fell: bool = not pawn.is_alive()
@@ -562,9 +578,148 @@ func award_exp(attacker: TacticsPawn, defender: TacticsPawn, is_kill: bool) -> v
 			}])
 
 
+#region Afflictions
+## L'affliction qu'un coup porté par cette arme pose, ou {} s'il n'en pose aucune.
+##
+## Le tirage est [b]passé en argument[/b] et non tiré ici : c'est ce qui rend la
+## règle vérifiable en headless — on peut demander « et si le dé donnait 44 ? »
+## sans jamais monter de bataille. [method _try_afflict] est le seul à tirer.
+##
+## [param roll] Tirage de 1 à 100. L'affliction tombe quand il ne dépasse pas la
+## chance de l'arme : à 45 %, les tirages 1 à 45 affligent.
+## [returns] {status: String, turns: int} — vide si l'arme est inoffensive ou si
+## le dé a été clément.
+static func status_from_weapon(weapon_id: String, roll: int) -> Dictionary:
+	var spec: Dictionary = WeaponDB.inflicts(weapon_id)
+	if spec.is_empty() or not StatusDB.exists(str(spec["status"])):
+		return {}
+	if roll > int(spec["chance"]):
+		return {}
+	return {"status": str(spec["status"]), "turns": int(spec["turns"])}
+
+
+## Les afflictions que les compétences déclenchées pendant l'échange posent.
+##
+## Le pendant « compétence » de [method status_from_weapon], et la même règle de
+## pureté — mais poussée plus loin : rien n'est tiré ici du tout. Le dé a déjà
+## roulé dans [method FECombatCalculator.roll_strike], qui rend les identifiants
+## des compétences ayant pris ; cette fonction ne fait que les traduire en
+## afflictions. Elle se vérifie donc sans RNG, sans pion et sans bataille.
+##
+## [param skill_ids] Compétences réellement déclenchées par un camp.
+## [returns] [{status, turns}] — vide si aucune n'afflige.
+static func statuses_from_skills(skill_ids: Array) -> Array:
+	var out: Array = []
+	for id: Variant in skill_ids:
+		var skill: Dictionary = SkillDBRef.get_skill(str(id))
+		if str(skill.get("proc", "")) != "inflict":
+			continue
+		var status: String = str(skill.get("status", ""))
+		if not StatusDB.exists(status):
+			continue
+		out.append({"status": status, "turns": int(skill.get("status_turns", 0))})
+	return out
+
+
+## Tente de poser sur [param victim] les afflictions du coup que vient de porter
+## [param attacker] : celle de son arme, puis celles de ses compétences.
+##
+## Sans effet si l'assaillant n'afflige par aucune des deux voies, ou si la
+## victime est déjà tombée — on n'empoisonne pas un mort.
+##
+## [param skill_ids] Compétences déclenchées par l'assaillant pendant l'échange,
+## telles que [method _side_summary] les a collectées.
+func _try_afflict(attacker: TacticsPawn, victim: TacticsPawn, skill_ids: Array = []) -> void:
+	if not attacker or not victim or not attacker.stats or not victim.stats:
+		return
+	if not victim.is_alive():
+		return
+
+	# L'arme d'abord, les compétences ensuite. Les deux voies peuvent porter la
+	# même affliction sans que rien ne double : [StatusEffects.apply] ne les
+	# empile pas, il garde la plus longue des deux durées.
+	var afflictions: Array = []
+	var from_weapon: Dictionary = status_from_weapon(
+		str(attacker.stats.equipped_weapon), randi_range(1, 100))
+	if not from_weapon.is_empty():
+		afflictions.append(from_weapon)
+	afflictions.append_array(statuses_from_skills(skill_ids))
+
+	for affliction: Dictionary in afflictions:
+		_afflict(attacker, victim, str(affliction["status"]), int(affliction["turns"]))
+
+
+## Pose une affliction et la journalise — ou dit qu'elle a été repoussée.
+##
+## Le passage obligé par [method Stats.suffer_status] est ce qui donne leur mot à
+## dire aux compétences défensives : c'est là, et nulle part ailleurs, que le
+## sang-froid raccourcit ce qu'il subit.
+func _afflict(attacker: TacticsPawn, victim: TacticsPawn, status: String, turns: int) -> void:
+	var applied: Dictionary = victim.stats.suffer_status(status, turns)
+	var victim_name: String = _get_name(victim)
+
+	if not bool(applied["ok"]):
+		# Une affliction repoussée est un fait de combat, pas un non-événement :
+		# sans cette ligne, le joueur croit que le dé a simplement été clément.
+		if bool(applied.get("warded", false)):
+			print("🛡 %s résiste : %s ne prend pas" % [victim_name, StatusDB.label(status)])
+		return
+
+	print("%s %s : %s pour %d tour(s)%s" % [
+		StatusDB.glyph(str(applied["status"])), victim_name,
+		str(applied["label"]), int(applied["turns"]),
+		" (écourté)" if bool(applied.get("warded", false)) else "",
+	])
+	_record(&"record_status_applied", [
+		_get_name(attacker), victim_name, str(applied["status"]), int(applied["turns"]),
+	])
+#endregion
+
+
+#region Phases de boss
+## Fait basculer [param p] dans les phases que ses PV viennent de franchir, et
+## raconte ce qui vient d'arriver.
+##
+## [b]Statique et sans condition à l'appel[/b], comme [method play_figure] : le
+## site d'appel n'a pas à savoir si le pion est un boss. Les deux endroits qui
+## retirent des PV l'appellent — l'échange de coups
+## ([method _apply_exchange]) et les afflictions de début de tour
+## ([method TacticsPawn._resolve_statuses]) — et un poison qui pousse un boss sous
+## son seuil le fait rugir tout autant qu'un coup d'épée. Ne rien brancher sur la
+## seconde voie laisserait une bascule silencieuse : le boss gagnerait ses
+## statistiques au coup [i]suivant[/i], ou jamais si personne ne le frappe plus.
+##
+## La décision revient entièrement à [method Stats.advance_boss_phases] ; ici on
+## ne fait que la mettre en mots et en son.
+##
+## [returns] les phases déclenchées (vide dans l'immense majorité des appels).
+static func check_boss_phases(p: TacticsPawn) -> Array:
+	if not p or not is_instance_valid(p) or not p.stats:
+		return []
+
+	var fired: Array = p.stats.advance_boss_phases()
+	if fired.is_empty():
+		return []
+
+	var boss_name: String = p.display_name()
+	for phase: Dictionary in fired:
+		var message: String = str(phase["message"])
+		if message.is_empty():
+			message = "%s change de posture." % boss_name
+		print_rich("[color=gold][b]👑 %s[/b][/color]  (%s : %d/%d PV)" % [
+			message, boss_name, int(phase["hp"]), int(phase["max_hp"]),
+		])
+		var detail: String = BossPhases.effects_summary(phase)
+		if not detail.is_empty():
+			print("   ↳ %s" % detail)
+		_record(&"record_boss_phase", [boss_name, phase])
+	return fired
+#endregion
+
+
 ## Journalise un événement via l'autoload BattleRecorder, s'il est présent.
 ## Reste silencieux hors runtime complet (tests unitaires headless).
-func _record(method: StringName, args: Array) -> void:
+static func _record(method: StringName, args: Array) -> void:
 	var loop := Engine.get_main_loop()
 	if not loop is SceneTree:
 		return

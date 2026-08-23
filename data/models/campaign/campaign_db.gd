@@ -83,6 +83,10 @@ const CHAPTERS: Array[Dictionary] = [
 		# La cible doit correspondre au nom affiché d'un pion de la carte
 		# (skeleton_cpn.tres → « Garrick »), sinon l'objectif serait gagné d'emblée.
 		"objective": {"kind": OBJ.Kind.DEFEAT_BOSS, "target": "Garrick"},
+		# Garrick est le boss du chapitre : ses phases ([BossDB] « garrick ») se
+		# déclenchent quand il passe sous ses seuils de PV ([ChapterRunner] le
+		# couronne au chargement).
+		"boss": "garrick",
 		"bonus_objectives": [
 			{"kind": OBJ.Bonus.FULL_ROUT},
 			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 10},
