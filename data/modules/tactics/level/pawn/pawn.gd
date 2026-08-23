@@ -139,6 +139,20 @@ func reset_turn() -> void:
 ## soutien, deux faveurs qu'une unité paralysée n'a pas gagnées.
 func _resolve_statuses() -> void:
 	var outcome: Dictionary = stats.tick_statuses()
+
+	# La régénération ([SkillDB]) répond aux afflictions, elle ne les précède pas :
+	# le poison mord d'abord, la compétence rend ensuite ce qu'elle peut. Soigner
+	# en premier ferait passer une unité juste au-dessus du seuil de PV bas, qui
+	# perdrait alors le bénéfice de la compétence au moment même où elle en a
+	# besoin — et reperdrait ses PV dans la foulée.
+	var healed: int = stats.tick_regeneration()
+	if healed > 0:
+		print("💚 %s régénère %d PV (%d/%d)" % [
+			display_name(), healed, stats.hp, stats.max_hp])
+		var healer: Node = get_node_or_null("/root/BattleRecorder")
+		if healer:
+			healer.record_heal(display_name(), display_name(), healed, stats.hp)
+
 	if int(outcome["damage"]) <= 0 and not bool(outcome["blocked"]) \
 			and (outcome["expired"] as Array).is_empty():
 		return

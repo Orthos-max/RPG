@@ -239,6 +239,13 @@ static func roll_strike(result: CombatResult, rng: RandomNumberGenerator = null)
 				out["damage"] += int(floor(float(result.defense_used) / 2.0))
 			"extra_hit":
 				out["damage"] += result.damage
+			"inflict":
+				# Rien à ajouter au coup : l'affliction ne se paie pas maintenant.
+				# Le calculateur ne connaît ni pion ni fiche, il ne peut donc pas
+				# la poser lui-même — il se contente de dire que la compétence a
+				# pris, et le service de combat traduit l'identifiant en
+				# affliction ([TacticsPawnCombatService.statuses_from_skills]).
+				pass
 
 	return out
 
@@ -354,5 +361,9 @@ static func roll_combat(result: CombatResult) -> Dictionary:
 			"extra_hit":
 				# Astre : une frappe supplémentaire aux dégâts de base.
 				outcomes["total_damage"] += result.damage
+			"inflict":
+				# Venin, Braise, Décharge : l'affliction est posée par le service
+				# de combat, pas ici — voir [method roll_strike].
+				pass
 
 	return outcomes

@@ -17,6 +17,8 @@ const CMAP = preload("res://data/models/campaign/chapter_map.gd")
 const MAP_DATA = preload("res://data/models/world/map/map_data.gd")
 const OBJ = preload("res://data/models/campaign/objective.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
+const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
+const CombatService = preload("res://data/models/world/combat/participant/pawn/service/combat.gd")
 const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
@@ -866,6 +868,181 @@ func _test_skills() -> void:
 		"le catalogue de compétences s'énumère en entier")
 
 	await _test_editor_tooltips()
+	_test_status_skills()
+
+
+## Les compétences qui posent, écourtent ou compensent une affliction.
+##
+## Elles se vérifient sans monter la moindre bataille : le catalogue est pur, le
+## tirage se passe en argument ([method Calc.roll_strike] avec une graine fixe),
+## et la traduction des identifiants déclenchés en afflictions
+## ([method CombatService.statuses_from_skills]) ne connaît ni pion ni scène.
+func _test_status_skills() -> void:
+	print("\n☠  Test 11ter: compétences à effet de statut")
+
+	# --- Catalogue ---
+	for id: String in ["venom", "ember", "jolt"]:
+		var skill: Dictionary = SKILLS.get_skill(id)
+		_check(int(skill["kind"]) == SKILLS.Kind.ACTIVE
+				and str(skill["proc"]) == "inflict"
+				and STATUS_DB.exists(str(skill["status"]))
+				and int(skill["status_turns"]) > 0,
+			"%s : proc affligeant bien formé" % id, str(skill))
+	_check(int(SKILLS.get_skill("venom")["status_turns"]) <= STATUS_DB.MAX_TURNS
+			and int(SKILLS.get_skill("jolt")["status_turns"]) <= STATUS_DB.MAX_TURNS,
+		"durées des compétences sous le plafond du catalogue")
+
+	# La chance est fixe, elle ne suit pas l'Adresse — c'est ce qui distingue une
+	# compétence affligeante d'une compétence de frappe.
+	_check(SKILLS.proc_chance("venom", 3) == 35 and SKILLS.proc_chance("venom", 40) == 35,
+		"Venin : 35 %% quelle que soit l'Adresse")
+	_check(SKILLS.proc_chance("luna", 20) == 20 and SKILLS.proc_chance("astra", 20) == 10,
+		"Lune et Astre suivent toujours l'Adresse")
+
+	var procs: Array = SKILLS.active_procs(["venom", "duelist"], {"attacking": true}, 3)
+	_check(procs.size() == 1 and str(procs[0]["status"]) == "poison"
+			and int(procs[0]["status_turns"]) == 3 and int(procs[0]["chance"]) == 35,
+		"Venin listé avec son affliction et sa durée", str(procs))
+	_check(SKILLS.active_procs(["venom"], {"attacking": false}, 3).is_empty(),
+		"Venin muet quand l'unité encaisse")
+
+	# --- Déclenchement réel dans un jet de combat ---
+	# Le poison ne tombe pas à tous les coups : on cherche une graine où il tombe
+	# et une où il ne tombe pas, plutôt que de figer un nombre magique.
+	var poisoner: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	poisoner.set_skills(["venom"])
+	var prey: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	var shot = Calc.calculate(poisoner, prey)
+	_check(shot.procs.size() == 1 and str(shot.procs[0]["id"]) == "venom",
+		"le calculateur porte le proc de Venin", str(shot.procs))
+
+	var triggered: int = 0
+	var missed_proc: int = 0
+	for seed_value: int in range(40):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var blow: Dictionary = Calc.roll_strike(shot, rng)
+		if not bool(blow["hit"]):
+			continue
+		if "venom" in blow["skills"]:
+			triggered += 1
+		else:
+			missed_proc += 1
+	_check(triggered > 0 and missed_proc > 0,
+		"Venin tombe parfois et pas toujours (%d / %d coups portés)" % [
+			triggered, triggered + missed_proc])
+
+	# Un proc affligeant n'ajoute rien aux dégâts : c'est du temps volé, pas de la
+	# puissance. Sans ce test, « inflict » pourrait se comporter comme « pierce ».
+	var damage_seen: Dictionary = {}
+	for seed_value: int in range(40):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var blow: Dictionary = Calc.roll_strike(shot, rng)
+		if bool(blow["hit"]) and not bool(blow["crit"]):
+			damage_seen[int(blow["damage"])] = true
+	_check(damage_seen.keys() == [shot.damage],
+		"Venin ne gonfle pas les dégâts du coup", str(damage_seen.keys()))
+
+	# --- Des identifiants déclenchés aux afflictions ---
+	var posed: Array = CombatService.statuses_from_skills(["venom", "luna", "inexistante"])
+	_check(posed.size() == 1 and str(posed[0]["status"]) == "poison"
+			and int(posed[0]["turns"]) == 3,
+		"seul Venin se traduit en affliction", str(posed))
+	_check(CombatService.statuses_from_skills([]).is_empty(),
+		"aucune compétence déclenchée : aucune affliction")
+
+	# --- Pose sur une unité, compétence défensive comprise ---
+	var victim: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	victim.set_skills([])
+	var landed: Dictionary = victim.suffer_status("poison", 3)
+	_check(bool(landed["ok"]) and victim.status_turns_left("poison") == 3
+			and not bool(landed["warded"]),
+		"poison posé pour 3 tours sur une unité sans parade", str(landed))
+
+	var stoic: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	stoic.set_skills(["cold_blood"])
+	var shortened: Dictionary = stoic.suffer_status("poison", 3)
+	_check(bool(shortened["ok"]) and int(shortened["turns"]) == 2
+			and bool(shortened["warded"]),
+		"Sang-froid écourte le poison de 3 à 2 tours", str(shortened))
+	var repelled: Dictionary = stoic.suffer_status("paralyze", 1)
+	_check(not bool(repelled["ok"]) and bool(repelled["warded"])
+			and not stoic.has_status("paralyze"),
+		"Sang-froid repousse entièrement une paralysie d'un tour", str(repelled))
+	_check(stoic.suffer_status("burn").ok and stoic.status_turns_left("burn") == 1,
+		"la durée par défaut du catalogue est écourtée elle aussi")
+
+	# La porte brute reste brute : ce que l'éditeur ou un objet pose ne se
+	# fait pas raboter au passage.
+	var forced: CharStats = _live("res://data/models/world/stats/mob/skeleton.tres")
+	forced.set_skills(["cold_blood"])
+	forced.apply_status("poison", 3)
+	_check(forced.status_turns_left("poison") == 3,
+		"apply_status ignore le sang-froid, suffer_status non")
+	_check(not forced.suffer_status("inexistante").ok,
+		"affliction inconnue refusée par suffer_status")
+
+	# --- Régénération ---
+	var hurt: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	hurt.set_skills(["regeneration"])
+	hurt.hp = 4  # Bien sous la moitié de ses PV
+	var healed: int = hurt.tick_regeneration()
+	_check(healed == 3 and hurt.hp == 7, "Régénération rend 3 PV sous 50 %% de PV",
+		"soigné %d, PV %d" % [healed, hurt.hp])
+
+	hurt.hp = hurt.max_hp
+	_check(hurt.tick_regeneration() == 0, "rien à rendre à pleins PV")
+	hurt.hp = hurt.max_hp - 1
+	_check(hurt.tick_regeneration() == 0 and hurt.hp == hurt.max_hp - 1,
+		"au-dessus du seuil de PV, la régénération ne s'active pas", str(hurt.hp))
+	hurt.hp = 0
+	_check(hurt.tick_regeneration() == 0, "une unité tombée ne régénère pas")
+
+	var plain: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	plain.set_skills([])
+	plain.hp = 4
+	_check(plain.tick_regeneration() == 0, "sans la compétence, rien n'est rendu")
+
+	# --- Branchement par classe ---
+	_check("venom" in CDB.unlocked_skills(CDB.Id.SORCERER, 1),
+		"Sorcier : Venin dès le Lv.1", str(CDB.unlocked_skills(CDB.Id.SORCERER, 1)))
+	_check(not "venom" in CDB.unlocked_skills(CDB.Id.DARK_MAGE, 5)
+			and "venom" in CDB.unlocked_skills(CDB.Id.DARK_MAGE, 6),
+		"Mage noir : Venin au Lv.6, pas avant")
+	_check("ember" in CDB.unlocked_skills(CDB.Id.SAGE, 4), "Sage : Braise au Lv.4")
+	_check("jolt" in CDB.unlocked_skills(CDB.Id.GRANDMASTER, 6),
+		"Grand maître : Décharge au Lv.6")
+	_check("cold_blood" in CDB.unlocked_skills(CDB.Id.KNIGHT, 8)
+			and "cold_blood" in CDB.unlocked_skills(CDB.Id.GREAT_KNIGHT, 4),
+		"Chevaliers cuirassés : Sang-froid")
+	_check("regeneration" in CDB.unlocked_skills(CDB.Id.CLERIC, 8)
+			and "regeneration" in CDB.unlocked_skills(CDB.Id.WAR_CLERIC, 4),
+		"Clercs : Régénération")
+
+	# Toute compétence citée par une classe doit exister — un identifiant mal
+	# tapé y resterait sinon invisible jusqu'à ce qu'une unité l'atteigne.
+	var unknown: Array[String] = []
+	for class_id: Variant in CDB.DATA:
+		for entry: Dictionary in CDB.get_class_skills(class_id):
+			if not SKILLS.exists(str(entry["id"])):
+				unknown.append("%s:%s" % [CDB.get_class_name(class_id), str(entry["id"])])
+	_check(unknown.is_empty(), "aucune classe ne cite de compétence inconnue", str(unknown))
+
+	# --- Affichage ---
+	_check(SKILLS.short_effect("venom") == "☠ Poison 35%",
+		"Venin se lit à son affliction", SKILLS.short_effect("venom"))
+	_check(SKILLS.short_effect("cold_blood").contains("tour")
+			and SKILLS.short_effect("regeneration").contains("PV/tour"),
+		"les effets hors table de modificateurs se lisent quand même",
+		"%s / %s" % [SKILLS.short_effect("cold_blood"), SKILLS.short_effect("regeneration")])
+	_check(SKILLS.short_effect("luna") == "perce l'armure"
+			and SKILLS.short_effect("duelist") == "+10 Préc",
+		"les compétences d'avant s'affichent comme avant",
+		"%s / %s" % [SKILLS.short_effect("luna"), SKILLS.short_effect("duelist")])
+	for id: String in ["venom", "ember", "jolt", "cold_blood", "regeneration"]:
+		_check(not SKILLS.tooltip(id).is_empty() and not SKILLS.summary(id).is_empty(),
+			"%s : info-bulle et résumé remplis" % id, SKILLS.summary(id))
 #endregion
 
 

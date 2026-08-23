@@ -137,7 +137,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
-		"skills": [{"id": "serenity", "level": 1}],
+		"skills": [{"id": "serenity", "level": 1}, {"id": "regeneration", "level": 8}],
 	},
 	Id.WAR_CLERIC: {
 		"name": "War Cleric",
@@ -148,7 +148,8 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
-		"skills": [{"id": "serenity", "level": 1}, {"id": "guardian", "level": 6}],
+		"skills": [{"id": "serenity", "level": 1}, {"id": "regeneration", "level": 4},
+			{"id": "guardian", "level": 6}],
 	},
 	Id.SAGE: {
 		"name": "Sage",
@@ -159,7 +160,8 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
-		"skills": [{"id": "serenity", "level": 1}, {"id": "luna", "level": 8}],
+		"skills": [{"id": "serenity", "level": 1}, {"id": "ember", "level": 4},
+			{"id": "luna", "level": 8}],
 	},
 	Id.TACTICIAN: {
 		"name": "Tactician",
@@ -181,7 +183,8 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
-		"skills": [{"id": "focus", "level": 1}, {"id": "luna", "level": 8}],
+		"skills": [{"id": "focus", "level": 1}, {"id": "jolt", "level": 6},
+			{"id": "luna", "level": 8}],
 	},
 	Id.BRIGAND: {
 		"name": "Brigand",
@@ -214,7 +217,7 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
-		"skills": [{"id": "serenity", "level": 4}],
+		"skills": [{"id": "serenity", "level": 4}, {"id": "venom", "level": 6}],
 	},
 	Id.SORCERER: {
 		"name": "Sorcerer",
@@ -225,7 +228,8 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
-		"skills": [{"id": "serenity", "level": 1}, {"id": "luna", "level": 6}],
+		"skills": [{"id": "serenity", "level": 1}, {"id": "venom", "level": 1},
+			{"id": "luna", "level": 6}],
 	},
 	Id.KNIGHT: {
 		"name": "Knight",
@@ -236,7 +240,8 @@ static var DATA: Dictionary = {
 		"promo_level": 10,
 		"is_promoted": false,
 		"flying": false,
-		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 5}],
+		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 5},
+			{"id": "cold_blood", "level": 8}],
 	},
 	Id.GREAT_KNIGHT: {
 		"name": "Great Knight",
@@ -247,7 +252,8 @@ static var DATA: Dictionary = {
 		"promo_level": -1,
 		"is_promoted": true,
 		"flying": false,
-		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 1}, {"id": "charge", "level": 8}],
+		"skills": [{"id": "bulwark", "level": 1}, {"id": "guardian", "level": 1},
+			{"id": "cold_blood", "level": 4}, {"id": "charge", "level": 8}],
 	},
 	Id.PEGASUS_KNIGHT: {
 		"name": "Pegasus Knight",

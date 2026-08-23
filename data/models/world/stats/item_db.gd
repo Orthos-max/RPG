@@ -9,6 +9,7 @@ enum Kind {
 	HEAL = 0,   ## Rend des PV
 	BUFF = 1,   ## Bonus de stat temporaire (en tours)
 	BOOST = 2,  ## Gain de stat permanent (utilisé depuis l'intendance)
+	CURE = 3,   ## Lève les effets de statut ([StatusDB])
 }
 
 ## Nombre maximum d'objets transportés par unité
@@ -33,6 +34,11 @@ static var DATA: Dictionary = {
 		"icon": "concoction"},
 	"Elixir": {"kind": Kind.HEAL, "amount": 999, "price": 500, "label": "Élixir",
 		"icon": "elixir"},
+	# L'antidote lève [b]toutes[/b] les afflictions d'un coup, poison comme
+	# paralysie. Un remède par statut ferait quatre objets à trimballer dans un
+	# inventaire de cinq places : le choix serait celui du sac, pas du combat.
+	"Antidote": {"kind": Kind.CURE, "price": 240, "label": "Antidote",
+		"icon": "vulnerary"},
 	"Def Tonic": {"kind": Kind.BUFF, "stat": "def", "amount": 2, "turns": 2, "price": 180,
 		"label": "Tonique de défense", "icon": "def_tonic"},
 	"Spd Tonic": {"kind": Kind.BUFF, "stat": "spd", "amount": 2, "turns": 2, "price": 180,

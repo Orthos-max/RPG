@@ -561,6 +561,56 @@ func apply_status(status: String, turns: int = 0) -> Dictionary:
 		"refreshed": bool(result["refreshed"]), "label": STATUS_DB.label(key)}
 
 
+## Pose une affliction en laissant les compétences de l'unité s'y opposer.
+##
+## Le pendant [i]subi[/i] de [method apply_status], qui reste la porte brute —
+## celle d'un objet, de l'éditeur de personnages ou d'un instantané relu, où rien
+## ne doit s'interposer entre l'intention et la fiche. Ici au contraire, le
+## sang-froid ([SkillDB]) retranche ses tours avant la pose, et une affliction
+## ramenée à zéro tour ne prend tout simplement pas.
+##
+## C'est le chemin que doit emprunter tout ce qui vient d'un coup porté : arme
+## affligeante comme compétence à déclenchement. Passer par `apply_status` là-bas
+## rendrait la compétence défensive muette.
+##
+## [param turns] 0 : la durée par défaut du catalogue s'applique, avant déduction.
+## [returns] {ok, status, turns, refreshed, label, warded} — `warded` vrai dès
+## qu'une compétence a raccourci l'affliction, `ok` faux si elle l'a effacée.
+func suffer_status(status: String, turns: int = 0) -> Dictionary:
+	var key: String = STATUS_DB.canonical_key(status)
+	if key.is_empty():
+		return {"ok": false, "status": "", "turns": 0, "refreshed": false,
+			"label": "", "warded": false}
+
+	var wanted: int = turns if turns > 0 else STATUS_DB.default_turns(key)
+	var kept: int = SkillDB.warded_turns(get_skills(), skill_context(false), wanted)
+	if kept <= 0:
+		return {"ok": false, "status": key, "turns": 0, "refreshed": false,
+			"label": STATUS_DB.label(key), "warded": true}
+
+	var applied: Dictionary = apply_status(key, kept)
+	applied["warded"] = kept < wanted
+	return applied
+
+
+## PV rendus par les compétences de régénération, au début du tour de l'unité.
+##
+## Rien n'est rendu à qui est déjà tombé, ni au-delà des PV maximum. Le contexte
+## est celui d'une unité qui [i]encaisse[/i] (`attacking` faux) : la régénération
+## se juge sur les PV restants, pas sur ce que l'unité s'apprête à faire.
+##
+## [returns] les PV réellement regagnés (0 si l'unité n'a aucune régénération,
+## est à pleins PV, ou hors de combat).
+func tick_regeneration() -> int:
+	if hp <= 0:
+		return 0
+	var amount: int = SkillDB.regeneration(get_skills(), skill_context(false))
+	amount = mini(amount, maxi(0, max_hp - hp))
+	if amount > 0:
+		apply_to_curr_health(amount)
+	return amount
+
+
 ## Fait vivre les afflictions d'un tour : dégâts, blocage, expirations.
 ##
 ## Appelée au début du tour de l'unité, aux côtés de [method tick_buffs]. Les PV

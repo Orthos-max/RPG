@@ -6,6 +6,13 @@ extends RefCounted
 ## pour un contexte donné (attaque/défense, PV restants, terrain, cible volante)
 ## et applique le résultat. Les compétences se débloquent par classe et par niveau
 ## dans [ClassDataDB].
+##
+## Certaines compétences débordent de la table des modificateurs : elles posent
+## une affliction ([StatusDB]), en raccourcissent une, ou rendent des PV entre
+## deux tours. Elles restent déclarées ici, avec leurs propres clés — `status`,
+## `status_ward`, `regen` — et leurs propres agrégateurs plus bas.
+
+const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 
 enum Kind {
 	PASSIVE = 0,  ## Modificateurs permanents ou conditionnels
@@ -38,6 +45,7 @@ const MOD_SHORT: Dictionary = {
 const PROC_SHORT: Dictionary = {
 	"pierce": "perce l'armure",
 	"extra_hit": "frappe en plus",
+	"inflict": "afflige la cible",
 }
 
 static var DATA: Dictionary = {
@@ -122,6 +130,70 @@ static var DATA: Dictionary = {
 		"proc": "extra_hit",
 		"chance_stat": "skl",
 		"chance_ratio": 0.5,
+	},
+
+	# --- Compétences affligeantes ---
+	# Même mécanique que « Lune » et « Astre » : un `proc` tiré à chaque coup
+	# porté. Seul l'effet change — au lieu d'ajouter des dégâts immédiats, il pose
+	# une affliction ([StatusDB]) qui survit à l'échange.
+	#
+	# La chance est ici **fixe** (`chance`) et non calculée sur l'Adresse : un
+	# poison qui tomberait deux fois plus souvent sur un bretteur que sur un mage
+	# ferait de la compétence une prime à l'Adresse, alors que ce qu'elle apporte
+	# — du temps volé à l'adversaire — vaut la même chose pour tout le monde.
+	#
+	# Les durées sont plus courtes que celles des armes équivalentes : la
+	# compétence est acquise pour de bon, l'arme se paie et s'use.
+	"venom": {
+		"name": "Venin",
+		"desc": "35 % de chances d'empoisonner la cible pour 3 tours.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "inflict",
+		"status": "poison",
+		"status_turns": 3,
+		"chance": 35,
+	},
+	"ember": {
+		"name": "Braise",
+		"desc": "35 % de chances de brûler la cible pour 2 tours.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "inflict",
+		"status": "burn",
+		"status_turns": 2,
+		"chance": 35,
+	},
+	# La paralysie vole un tour entier : elle tombe rarement, comme pour la lance
+	# fulgurante ([WeaponDB]), sans quoi elle déciderait seule de la bataille.
+	"jolt": {
+		"name": "Décharge",
+		"desc": "20 % de chances de paralyser la cible pour 1 tour.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "inflict",
+		"status": "paralyze",
+		"status_turns": 1,
+		"chance": 20,
+	},
+
+	# --- Compétences défensives hors table de modificateurs ---
+	"cold_blood": {
+		"name": "Sang-froid",
+		"desc": "Toute affliction subie dure un tour de moins ; celle d'un seul tour ne prend pas.",
+		"kind": Kind.PASSIVE,
+		"trigger": Trigger.ALWAYS,
+		"mods": {},
+		"status_ward": 1,
+	},
+	"regeneration": {
+		"name": "Régénération",
+		"desc": "Rend 3 PV au début de chaque tour, sous 50 % de PV.",
+		"kind": Kind.PASSIVE,
+		"trigger": Trigger.WHEN_HP_LOW,
+		"threshold": 0.5,
+		"mods": {},
+		"regen": 3,
 	},
 }
 
@@ -208,6 +280,14 @@ static func short_effect(skill_id: String) -> String:
 	if skill.is_empty():
 		return ""
 	if int(skill.get("kind", Kind.PASSIVE)) == Kind.ACTIVE:
+		# Une compétence affligeante se lit à son affliction, pas à son verbe :
+		# « ☠ Poison 35 % » dit tout ce qu'il faut savoir avant d'engager, là où
+		# « afflige la cible » obligerait à ouvrir la bulle pour savoir quoi.
+		var status: String = str(skill.get("status", ""))
+		if str(skill.get("proc", "")) == "inflict" and STATUS_DB.exists(status):
+			return "%s %s %d%%" % [
+				STATUS_DB.glyph(status), STATUS_DB.label(status), proc_chance(skill_id, 0),
+			]
 		return str(PROC_SHORT.get(str(skill.get("proc", "")), "effet spécial"))
 
 	var mods: Dictionary = skill.get("mods", {})
@@ -217,6 +297,16 @@ static func short_effect(skill_id: String) -> String:
 	for key: String in MOD_KEYS:
 		if mods.has(key):
 			parts.append("%+d %s" % [int(mods[key]), str(MOD_SHORT[key])])
+
+	# Les effets qui ne se comptent ni en points de précision ni en points de
+	# dégâts. Ils n'ont pas leur place dans [constant MOD_KEYS] — un tour n'est
+	# pas un point — mais ils doivent se lire quelque part.
+	var ward: int = int(skill.get("status_ward", 0))
+	if ward > 0:
+		parts.append("−%d tour%s d'affliction" % [ward, "" if ward <= 1 else "s"])
+	var regen: int = int(skill.get("regen", 0))
+	if regen > 0:
+		parts.append("+%d PV/tour" % regen)
 	return " ".join(parts)
 
 
@@ -306,9 +396,24 @@ static func aggregate(skill_ids: Array, ctx: Dictionary) -> Dictionary:
 	return total
 
 
+## Probabilité de déclenchement d'une compétence, en pourcents (0 à 100).
+##
+## Deux façons de la déclarer, et une seule règle pour les départager : une
+## compétence qui porte `chance` a un taux [b]fixe[/b], les autres tirent le leur
+## de l'Adresse ([param skl] × `chance_ratio`). Les deux voies existent parce que
+## les deux effets ne se valent pas — un coup mieux porté récompense l'adresse,
+## un poison ne récompense rien, il dure.
+static func proc_chance(skill_id: String, skl: int) -> int:
+	var skill: Dictionary = get_skill(skill_id)
+	if skill.has("chance"):
+		return clampi(int(skill["chance"]), 0, 100)
+	return clampi(int(round(float(skl) * float(skill.get("chance_ratio", 1.0)))), 0, 100)
+
+
 ## Compétences à déclenchement disponibles dans ce contexte, avec leur chance.
 ## [param skl] Skill de l'unité — sert au calcul de la probabilité.
-## [returns] [{id, proc, chance}]
+## [returns] [{id, proc, chance, status, status_turns}] — les deux derniers champs
+## ne portent quelque chose que pour un `proc` « inflict ».
 static func active_procs(skill_ids: Array, ctx: Dictionary, skl: int) -> Array:
 	var procs: Array = []
 	for id in skill_ids:
@@ -321,6 +426,47 @@ static func active_procs(skill_ids: Array, ctx: Dictionary, skl: int) -> Array:
 		procs.append({
 			"id": skill_id,
 			"proc": str(skill.get("proc", "")),
-			"chance": clampi(int(round(float(skl) * float(skill.get("chance_ratio", 1.0)))), 0, 100),
+			"chance": proc_chance(skill_id, skl),
+			"status": str(skill.get("status", "")),
+			"status_turns": int(skill.get("status_turns", 0)),
 		})
 	return procs
+
+
+## Tours retranchés à une affliction entrante par ces compétences.
+##
+## Le pendant défensif de [method active_procs] : là où une compétence
+## affligeante ajoute des tours d'agonie, une compétence de sang-froid en retire.
+## Le total est la somme de toutes celles qui jouent dans ce contexte.
+static func status_ward(skill_ids: Array, ctx: Dictionary) -> int:
+	var total: int = 0
+	for id in skill_ids:
+		var skill_id: String = str(id)
+		if is_active(skill_id, ctx):
+			total += int(get_skill(skill_id).get("status_ward", 0))
+	return total
+
+
+## Durée réellement subie d'une affliction, une fois le sang-froid déduit.
+##
+## Rend 0 quand l'affliction est entièrement repoussée : une paralysie d'un seul
+## tour ne prend pas sur qui en retranche un. C'est délibérément une immunité
+## partielle — elle protège de ce qui est bref, pas de ce qui s'installe.
+##
+## [param turns] Durée voulue, déjà résolue : à l'appelant d'avoir remplacé un 0
+## par la durée par défaut du catalogue, ce service-ci ne connaît pas le tempo
+## de chaque affliction.
+static func warded_turns(skill_ids: Array, ctx: Dictionary, turns: int) -> int:
+	if turns <= 0:
+		return 0
+	return maxi(0, turns - status_ward(skill_ids, ctx))
+
+
+## PV rendus au début du tour par les compétences de régénération.
+static func regeneration(skill_ids: Array, ctx: Dictionary) -> int:
+	var total: int = 0
+	for id in skill_ids:
+		var skill_id: String = str(id)
+		if is_active(skill_id, ctx):
+			total += int(get_skill(skill_id).get("regen", 0))
+	return total
