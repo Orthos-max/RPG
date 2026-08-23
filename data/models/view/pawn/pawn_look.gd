@@ -85,6 +85,23 @@ const NAME_UNIT: Dictionary = {
 	"brigand chief": "warrior",
 }
 
+## Les planches dessinées pour une unité précise, rangées sous le chemin que sa
+## fiche porte dans `stats.sprite`.
+##
+## C'est le seul endroit où une fiche décide de sa figurine de plateau : elle
+## désigne sa planche, la table dit comment la découper. Le pack déduit tout de
+## ses cellules carrées — une planche maison, elle, peut empiler ses images, et
+## une colonne ne se déduit de rien.
+##
+## `rows` est le nombre de rangées de la planche (les colonnes s'en déduisent :
+## une cellule est carrée). `foot` est la rangée de pixels où les pieds touchent
+## le sol, mesurée dans la cellule. Toutes les images servent la boucle de repos :
+## une planche maison n'a pas de course, elle rejoue son repos en marchant — plus
+## vite ([constant RUN_FPS]), ce qui vaut mieux qu'une figurine figée.
+const CUSTOM_SHEETS: Dictionary = {
+	"res://assets/textures/pawns/elfe_rousse_v2_pawn.png": {"rows": 2, "foot": 127},
+}
+
 ## Couleur du pack par camp.
 const SIDE_COLOR: Dictionary = {
 	TeamDataRef.Side.PLAYER: "Blue",
@@ -109,12 +126,20 @@ const MOB_CASTER_COLOR: String = "Purple"
 ## L'apparence d'un pion, ou {} s'il n'y en a pas (le pion garde alors sa
 ## planche de fiche).
 ##
+## Une planche maison passe avant le pack : un dessin fait pour ce personnage-là
+## vaut mieux que la silhouette générique que sa classe lui vaudrait.
+##
 ## [param side] un [enum TeamData.Side], tel que
 ## [method TeamData.side_for_camp_node] le rend pour le nœud de camp.
-## [returns] {idle: String, run: String, foot: int, pixel_size: float, hover: float}
+## [returns] {idle: String, run: String, foot: int, pixel_size: float,
+## hover: float, rows: int, full_cell: bool}
 static func for_stats(stats: Stats, side: int) -> Dictionary:
 	if not stats:
 		return {}
+
+	var custom: Dictionary = _custom_look(stats)
+	if not custom.is_empty():
+		return custom
 
 	var key: String = _unit_key(stats)
 	if not UNITS.has(key):
@@ -134,6 +159,8 @@ static func for_stats(stats: Stats, side: int) -> Dictionary:
 		"foot": int(unit["foot"]),
 		"pixel_size": PIXEL_SIZE,
 		"hover": HOVER if CD.is_flying(stats.character_class) else 0.0,
+		"rows": 1,
+		"full_cell": false,
 	}
 
 
@@ -147,7 +174,8 @@ static func for_stats(stats: Stats, side: int) -> Dictionary:
 ## La vignette ne prend qu'une **demi-cellule**, calée en bas sur la ligne de
 ## pieds et centrée horizontalement : le pack laisse la moitié de sa cellule vide
 ## au-dessus de l'unité (~88 px dessinés sur 192): rendue entière, la figurine
-## occuperait le tiers de la vignette.
+## occuperait le tiers de la vignette. Une planche maison, elle, est dessinée au
+## format de sa cellule (`full_cell`) : la rogner couperait le personnage en deux.
 static func still_for_stats(stats: Stats, side: int) -> Texture2D:
 	var look: Dictionary = for_stats(stats, side)
 	if look.is_empty():
@@ -156,8 +184,8 @@ static func still_for_stats(stats: Stats, side: int) -> Texture2D:
 	if not sheet:
 		return null
 
-	var cell: float = float(sheet.get_height())
-	var box: float = cell / 2.0
+	var cell: float = float(sheet.get_height()) / float(maxi(1, int(look.get("rows", 1))))
+	var box: float = cell if bool(look.get("full_cell", false)) else cell / 2.0
 	var still := AtlasTexture.new()
 	still.atlas = sheet
 	still.region = Rect2((cell - box) / 2.0, maxf(0.0, float(look["foot"]) - box), box, box)
@@ -165,6 +193,33 @@ static func still_for_stats(stats: Stats, side: int) -> Texture2D:
 
 
 #region Internes
+## L'apparence d'une unité qui porte sa propre planche, ou {} si sa fiche
+## désigne une figurine ordinaire.
+##
+## Le camp n'entre pas en compte : une planche maison n'a qu'une teinte, celle de
+## son dessin. Le repos et la course sont la même planche — voir [constant
+## CUSTOM_SHEETS].
+static func _custom_look(stats: Stats) -> Dictionary:
+	var sheet: String = stats.sprite.strip_edges()
+	if not CUSTOM_SHEETS.has(sheet):
+		return {}
+	# Même prudence que pour le pack : une planche manquante rend la main à la
+	# figurine de fiche plutôt que de laisser un pion invisible sur le plateau.
+	if not ResourceLoader.exists(sheet):
+		return {}
+
+	var entry: Dictionary = CUSTOM_SHEETS[sheet]
+	return {
+		"idle": sheet,
+		"run": sheet,
+		"foot": int(entry["foot"]),
+		"pixel_size": PIXEL_SIZE,
+		"hover": HOVER if CD.is_flying(stats.character_class) else 0.0,
+		"rows": int(entry["rows"]),
+		"full_cell": true,
+	}
+
+
 ## L'unité du pack : l'intitulé d'abord s'il impose quelque chose, la classe sinon.
 static func _unit_key(stats: Stats) -> String:
 	var label: String = stats.expertise.strip_edges().to_lower()

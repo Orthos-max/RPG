@@ -13,6 +13,10 @@ const STARTING_ROSTER: Array[String] = [
 	"res://data/models/world/stats/hero/lord.tres",
 	"res://data/models/world/stats/hero/cleric.tres",
 	"res://data/models/world/stats/hero/archer.tres",
+	# Placée avant le grand chevalier : le déploiement par défaut prend les
+	# premières du roster, et c'est la seule unité qui porte sa propre planche
+	# ([constant PawnLook.CUSTOM_SHEETS]) — elle doit se voir dès le chapitre 1.
+	"res://data/models/world/stats/hero/elfe_rousse.tres",
 	"res://data/models/world/stats/hero/great_knight.tres",
 ]
 
@@ -43,7 +47,9 @@ const CHAPTERS: Array[Dictionary] = [
 			{"kind": OBJ.Bonus.NO_LOSSES},
 			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 8},
 		],
-		"deploy_slots": 3,
+		# Quatre places, et non trois : l'elfe rousse rejoint la ligne de départ
+		# sans en chasser personne — Chrom, Lissa et Virion la tenaient déjà.
+		"deploy_slots": 4,
 		"reward_gold": 300,
 		"recommended_level": 1,
 		# Deux détours et un pont : le corridor de l'est (12, 5), la rive

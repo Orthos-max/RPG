@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1_elfrs"]
+
+[resource]
+script = ExtResource("1_elfrs")
+override_name = "Elfe Rousse"
+expertise = "Archer"
+strategy = 3
+character_class = 4
+level = 2
+exp = 0
+is_promoted = false
+sprite = "res://assets/textures/pawns/elfe_rousse_v2_pawn.png"
+hp = 20
+str = 6
+mag = 0
+skl = 11
+spd = 9
+lck = 6
+def = 5
+res = 4
+movement = 5
+jump = 2.0
+attack_range = 2
+weapon_type = 3
+weapon_might = 6
+weapons = Array[String](["iron_bow"])
+equipped_weapon = "iron_bow"
+hp_growth = 65
+str_growth = 45
+mag_growth = 0
+skl_growth = 75
+spd_growth = 70
+lck_growth = 50
+def_growth = 30
+res_growth = 30
+max_health = 20
+attack_power = 12

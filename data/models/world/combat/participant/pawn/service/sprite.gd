@@ -7,6 +7,9 @@ extends Sprite3D
 ## - **Le pack Tiny Swords** ([PawnLook]) : une bande horizontale d'images
 ##   carrées, une seule vue (l'unité regarde à droite), animée dans le temps.
 ##   C'est ce que porte un pion dès que sa classe a une correspondance.
+## - **Les planches maison** ([constant PawnLook.CUSTOM_SHEETS]) : même chose,
+##   mais la grille est annoncée au lieu d'être déduite — celle de l'elfe rousse
+##   est une colonne de deux images. Une fiche y a droit en désignant sa planche.
 ## - **Les planches de fiche** en 48 × 96 : une colonne, deux rangées — le
 ##   visage en haut, le dos en bas — choisies selon l'orientation, sans
 ##   animation. C'est le repli quand le pack manque ou qu'une classe n'y a pas
@@ -158,10 +161,12 @@ func _wear_pack_sheets() -> void:
 		&"run": load(str(_look["run"])) as Texture2D,
 	}
 	pixel_size = float(_look["pixel_size"])
-	vframes = 1
 
-	# Une cellule est carrée : la hauteur de la planche donne son côté.
-	var cell: float = float(_clips[&"idle"].get_height())
+	# Une cellule est carrée : la hauteur d'une rangée donne son côté. Le pack
+	# n'en a qu'une (sa bande est horizontale) ; une planche maison peut empiler
+	# ses images, et annonce alors ses rangées ([constant PawnLook.CUSTOM_SHEETS]).
+	var rows: int = maxi(1, int(_look.get("rows", 1)))
+	var cell: float = float(_clips[&"idle"].get_height()) / float(rows)
 	# Le pied doit tomber à `hover` au-dessus de la case, alors que le nœud est
 	# suspendu à `_base_y` et que la texture est centrée sur lui.
 	var ground: float = (float(_look["hover"]) - _base_y) / pixel_size
@@ -177,11 +182,14 @@ func _play(clip: StringName) -> void:
 		return
 	_clip = clip
 	texture = _clips[clip]
-	# La bande est horizontale et ses cellules sont carrées : autant d'images que
-	# la largeur contient de fois la hauteur. Rien à tenir à jour à la main quand
-	# le pack change le nombre de poses d'une animation.
-	hframes = maxi(1, int(texture.get_width() / texture.get_height()))
-	_clip_frames = hframes
+	# Les cellules sont carrées : le côté est la hauteur divisée par les rangées,
+	# et la largeur dit combien de colonnes suivent. Rien à tenir à jour à la main
+	# quand le pack change le nombre de poses d'une animation — ni quand une
+	# planche maison range ses images en colonne plutôt qu'en bande.
+	vframes = maxi(1, int(_look.get("rows", 1)))
+	var cell: int = maxi(1, texture.get_height() / vframes)
+	hframes = maxi(1, texture.get_width() / cell)
+	_clip_frames = hframes * vframes
 	_clip_fps = PawnLook.RUN_FPS if clip == &"run" else PawnLook.IDLE_FPS
 	_clip_time = 0.0
 	frame = 0
