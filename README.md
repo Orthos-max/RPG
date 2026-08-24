@@ -5,31 +5,6 @@
 [![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-c9a227.svg)](./project.godot)
 
 **Un tactical RPG au tour par tour façon _Fire Emblem_, écrit sur Godot 4.3.**
-Sa signature : le **pont CielAI**, qui laisse une IA externe — Ciel — prendre les
-commandes du camp adverse, tour après tour, à travers un simple échange de
-fichiers JSON.
-
----
-
-## L'univers — « Velmar : nuit et or »
-
-Toute la magie du monde vient d'une source unique, le **Puits d'Éternité**. Le roi
-Aldric y a puisé trop fort pour alimenter ses machines de guerre ; le Puits est
-entré en **Surcharge**. **Ciel**, dernière Gardienne, a absorbé l'excès dans son
-propre corps — ce qui l'a sauvée et la condamne. Le royaume l'a déclarée
-traîtresse ; elle a fondé la **Révolte d'Azur** pour atteindre le Puits et le
-stabiliser avant qu'il n'emporte tout.
-
-Le joueur est **Patriot**, wendigo silencieux, garde du corps de Ciel. Et quelque
-part en face se tient **Luna**, clerc de la cour — la petite sœur de Ciel, qui ne
-sait rien.
-
-La charte graphique porte le nom du royaume : fonds de nuit, or en accent
-seulement, pourpre réservé à ce qui blesse ou ne se défait pas. Elle vit dans
-[`data/models/view/theme/`](data/models/view/theme/), bâtie en code, polices
-comprises (Cinzel et Alegreya Sans).
-
-Le socle narratif complet est dans [`docs/LORE.md`](docs/LORE.md).
 
 ---
 
@@ -68,27 +43,18 @@ boucles musicales (titre, bataille, préparation) — générés localement, san
 aucun droit d'auteur. Particules d'ambiance par terrain : feuilles en forêt,
 flocons en neige, reflets sur l'eau, braises dans les ruines.
 
-### Le pont CielAI
-Le camp adverse peut être piloté par une IA externe. Le jeu écrit son état complet
-dans `ai_state.json` (tour, étape, actions légales, portées, terrains, unités,
-événements) ; Ciel répond par un `ai_command.json` ; le moteur valide, exécute et
-acquitte dans `ai_feedback.json`. Chaque bataille est journalisée dans
-`replays/`.
-Sans ordre valide pendant ~10 s, une **IA locale heuristique** joue le tour à sa
-place — la partie ne se fige jamais.
-
 ### Multijoueur par code d'accès
 Créer une partie, transmettre un **code de 7 caractères**, jouer. Pas de
 matchmaking : du peer-to-peer entre amis (ENet, port 24710). L'hôte fait autorité
-et valide chaque ordre reçu — les mêmes règles que pour Ciel. Un invité qui saute
+et valide chaque ordre reçu. Un invité qui saute
 voit son siège gardé 90 s pendant que l'IA locale le tient, et se reconnecte tout
-seul. Option **Ciel en troisième camp** : hôte, invité et Ciel, chacun pour soi.
+seul.
 
 ### Éditeurs intégrés
 - **Éditeur de cartes** — pinceaux de terrain, élévation, unités des deux camps,
   cases de départ, point de commandement, réglages d'objectif, annulation/rétablissement
   (Ctrl+Z), redimensionnement, bibliothèque dans `user://maps/`, partage par
-  presse-papiers ou fichier, et essai immédiat contre l'IA locale ou contre Ciel.
+  presse-papiers ou fichier, et essai immédiat contre l'IA locale.
   Une carte d'essai ne touche jamais à la campagne.
 - **Éditeur de personnages** — les créatures écrites y sont posables dans
   l'éditeur de cartes, pour les deux camps.
@@ -138,41 +104,6 @@ godot --path . --resolution 1600x900 --script shot.gd -- battle sortie.png free
 
 ---
 
-## Brancher Ciel
-
-Le pont est un échange de fichiers JSON — aucune dépendance réseau, aucune
-bibliothèque. Les scripts résolvent tout seuls le dossier `user://` selon l'OS.
-
-```bash
-# Où le jeu écrit son état
-bash scripts/ciel_game/state.sh --path
-
-# Lire la partie en cours
-bash scripts/ciel_game/state.sh
-bash scripts/ciel_game/state.sh --watch
-bash scripts/ciel_game/state.sh --events
-
-# Jouer un tour adverse
-bash scripts/ciel_game/command.sh select_pawn Skeleton
-bash scripts/ciel_game/command.sh move 5 3
-bash scripts/ciel_game/command.sh attack Lord
-bash scripts/ciel_game/command.sh end_turn
-
-# Rendre le camp adverse à l'IA locale (et inversement)
-bash scripts/ciel_game/command.sh toggle off
-```
-
-Ordres disponibles : `select_pawn`, `move`, `attack`, `heal`, `use_item`,
-`promote`, `flee`, `guard`, `wait`, `end_pawn`, `end_turn`, `toggle`.
-
-Pour forcer un dossier d'échange : `export CIEL_USERDATA="$HOME/mon/dossier"`.
-
-Le contrat complet — schémas JSON, codes d'erreur, garanties, versionnage — est
-dans [`docs/CIEL_PROTOCOL.md`](docs/CIEL_PROTOCOL.md), et la prise en main du pont
-dans [`scripts/ciel_game/README.md`](scripts/ciel_game/README.md).
-
----
-
 ## Structure du projet
 
 ```
@@ -181,7 +112,7 @@ data/
     config/        configuration, journal de débogage
     view/          caméra, contrôles, décor du plateau, charte graphique
     world/
-      ai/            validation des ordres Ciel, IA locale, difficulté
+      ai/            validation des ordres, IA locale, difficulté
       combat/        arène, participants, pions, camps
       map/           MapData, grille de bataille, champ de parcours
       stats/         stats, classes, armes, compétences, objets, exp, soutiens
@@ -190,7 +121,7 @@ data/
     net/           sièges gardés, plan de reconnexion
   modules/       nœuds Godot — gameplay et écrans
     tactics/       niveau, arène, participants, pion, caméra, contrôles
-    ai/            ciel_ai.gd — le pont (autoload)
+    ai/            IA adverse locale et difficulté
     campaign/      déroulé de chapitre, phase de placement
     menu/          titre, préparation, salon réseau
     net/           miroir côté invité
@@ -203,17 +134,15 @@ assets/
   fonts/         Cinzel, Alegreya Sans (OFL)
   audio/         branché, en attente de fichiers
 art/             atelier des figurines — gabarits, palette, outils de découpe
-docs/            PROJECT_SPEC, LORE, CIEL_PROTOCOL, INSTALL
+docs/            PROJECT_SPEC, INSTALL
 scripts/
-  ciel_game/     le pont CielAI
   build/         export, packaging, installeur Windows
   test_all.sh    toutes les suites, d'un coup
 tests/           les suites headless et fenêtrées
 ```
 
 Trois règles gouvernent cette arborescence : `models` porte les données et la
-logique, `modules` les nœuds Godot, `services` ce qui traverse tout. Le contrat du
-pont CielAI ne se casse pas.
+logique, `modules` les nœuds Godot, `services` ce qui traverse tout.
 
 ---
 
@@ -222,8 +151,6 @@ pont CielAI ne se casse pas.
 | Document | Ce qu'on y trouve |
 |---|---|
 | [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) | Le document de cap : architecture, backlog, journal d'implémentation |
-| [`docs/LORE.md`](docs/LORE.md) | L'univers, les factions, les personnages, les fins possibles |
-| [`docs/CIEL_PROTOCOL.md`](docs/CIEL_PROTOCOL.md) | Le protocole CielAI v1, schémas et codes d'erreur |
 | [`docs/INSTALL.md`](docs/INSTALL.md) | Jouer, construire, empaqueter, dépanner |
 | [`assets/textures/actor/README.md`](assets/textures/actor/README.md) | Le format des figurines et ce qui manque |
 | [`art/METHODES.md`](art/METHODES.md) | Les routes possibles pour produire les planches |
