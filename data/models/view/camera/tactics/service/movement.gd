@@ -52,7 +52,7 @@ func move_camera(h: float, v: float, joystick: bool, delta: float, camera: Tacti
 
 ## Moves the camera to focus on a target, respecting boundary constraints
 ## La caméra suit souvent un **pion**, et un pion meurt. Il est retiré de la
-## scène une demi-seconde après sa mort ([TacticsPawnCombatService._check_death]),
+## scène une demi-seconde après sa mort ([TacticsPawnCombatService.check_death]),
 ## et la caméra tient encore la référence.
 ##
 ## `if not res.target` ne suffit pas. En **debug**, Godot annule les références

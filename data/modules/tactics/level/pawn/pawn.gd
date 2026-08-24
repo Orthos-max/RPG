@@ -219,6 +219,18 @@ func attack_target_pawn(target_pawn: TacticsPawn, delta: float) -> bool:
 	return serv.attack_target_pawn(self, target_pawn, delta)
 
 
+## Constate la mort du pion après un coup porté hors de l'échange d'armes.
+##
+## L'échange constate lui-même ses morts ; une compétence lancée depuis le menu
+## ne passe pas par lui et doit donc le demander. Sans cet appel, une cible
+## abattue à la compétence restait plantée sur sa case à 0 PV : jamais retirée,
+## jamais journalisée, et la victoire jamais constatée.
+##
+## @param killer: Nom affiché de qui l'a mis à terre
+func check_death(killer: String = "") -> void:
+	serv.check_death(self, killer)
+
+
 ## Moves the pawn along its designated path
 ##
 ## @param delta: Time elapsed since the last frame

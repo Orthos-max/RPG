@@ -69,7 +69,7 @@ func _resolve_combat(pawn: TacticsPawn, target_pawn: TacticsPawn) -> void:
 	if not CombatCalc:
 		push_error("FECombatCalculator not loaded! Falling back to flat damage.")
 		target_pawn.stats.apply_to_curr_health(-pawn.stats.attack_power)
-		_check_death(target_pawn, _get_name(pawn))
+		check_death(target_pawn, _get_name(pawn))
 		return
 	
 	# --- L'échange : assaut, riposte, et second coup du plus rapide ---
@@ -192,9 +192,9 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 	# et personne d'autre ne le saura après coup. Le bilan détaillé
 	# ([BattleReport]) en fait sa colonne « Kills ».
 	if defender_fell:
-		_check_death(target_pawn, attacker_name)
+		check_death(target_pawn, attacker_name)
 	if attacker_fell:
-		_check_death(pawn, defender_name)
+		check_death(pawn, defender_name)
 
 
 #region Passes de figurine
@@ -330,7 +330,7 @@ func _resolve_heal(healer: TacticsPawn, target: TacticsPawn) -> void:
 ## Handle a pawn's death — remove from scene after a brief delay
 ##
 ## [param killer] Nom affiché de qui l'a mis à terre, quand on le connaît.
-func _check_death(p: TacticsPawn, killer: String = "") -> void:
+func check_death(p: TacticsPawn, killer: String = "") -> void:
 	# Only process if dead
 	if p.is_alive():
 		return
@@ -778,7 +778,7 @@ func _drain_life(drainer: TacticsPawn, skill_ids: Array, damage: int) -> int:
 ## déplacer servirait le spectacle et desservirait la lecture : une case libérée
 ## une case plus loin que là où le joueur l'attend ouvre un chemin que personne
 ## n'a vu s'ouvrir. C'est aussi ce qui rend l'ordre d'appel important — le recul
-## se joue avant que [method _check_death] ne retire le pion.
+## se joue avant que [method check_death] ne retire le pion.
 ##
 ## [i]Une cible acculée encaisse quand même.[/i] Les dégâts du souffle sont déjà
 ## dans le coup ([method FECombatCalculator.roll_strike]) ; ce qui se décide ici

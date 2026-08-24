@@ -49,3 +49,11 @@ func process(pawn: TacticsPawn, delta: float) -> void:
 ## @return: Whether the attack was successful
 func attack_target_pawn(pawn: TacticsPawn, target_pawn: TacticsPawn, delta: float) -> bool:
 	return combat.attack_target_pawn(pawn, target_pawn, delta)
+
+
+## Constate la mort d'un pion abattu hors de l'échange d'armes.
+##
+## @param pawn: Le TacticsPawn à qui l'on vient de retirer ses derniers PV
+## @param killer: Nom affiché de qui l'a mis à terre
+func check_death(pawn: TacticsPawn, killer: String = "") -> void:
+	combat.check_death(pawn, killer)
