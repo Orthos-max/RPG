@@ -263,6 +263,12 @@ func _player_wants_to_attack() -> void:
 	serv.player_wants_to_attack()
 
 
+## Handles the player's intention to use a usable skill (Compétence button)
+func _player_wants_to_use_skill() -> void:
+	_play_ui("ui_select")
+	serv.player_wants_to_use_skill()
+
+
 ## Ramène le pion à son point de départ (annulation du déplacement)
 func _player_wants_to_undo_move() -> void:
 	_play_ui("ui_cancel")

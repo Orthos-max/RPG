@@ -20,6 +20,7 @@ const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 const CombatService = preload("res://data/models/world/combat/participant/pawn/service/combat.gd")
 const KnockbackRef = preload("res://data/services/combat/knockback.gd")
+const SkillUseRef = preload("res://data/services/combat/skill_use.gd")
 const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
@@ -1047,6 +1048,20 @@ func _test_status_skills() -> void:
 	var push_edge: Dictionary = KnockbackRef.push_from(kb_grid, Vector2i(4, 0), Vector2i(5, 0), 2)
 	_check(Vector2i(push_edge["to"]) == Vector2i(5, 0) and bool(push_edge["blocked"]),
 		"knockback : bloqué au bord de la grille", str(push_edge["to"]))
+
+	# --- Bouton « Compétence » : le Soin du Clerc (mend) ---
+	_check(SkillUseRef.can_target("mend", true, 1) and not SkillUseRef.can_target("mend", false, 1),
+		"Soin : cible alliée seulement, portée 1")
+	_check(SkillUseRef.can_target("venom_strike", false, 1)
+			and not SkillUseRef.can_target("venom_strike", true, 1),
+		"Frappe venimeuse : cible ennemie seulement, portée 1")
+	var healer_stats: CharStats = _live("res://data/models/world/stats/hero/cleric.tres")
+	var wounded_ally: CharStats = _live("res://data/models/world/stats/hero/lord.tres")
+	wounded_ally.hp = 4
+	var mend_report: Dictionary = SkillUseRef.resolve("mend", healer_stats, wounded_ally)
+	_check(int(mend_report.get("amount", 0)) > 0 and wounded_ally.hp > 4,
+		"Soin (mend) rend des PV à un allié via le bouton Compétence",
+		"amount=%s hp=%d" % [str(mend_report.get("amount")), wounded_ally.hp])
 
 	# Toute compétence citée par une classe doit exister — un identifiant mal
 	# tapé y resterait sinon invisible jusqu'à ce qu'une unité l'atteigne.

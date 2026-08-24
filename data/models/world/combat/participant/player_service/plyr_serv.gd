@@ -1,6 +1,7 @@
 class_name TacticsPlayerService
 extends RefCounted
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 ## Service class for TacticsPlayer
 
 ## Resource containing participant data and configurations
@@ -94,9 +95,15 @@ func display_attackable_targets() -> void:
 	
 	camera.target = p
 	# Don't filter by allies — enemy tiles must be reachable for attack targeting
-	arena.process_surrounding_tiles(p.get_tile(), float(p.stats.attack_range))
-	arena.mark_attackable_tiles(p.get_tile(), float(p.stats.attack_range),
-		float(WT.get_min_range(p.stats.weapon_type)))
+	var range_f: float = float(p.stats.attack_range)
+	var min_range: float = float(WT.get_min_range(p.stats.weapon_type))
+	if not res.pending_skill.is_empty():
+		# Compétence utilisable armée : sa portée au catalogue remplace celle de
+		# l'arme. Les compétences actuelles sont à portée 1, comme une lame.
+		range_f = float(SKILLS.range_of(res.pending_skill))
+		min_range = 1.0 if range_f >= 1.0 else 0.0
+	arena.process_surrounding_tiles(p.get_tile(), range_f)
+	arena.mark_attackable_tiles(p.get_tile(), range_f, min_range)
 	res.stage = res.STAGE_SELECT_ATTACK_TARGET
 
 

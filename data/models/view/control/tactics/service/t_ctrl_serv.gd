@@ -128,6 +128,11 @@ func player_wants_to_attack() -> void:
 	pawn_selection_service.player_wants_to_attack()
 
 
+## L'unité arme une compétence utilisable (bouton « Compétence »).
+func player_wants_to_use_skill() -> void:
+	pawn_selection_service.player_wants_to_use_skill()
+
+
 ## L'unité boit ou se pare au milieu de la bataille (le tour se consomme).
 func player_wants_to_use_item(item_name: String) -> Dictionary:
 	return pawn_selection_service.player_wants_to_use_item(item_name)

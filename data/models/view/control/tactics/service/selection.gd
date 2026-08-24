@@ -3,6 +3,8 @@ extends RefCounted
 ## Service class for managing pawn and tile selection in the Tactics game.
 
 const WT = preload("res://data/models/world/stats/weapon_type.gd")
+const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
+const SkillUseRef = preload("res://data/services/combat/skill_use.gd")
 
 ## Reference to the TacticsParticipantResource.
 var participant: TacticsParticipantResource
@@ -206,11 +208,19 @@ func select_pawn_to_attack(ctrl: TacticsControls) -> void:
 	
 	# Un soigneur ne vise que ses alliés, un combattant que ses ennemis.
 	# La règle vit dans [TacticsPawnCombatService.can_target] : la prévision de
-	# combat s'en sert aussi, et les deux doivent dire la même chose.
+	# combat s'en sert aussi, et les deux doivent dire la même chose. Une
+	# compétence utilisable armée (bouton « Compétence ») a sa propre règle,
+	# portée comprise.
 	if target and participant.curr_pawn:
 		var same_team: bool = target.get_parent() == participant.curr_pawn.get_parent()
-		if not TacticsPawnCombatService.can_target(
-				participant.curr_pawn.stats.weapon_type, same_team):
+		var legal: bool
+		if not participant.pending_skill.is_empty():
+			legal = SkillUseRef.can_target(participant.pending_skill, same_team,
+				TacticsPawnCombatService.grid_distance(participant.curr_pawn, target))
+		else:
+			legal = TacticsPawnCombatService.can_target(
+				participant.curr_pawn.stats.weapon_type, same_team)
+		if not legal:
 			target = null
 	
 	participant.attackable_pawn = target
@@ -289,6 +299,25 @@ func player_wants_to_skip_turn() -> void:
 
 ## Handles the player's intention to attack.
 func player_wants_to_attack() -> void:
+	participant.stage = 5
+
+
+## Arme la première compétence utilisable de l'unité (bouton « Compétence »)
+## puis ouvre le ciblage, comme une attaque.
+##
+## V1 : la première du répertoire est armée directement. Quand une unité aura
+## plusieurs compétences utilisables, un menu de choix viendra s'intercaler ici.
+func player_wants_to_use_skill() -> void:
+	var p: TacticsPawn = participant.curr_pawn
+	if not p or not is_instance_valid(p) or not p.stats or not p.can_act():
+		return
+	var usable: Array = []
+	for id: Variant in p.stats.get_skills():
+		if SKILLS.is_usable(str(id)):
+			usable.append(str(id))
+	if usable.is_empty():
+		return
+	participant.pending_skill = str(usable[0])
 	participant.stage = 5
 
 

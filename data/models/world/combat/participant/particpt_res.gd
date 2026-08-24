@@ -28,6 +28,11 @@ const STAGE_ATTACK: int = 7
 var stage: int = 0
 #endregion
 
+## Compétence utilisable armée par le bouton « Compétence », en attente de
+## cible — "" sinon. Posée par [SelectionService], consommée par le service de
+## combat du participant au passage du stage d'attaque.
+var pending_skill: String = ""
+
 ## The currently active pawn
 var curr_pawn: TacticsPawn = null:
 	set(val):
