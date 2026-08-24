@@ -162,7 +162,8 @@ static var DATA: Dictionary = {
 		"is_promoted": true,
 		"flying": false,
 		"skills": [{"id": "serenity", "level": 1}, {"id": "ember", "level": 4},
-			{"id": "luna", "level": 8}],
+			{"id": "luna", "level": 8}, {"id": "shockwave", "level": 1},
+			{"id": "well_drain", "level": 1}, {"id": "well_chain", "level": 1}],
 	},
 	Id.TACTICIAN: {
 		"name": "Tactician",

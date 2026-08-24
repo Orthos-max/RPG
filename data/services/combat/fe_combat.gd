@@ -249,6 +249,19 @@ static func roll_strike(result: CombatResult, rng: RandomNumberGenerator = null)
 				# pris, et le service de combat traduit l'identifiant en
 				# affliction ([TacticsPawnCombatService.statuses_from_skills]).
 				pass
+			"knockback":
+				# Onde de choc : le souffle meurtrit en même temps qu'il déplace.
+				# Sa part se compte sur les dégâts **de base** et non sur ceux du
+				# coup, comme le fait déjà « Astre » : sans quoi un critique la
+				# triplerait, et l'onde vaudrait soudain plus que le coup d'épée.
+				out["damage"] += int(floor(float(result.damage) * float(proc.get("damage_ratio", 0.0))))
+			"drain":
+				# Drain du Puits : rien de plus dans le coup. Les PV volés se
+				# comptent sur les dégâts **réellement encaissés**, que seul le
+				# service de combat connaît — un coup porté à une cible qui n'a
+				# plus que 2 PV n'en rend pas quarante
+				# ([TacticsPawnCombatService.drain_from_skills]).
+				pass
 
 	return out
 
@@ -367,6 +380,16 @@ static func roll_combat(result: CombatResult) -> Dictionary:
 			"inflict":
 				# Venin, Braise, Décharge : l'affliction est posée par le service
 				# de combat, pas ici — voir [method roll_strike].
+				pass
+			"knockback":
+				# Onde de choc : la part de dégâts du souffle. Le recul lui-même
+				# demande une grille, donc le service de combat — voir
+				# [method roll_strike].
+				outcomes["total_damage"] += int(floor(
+					float(result.damage) * float(proc.get("damage_ratio", 0.0))))
+			"drain":
+				# Drain du Puits : les PV volés se comptent après coup, sur les
+				# dégâts encaissés. Voir [method roll_strike].
 				pass
 
 	return outcomes

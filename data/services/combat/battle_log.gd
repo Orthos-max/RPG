@@ -29,6 +29,7 @@ enum Kind {
 	STATUS_APPLIED = 10,  ## Une affliction vient d'être posée ([StatusDB])
 	STATUS_DAMAGE = 11,   ## Une affliction se paie au début d'un tour
 	BOSS_PHASE = 12,      ## Un boss franchit un seuil de PV ([BossPhases])
+	KNOCKBACK = 13,       ## Un pion est repoussé par un coup ([Knockback])
 }
 
 ## Tous les événements de la partie courante
@@ -139,6 +140,24 @@ func record_boss_phase(pawn: String, phase: Dictionary) -> void:
 	})
 
 
+## Un pion soufflé de sa case par une compétence de repoussement.
+##
+## L'événement porte les [b]deux[/b] cases, et non le seul point d'arrivée : un
+## replay relu doit pouvoir redessiner le plateau tour par tour, et une case
+## quittée sans qu'on sache d'où laisserait un trou. `tiles` est la distance
+## réellement parcourue — jamais celle que la compétence promettait — et
+## `blocked` dit que quelque chose a arrêté le recul avant son terme.
+func record_knockback(source: String, target: String, skill: String, tiles: int,
+		from_col: int, from_row: int, to_col: int, to_row: int,
+		blocked: bool = false) -> void:
+	record(Kind.KNOCKBACK, {
+		"source": source, "target": target, "skill": skill, "tiles": tiles,
+		"from": {"col": from_col, "row": from_row},
+		"to": {"col": to_col, "row": to_row},
+		"blocked": blocked,
+	})
+
+
 func record_death(pawn: String, team: String, killer: String = "") -> void:
 	record(Kind.DEATH, {"pawn": pawn, "team": team, "killer": killer})
 
@@ -212,4 +231,5 @@ static func kind_name(kind: int) -> String:
 		Kind.STATUS_APPLIED: return "status_applied"
 		Kind.STATUS_DAMAGE: return "status_damage"
 		Kind.BOSS_PHASE: return "boss_phase"
+		Kind.KNOCKBACK: return "knockback"
 		_: return "event"

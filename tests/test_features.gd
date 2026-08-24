@@ -19,6 +19,7 @@ const OBJ = preload("res://data/models/campaign/objective.gd")
 const SKILLS = preload("res://data/models/world/stats/skill_db.gd")
 const STATUS_DB = preload("res://data/models/world/stats/status_db.gd")
 const CombatService = preload("res://data/models/world/combat/participant/pawn/service/combat.gd")
+const KnockbackRef = preload("res://data/services/combat/knockback.gd")
 const GLOSSARY = preload("res://data/models/world/stats/stat_glossary.gd")
 const CAMPAIGN_DB = preload("res://data/models/campaign/campaign_db.gd")
 const StatsRes = preload("res://data/models/world/stats/stats_res.gd")
@@ -1020,6 +1021,32 @@ func _test_status_skills() -> void:
 	_check("regeneration" in CDB.unlocked_skills(CDB.Id.CLERIC, 8)
 			and "regeneration" in CDB.unlocked_skills(CDB.Id.WAR_CLERIC, 4),
 		"Clercs : Régénération")
+
+	# --- Compétences de Ciel (boss final, classe Sage) ---
+	_check("shockwave" in CDB.unlocked_skills(CDB.Id.SAGE, 1)
+			and "well_drain" in CDB.unlocked_skills(CDB.Id.SAGE, 1)
+			and "well_chain" in CDB.unlocked_skills(CDB.Id.SAGE, 1),
+		"Ciel (Sage) : Onde de choc, Drain du Puits et Chaîne du Puits dès le Lv.1")
+	_check(int(CombatService.knockback_from_skills(["shockwave"])["tiles"]) == 2,
+		"Onde de choc : 2 cases de recul")
+	_check(str(SKILLS.get_skill("well_chain").get("status", "")) == "paralyze",
+		"Chaîne du Puits : inflige la paralysie")
+	_check(str(SKILLS.get_skill("well_drain").get("proc", "")) == "drain",
+		"Drain du Puits : vole des PV")
+
+	# --- Knockback sur la grille (logique pure, headless) ---
+	var kb_grid := BattleGrid.new()
+	for col: int in 6:
+		var node := Node3D.new()
+		node.position = Vector3(float(col), 0.0, 0.0)
+		kb_grid.add_tile(node, node.position)
+	var push_ok: Dictionary = KnockbackRef.push_from(kb_grid, Vector2i(0, 0), Vector2i(1, 0), 2)
+	_check(Vector2i(push_ok["to"]) == Vector2i(3, 0) and int(push_ok["tiles"]) == 2
+			and not bool(push_ok["blocked"]),
+		"knockback : cible poussée de 2 cases sur case libre", str(push_ok["to"]))
+	var push_edge: Dictionary = KnockbackRef.push_from(kb_grid, Vector2i(4, 0), Vector2i(5, 0), 2)
+	_check(Vector2i(push_edge["to"]) == Vector2i(5, 0) and bool(push_edge["blocked"]),
+		"knockback : bloqué au bord de la grille", str(push_edge["to"]))
 
 	# Toute compétence citée par une classe doit exister — un identifiant mal
 	# tapé y resterait sinon invisible jusqu'à ce qu'une unité l'atteigne.

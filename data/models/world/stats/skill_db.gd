@@ -75,6 +75,8 @@ const PROC_SHORT: Dictionary = {
 	"pierce": "perce l'armure",
 	"extra_hit": "frappe en plus",
 	"inflict": "afflige la cible",
+	"knockback": "repousse la cible",
+	"drain": "vole des PV",
 }
 
 static var DATA: Dictionary = {
@@ -203,6 +205,55 @@ static var DATA: Dictionary = {
 		"proc": "inflict",
 		"status": "paralyze",
 		"status_turns": 1,
+		"chance": 20,
+	},
+
+	# --- L'arsenal de la Gardienne du Puits ---
+	# Les trois compétences de Ciel ([BossDB] « ciel », chapitre 7). Elles suivent
+	# la même mécanique que « Lune » et « Venin » — un `proc` tiré à chaque coup
+	# porté — mais chacune déborde la table des dégâts dans une direction qui lui
+	# est propre : l'une déplace, l'autre soigne, la troisième immobilise.
+	#
+	# Leur chance est **fixe**, pour la raison qui vaut déjà pour les compétences
+	# affligeantes : ce qu'elles apportent ne se compte pas en points de dégâts, et
+	# l'indexer sur l'Adresse en ferait une prime déguisée à une statistique.
+	#
+	# `push` (cases de recul) et `damage_ratio` (part des dégâts du coup ajoutée
+	# par le souffle) sont propres au proc « knockback » ; `heal_ratio` l'est au
+	# proc « drain ». Le calculateur ([FECombatCalculator.roll_strike]) sait ce
+	# qu'il doit ajouter aux dégâts ; le reste — le déplacement sur la grille, les
+	# PV rendus — appartient au service de combat, seul à connaître pions et cases.
+	"shockwave": {
+		"name": "Onde de choc",
+		"desc": "40 % de chances de repousser la cible de 2 cases, avec 50 % de dégâts en plus.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "knockback",
+		"push": 2,
+		"damage_ratio": 0.5,
+		"chance": 40,
+	},
+	"well_drain": {
+		"name": "Drain du Puits",
+		"desc": "35 % de chances de rendre à l'attaquant la moitié des dégâts infligés.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "drain",
+		"heal_ratio": 0.5,
+		"chance": 35,
+	},
+	# La chaîne du Puits est une « Décharge » de boss : même proc, même affliction,
+	# le double de la durée pour une chance à peine plus faible. Elle ne demande
+	# donc aucune mécanique nouvelle — c'est délibéré, deux compétences inédites
+	# suffisent à un seul adversaire.
+	"well_chain": {
+		"name": "Chaîne du Puits",
+		"desc": "20 % de chances de paralyser la cible pour 2 tours.",
+		"kind": Kind.ACTIVE,
+		"trigger": Trigger.WHEN_ATTACKING,
+		"proc": "inflict",
+		"status": "paralyze",
+		"status_turns": 2,
 		"chance": 20,
 	},
 
@@ -440,7 +491,19 @@ static func short_effect(skill_id: String) -> String:
 			return "%s %s %d%%" % [
 				STATUS_DB.glyph(status), STATUS_DB.label(status), proc_chance(skill_id, 0),
 			]
-		return str(PROC_SHORT.get(str(skill.get("proc", "")), "effet spécial"))
+		# Un repoussement se lit à sa distance : « repousse la cible » ne dit pas
+		# si l'on perd une case ou la moitié d'un couloir.
+		if str(skill.get("proc", "")) == "knockback":
+			return "↦ %d case%s %d%%" % [
+				push_tiles(skill_id), "" if push_tiles(skill_id) <= 1 else "s",
+				proc_chance(skill_id, 0),
+			]
+		var verb: String = str(PROC_SHORT.get(str(skill.get("proc", "")), "effet spécial"))
+		# La chance ne s'affiche que si elle est écrite au catalogue : celle de
+		# « Lune » se calcule sur l'Adresse et ne vaut rien hors d'une fiche.
+		if skill.has("chance"):
+			return "%s %d%%" % [verb, proc_chance(skill_id, 0)]
+		return verb
 
 	var mods: Dictionary = skill.get("mods", {})
 	var parts: Array[String] = []
@@ -564,10 +627,36 @@ static func proc_chance(skill_id: String, skl: int) -> int:
 	return clampi(int(round(float(skl) * float(skill.get("chance_ratio", 1.0)))), 0, 100)
 
 
+#region Repoussement et drain — lecture du catalogue
+## Cases de recul infligées par une compétence, 0 si elle ne repousse rien.
+##
+## Le pendant de [method status_of] pour le proc « knockback » : le catalogue
+## répond, personne d'autre n'a à connaître le nom de la clé.
+static func push_tiles(skill_id: String) -> int:
+	return maxi(0, int(get_skill(skill_id).get("push", 0)))
+
+
+## Part des dégâts du coup qu'un proc ajoute (0.0 s'il n'en ajoute aucune).
+##
+## C'est la moitié de ce que fait « Onde de choc » : le souffle qui déplace
+## meurtrit aussi. Exprimée en fraction et non en points fixes pour que la
+## compétence suive la montée en puissance de qui la porte, sans table par niveau.
+static func damage_ratio(skill_id: String) -> float:
+	return maxf(0.0, float(get_skill(skill_id).get("damage_ratio", 0.0)))
+
+
+## Part des dégâts rendue en PV à l'assaillant (0.0 s'il ne draine rien).
+static func heal_ratio(skill_id: String) -> float:
+	return maxf(0.0, float(get_skill(skill_id).get("heal_ratio", 0.0)))
+#endregion
+
+
 ## Compétences à déclenchement disponibles dans ce contexte, avec leur chance.
 ## [param skl] Skill de l'unité — sert au calcul de la probabilité.
-## [returns] [{id, proc, chance, status, status_turns}] — les deux derniers champs
-## ne portent quelque chose que pour un `proc` « inflict ».
+## [returns] [{id, proc, chance, status, status_turns, push, damage_ratio, heal_ratio}]
+## — les champs au-delà de `chance` ne portent quelque chose que pour le proc qui
+## les concerne : `status` pour « inflict », `push` et `damage_ratio` pour
+## « knockback », `heal_ratio` pour « drain ». Les autres valent 0.
 static func active_procs(skill_ids: Array, ctx: Dictionary, skl: int) -> Array:
 	var procs: Array = []
 	for id in skill_ids:
@@ -583,6 +672,9 @@ static func active_procs(skill_ids: Array, ctx: Dictionary, skl: int) -> Array:
 			"chance": proc_chance(skill_id, skl),
 			"status": str(skill.get("status", "")),
 			"status_turns": int(skill.get("status_turns", 0)),
+			"push": push_tiles(skill_id),
+			"damage_ratio": damage_ratio(skill_id),
+			"heal_ratio": heal_ratio(skill_id),
 		})
 	return procs
 

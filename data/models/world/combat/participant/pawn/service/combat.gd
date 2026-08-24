@@ -11,6 +11,7 @@ const SkillDBRef = preload("res://data/models/world/stats/skill_db.gd")
 const ForecastRef = preload("res://data/services/combat/battle_forecast.gd")
 const BattleLog = preload("res://data/services/combat/battle_log.gd")
 const TeamDataRef = preload("res://data/models/world/combat/team/team_data.gd")
+const KnockbackRef = preload("res://data/services/combat/knockback.gd")
 
 var _victory_checked: bool = false  ## Prevents duplicate victory/defeat triggers
 
@@ -155,6 +156,18 @@ func _apply_exchange(pawn: TacticsPawn, target_pawn: TacticsPawn,
 		_try_afflict(pawn, target_pawn, atk_side["skills"])
 	if bool(def_side["hit"]):
 		_try_afflict(target_pawn, pawn, def_side["skills"])
+
+	# --- Drain et repoussement, dans les deux sens ---
+	# Après les dégâts et les afflictions, avant les morts : c'est la fenêtre où
+	# la victime est encore debout et sa case encore la sienne. Les deux sens,
+	# comme pour les afflictions — rien n'interdit à un pion du joueur d'apprendre
+	# l'Onde de choc, et une riposte souffle aussi bien qu'un assaut.
+	if bool(atk_side["hit"]):
+		_drain_life(pawn, atk_side["skills"], dealt)
+		_try_knockback(pawn, target_pawn, atk_side["skills"])
+	if bool(def_side["hit"]):
+		_drain_life(target_pawn, def_side["skills"], taken)
+		_try_knockback(target_pawn, pawn, def_side["skills"])
 
 	# --- Bascules de phase, dans les deux sens ---
 	# Après les afflictions (une phase peut les lever) et avant les morts : un
@@ -673,6 +686,186 @@ func _afflict(attacker: TacticsPawn, victim: TacticsPawn, status: String, turns:
 	_record(&"record_status_applied", [
 		_get_name(attacker), victim_name, str(applied["status"]), int(applied["turns"]),
 	])
+#endregion
+
+
+#region Repoussement et drain
+## Le recul que les compétences déclenchées demandent, ou {} si aucune.
+##
+## Le pendant « souffle » de [method statuses_from_skills], et la même pureté :
+## le dé a déjà roulé dans [method FECombatCalculator.roll_strike], on ne fait
+## ici que traduire des identifiants en cases de recul. Aucun tirage, aucun pion,
+## aucune grille — la règle se vérifie sur une simple liste de chaînes.
+##
+## Deux ondes de choc dans le même échange ne s'additionnent pas : on garde la
+## plus longue portée. Un pion ne recule qu'une fois par échange, si loin qu'on
+## l'ait soufflé — additionner reviendrait à faire dépendre la distance du nombre
+## de coups portés, c'est-à-dire de la vitesse, qui n'a rien à voir ici.
+##
+## [returns] {id: String, tiles: int} — vide si aucune compétence ne repousse.
+static func knockback_from_skills(skill_ids: Array) -> Dictionary:
+	var best: Dictionary = {}
+	for id: Variant in skill_ids:
+		var skill_id: String = str(id)
+		if str(SkillDBRef.get_skill(skill_id).get("proc", "")) != "knockback":
+			continue
+		var tiles: int = SkillDBRef.push_tiles(skill_id)
+		if tiles <= 0:
+			continue
+		if best.is_empty() or tiles > int(best["tiles"]):
+			best = {"id": skill_id, "tiles": tiles}
+	return best
+
+
+## PV rendus à qui vient de frapper, par ses compétences de drain.
+##
+## Comptés sur les dégâts [b]réellement encaissés[/b] — ceux que
+## [method FECombatCalculator.roll_exchange] a déjà plafonnés aux PV de la
+## victime — et non sur ceux que le coup promettait : achever une cible à 2 PV
+## avec une frappe qui en annonçait quarante ne rend qu'un point. Sans ce
+## plafond, le drain récompenserait le surtuage.
+static func drain_from_skills(skill_ids: Array, damage: int) -> int:
+	if damage <= 0:
+		return 0
+	var total: int = 0
+	for id: Variant in skill_ids:
+		var skill_id: String = str(id)
+		if str(SkillDBRef.get_skill(skill_id).get("proc", "")) != "drain":
+			continue
+		total += int(floor(float(damage) * SkillDBRef.heal_ratio(skill_id)))
+	return total
+
+
+## Rend à [param drainer] les PV que ses compétences de drain lui ont volés.
+##
+## Sans effet s'il est tombé entre-temps : un mort ne boit pas. Le soin est
+## plafonné par [method Stats.apply_to_curr_health], qui ne dépasse pas les PV
+## maximum — un drain sur une unité intacte ne rend donc rien, et c'est voulu.
+##
+## [returns] les PV réellement rendus.
+func _drain_life(drainer: TacticsPawn, skill_ids: Array, damage: int) -> int:
+	if not drainer or not is_instance_valid(drainer) or not drainer.stats:
+		return 0
+	if not drainer.is_alive():
+		return 0
+	var wanted: int = drain_from_skills(skill_ids, damage)
+	if wanted <= 0:
+		return 0
+
+	var before: int = drainer.stats.hp
+	drainer.stats.apply_to_curr_health(wanted)
+	var gained: int = drainer.stats.hp - before
+	if gained <= 0:
+		return 0
+
+	BattleVFX.play_heal(drainer)
+	var drainer_name: String = _get_name(drainer)
+	print_rich("[color=purple]🩸 Drain du Puits : %s reprend %d PV (%d/%d)[/color]" % [
+		drainer_name, gained, drainer.stats.hp, drainer.stats.max_hp,
+	])
+	# Journalisé comme un soin : c'en est un, et le bilan de fin de bataille
+	# comme l'historique savent déjà lire cet événement-là. Le drainer se soigne
+	# lui-même, d'où le même nom des deux côtés.
+	_record(&"record_heal", [drainer_name, drainer_name, gained, drainer.stats.hp])
+	return gained
+
+
+## Repousse [param victim] du coup que [param attacker] vient de porter.
+##
+## [b]Trois décisions, toutes délibérées.[/b]
+##
+## [i]Une cible tuée ne recule pas.[/i] Le corps tombe là où il se tenait. Le
+## déplacer servirait le spectacle et desservirait la lecture : une case libérée
+## une case plus loin que là où le joueur l'attend ouvre un chemin que personne
+## n'a vu s'ouvrir. C'est aussi ce qui rend l'ordre d'appel important — le recul
+## se joue avant que [method _check_death] ne retire le pion.
+##
+## [i]Une cible acculée encaisse quand même.[/i] Les dégâts du souffle sont déjà
+## dans le coup ([method FECombatCalculator.roll_strike]) ; ce qui se décide ici
+## n'est que le déplacement, et un mur n'a jamais amorti une onde de choc. Le
+## contraire ferait de chaque muraille une armure.
+##
+## [i]Le recul est partiel plutôt que tout ou rien.[/i] La règle vit dans
+## [method Knockback.resolve], qui la documente.
+##
+## [returns] le compte rendu de [Knockback], {} si rien n'a été tenté.
+func _try_knockback(attacker: TacticsPawn, victim: TacticsPawn, skill_ids: Array) -> Dictionary:
+	var spec: Dictionary = knockback_from_skills(skill_ids)
+	if spec.is_empty():
+		return {}
+	if not attacker or not victim or not is_instance_valid(attacker) or not is_instance_valid(victim):
+		return {}
+	if not victim.is_alive():
+		return {}
+
+	# Hors bataille montée (test headless d'un simple échange), il n'y a pas de
+	# cases où reculer : le coup reste porté, le recul n'a simplement pas lieu.
+	var grid: BattleGrid = BattleGrid.current
+	if not grid:
+		return {}
+
+	var from: Vector2i = grid.coord_at_position(attacker.global_position)
+	var at: Vector2i = grid.coord_at_position(victim.global_position)
+	var push: Dictionary = KnockbackRef.push_from(grid, from, at, int(spec["tiles"]))
+
+	var skill_name: String = SkillDBRef.get_skill_name(str(spec["id"]))
+	var victim_name: String = _get_name(victim)
+	if int(push["tiles"]) <= 0:
+		# Un recul empêché est un fait de combat, pas un non-événement : sans
+		# cette ligne, le joueur croit que la compétence n'a pas pris.
+		print("↦ %s : %s ne recule pas, la voie est barrée" % [skill_name, victim_name])
+		return push
+
+	apply_push(victim, grid, push["to"])
+	print_rich("[color=aqua]↦ %s : %s est repoussé de %d case%s%s[/color]" % [
+		skill_name, victim_name, int(push["tiles"]),
+		"" if int(push["tiles"]) <= 1 else "s",
+		" (arrêté net)" if bool(push["blocked"]) else "",
+	])
+
+	var from_cell: Vector2i = _cell_of(grid, push["from"])
+	var to_cell: Vector2i = _cell_of(grid, push["to"])
+	_record(&"record_knockback", [
+		_get_name(attacker), victim_name, str(spec["id"]), int(push["tiles"]),
+		from_cell.x, from_cell.y, to_cell.x, to_cell.y, bool(push["blocked"]),
+	])
+	return push
+
+
+## Pose un pion repoussé sur sa case d'arrivée.
+##
+## Le déplacement forcé [b]ne passe pas par la pile de cheminement[/b]
+## ([TacticsPawnMovementService.move_along_path]). Celle-ci est le trajet que le
+## pion a choisi : elle se consomme à son tour, sous son contrôle, et coûte son
+## déplacement. Un recul n'est ni choisi, ni payé, ni annulable — il se pose.
+## Passer par la pile rendrait en prime le pion « en mouvement » pendant qu'un
+## autre camp joue, ce dont aucun tour ne sait quoi faire.
+##
+## La position dans le monde suffit à tout : c'est elle que l'index relit
+## ([method BattleGrid.coord_at_position]), donc poser le pion au centre de sa
+## nouvelle case le fait changer de case pour l'occupation, la portée et le
+## cheminement d'un seul geste. L'index est corrigé dans la foulée, sans attendre
+## l'image suivante : le second coup de l'échange s'appuie dessus.
+static func apply_push(victim: TacticsPawn, grid: BattleGrid, coord: Vector2i) -> bool:
+	if not victim or not is_instance_valid(victim) or grid == null:
+		return false
+	var tile: Node3D = grid.tile_at(coord) as Node3D
+	if not tile:
+		return false
+
+	var was: Vector2i = grid.coord_at_position(victim.global_position)
+	victim.global_position = tile.global_position
+	grid.place_occupant(was, null)
+	grid.place_occupant(coord, victim)
+	return true
+
+
+## Coordonnée (colonne, ligne) d'une case, telle que le journal l'écrit.
+## Rend (-1, -1) hors plateau — la même convention que [method BattleGrid.cell_of].
+static func _cell_of(grid: BattleGrid, coord: Vector2i) -> Vector2i:
+	if grid == null:
+		return Vector2i(-1, -1)
+	return grid.cell_of(grid.tile_at(coord))
 #endregion
 
 
