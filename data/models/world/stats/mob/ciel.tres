@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="StatsResource" load_steps=2 format=3 uid="uid://cielpuits07b1"]
+
+[ext_resource type="Script" path="res://data/models/world/stats/stats_res.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+override_name = "Ciel"
+race = "elf"
+expertise = "Gardienne du Puits"
+strategy = 0
+character_class = 18
+level = 18
+exp = 0
+is_promoted = true
+sprite = "res://assets/textures/pawns/luna_pawn.png"
+hp = 72
+str = 8
+mag = 18
+skl = 17
+spd = 15
+lck = 12
+def = 14
+res = 18
+movement = 5
+jump = 2.0
+attack_range = 2
+weapon_type = 4
+weapon_might = 9
+weapons = Array[String](["blaze", "thunder"])
+equipped_weapon = "blaze"
+use_class_growths = false
+hp_growth = 75
+str_growth = 20
+mag_growth = 80
+skl_growth = 65
+spd_growth = 60
+lck_growth = 55
+def_growth = 45
+res_growth = 70
+items = Array[String](["Elixir"])
+max_health = 72
+attack_power = 27

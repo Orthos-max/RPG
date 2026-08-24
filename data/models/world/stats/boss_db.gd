@@ -69,6 +69,47 @@ static var DATA: Dictionary = {
 			},
 		],
 	},
+	## La Gardienne du Puits, au bout de la campagne.
+	##
+	## Trois bascules là où Garrick en a deux, et l'ordre y raconte quelque chose :
+	## elle commence par frapper plus fort (la Surcharge), puis se met à bouger (le
+	## masque tombe), puis se referme sur elle-même (le Puits la rend au combat).
+	## Le soin n'arrive qu'en dernier, et il est partiel — [constant
+	## BossPhases.MAX_HEAL] l'y oblige, et c'est tant mieux : à 15 % de PV, le
+	## joueur doit sentir qu'il touche au but, pas que la barre repart de zéro.
+	"ciel": {
+		"name": "Ciel",
+		"title": "Gardienne du Puits",
+		"phases": [
+			{
+				"threshold": 0.66,
+				"label": "Surcharge",
+				"message": "Ciel libère la Surcharge — l'air lui-même prend feu !",
+				"gains": {"str": 3, "mag": 4},
+				"heal": 0.0,
+				"skills": ["ember"],
+				"cure": false,
+			},
+			{
+				"threshold": 0.33,
+				"label": "Dévoilement",
+				"message": "La Gardienne se dévoile : ce n'est plus une garde, c'est une chasse.",
+				"gains": {"spd": 4, "skl": 2},
+				"heal": 0.0,
+				"skills": ["astra", "luna"],
+				"cure": true,
+			},
+			{
+				"threshold": 0.15,
+				"label": "Appel du Puits",
+				"message": "Le Puits répond à son appel — ses blessures se referment.",
+				"gains": {"def": 3, "res": 3},
+				"heal": 0.3,
+				"skills": ["regeneration"],
+				"cure": true,
+			},
+		],
+	},
 }
 
 

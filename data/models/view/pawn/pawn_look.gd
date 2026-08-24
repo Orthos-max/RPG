@@ -149,6 +149,11 @@ const CUSTOM_SHEETS: Dictionary = {
 		"die": {"file": "res://assets/textures/pawns/test_episte_die.png", "rows": 5, "foot": 120},
 		"hurt": {"file": "res://assets/textures/pawns/test_episte_hurt.png", "rows": 3, "foot": 120},
 	},
+	# Ciel, la Gardienne du Puits (chapitre 7). Même découpe que l'elfe rousse —
+	# deux poses de 128 × 128 empilées — mais portée par un adversaire : c'est la
+	# première planche maison du côté rouge, et la seule chose qui distingue la
+	# boss des morts-vivants qu'elle commande.
+	"res://assets/textures/pawns/luna_pawn.png": {"rows": 2, "foot": 127},
 }
 
 ## Couleur du pack par camp.

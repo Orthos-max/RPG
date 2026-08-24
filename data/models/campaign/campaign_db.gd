@@ -249,6 +249,52 @@ const CHAPTERS: Array[Dictionary] = [
 			{"col": 14, "row": 9, "gold": 140},
 		],
 	},
+	{
+		"id": "ch07",
+		"index": 6,
+		"title": "Chapitre 7 — Le Puits d'Éternité",
+		"subtitle": "Sanctuaire du Puits, au bout de la montée",
+		"intro_lines": [
+			"La plaine, la rivière, la citadelle : tout ce qui vous sépare encore du Puits.",
+			"Au sommet, devant l'eau qui bat comme un cœur, une silhouette bleue attend.",
+			"— Elle nous a laissé passer au sanctuaire. Elle savait qu'on reviendrait.",
+			"C'est elle qui a tenu les relevés. C'est elle qui a détourné le flux.",
+			"— Ciel. Écarte-toi du Puits, ou nous t'en écarterons.",
+		],
+		"outro_lines": [
+			"La Gardienne tombe à genoux au bord du Puits, et l'eau redevient lisse.",
+			"— Je n'ai jamais gardé le Puits contre vous. Je l'ai gardé contre ce qu'il devient.",
+			"La Surcharge reflue. Pour la première fois depuis des années, le silence.",
+		],
+		"scene_path": "res://assets/maps/level/ch07_level.tscn",
+		# La cible doit correspondre au nom affiché d'un pion de la carte
+		# (ciel.tres → « Ciel »), sinon l'objectif serait gagné d'emblée.
+		"objective": {"kind": OBJ.Kind.DEFEAT_BOSS, "target": "Ciel"},
+		# Trois phases ([BossDB] « ciel ») contre les deux de Garrick : c'est le
+		# dernier chapitre, et la seule unité de la campagne qu'on voit changer
+		# trois fois de visage avant de tomber.
+		"boss": "ciel",
+		"bonus_objectives": [
+			{"kind": OBJ.Bonus.FULL_ROUT},
+			{"kind": OBJ.Bonus.SPEED_RUN, "turns": 20},
+		],
+		"deploy_slots": 6,
+		"reward_gold": 900,
+		"recommended_level": 17,
+		# Cinq coffres sur trente cases de large : ils balisent la montée, un par
+		# palier. Les deux hameaux de la plaine (4, 35) et (25, 35) se prennent en
+		# chemin ; le fortin de la rive (3, 22) demande un détour vers le pont
+		# ouest ; l'aile ouest de la citadelle (4, 9) coûte un tour à qui monte
+		# droit sur le Puits ; et les ruines du fond (18, 0) sont derrière Ciel —
+		# celui-là, on ne l'a qu'une fois la Gardienne dépassée.
+		"chests": [
+			{"col": 4, "row": 35, "gold": 90},
+			{"col": 25, "row": 35, "item": "Concoction"},
+			{"col": 3, "row": 22, "gold": 130},
+			{"col": 4, "row": 9, "item": "Elixir"},
+			{"col": 18, "row": 0, "gold": 220},
+		],
+	},
 ]
 
 

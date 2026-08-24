@@ -72,6 +72,7 @@ func _init() -> void:
 	_test_charter()
 	_test_battle_report()
 	await _test_chests()
+	_test_final_chapter()
 
 	print("\n========================================")
 	print("  RÉSULTATS: %d OK / %d ÉCHECS" % [_passed, _failed])
@@ -4018,4 +4019,172 @@ func _test_level_up_screen() -> void:
 		"nulles" if sparks == null else "sans texture")
 	if sparks:
 		sparks.free()
+#endregion
+
+
+#region 32. Chapitre 7 — le Puits et sa Gardienne
+## Le dernier chapitre, vérifié sans monter la bataille.
+##
+## Une carte de 30 × 40 ne se déroule pas en `--headless` : 1 200 cases à bâtir
+## et dix-huit adversaires à faire jouer, pour ne rien apprendre qu'on ne lise
+## déjà dans les fichiers. Tout ce qui peut rendre le chapitre injouable, en
+## revanche, s'y lit : le boss couronné doit exister sur la carte sous le nom que
+## vise l'objectif, sinon la victoire devient impossible et rien ne le dit ; les
+## adversaires doivent être posés sur des cases praticables, sinon ils tombent
+## hors du plateau ; et le terrain doit se traverser d'un camp à l'autre, sans
+## quoi personne ne rencontre personne.
+func _test_final_chapter() -> void:
+	print("\n🌊 Test 32: chapitre 7 — le Puits d'Éternité")
+
+	var index: int = CAMPAIGN_DB.index_of("ch07")
+	if index < 0:
+		_ko("Chapitre final", "aucun ch07 dans CampaignDB")
+		return
+	var chapter: ChapterData = CAMPAIGN_DB.get_chapter(index)
+	_check(chapter != null and index == CAMPAIGN_DB.count() - 1,
+		"ch07 ferme la campagne (rang %d sur %d)" % [index, CAMPAIGN_DB.count()])
+	_check(load(chapter.scene_path) is PackedScene,
+		"la scène du chapitre se charge (%s)" % chapter.scene_path)
+	_check(int(chapter.objective.get("kind", -1)) == OBJ.Kind.DEFEAT_BOSS
+			and str(chapter.objective.get("target", "")) == "Ciel",
+		"objectif « vaincre le commandant », cible « Ciel »", str(chapter.objective))
+	_check(chapter.intro_lines.size() >= 4 and not chapter.outro_lines.is_empty(),
+		"le chapitre a son texte (%d lignes d'intro)" % chapter.intro_lines.size())
+
+	_check_ciel_phases(chapter)
+	_check_ciel_on_the_map(chapter)
+
+
+## Le catalogue de la Gardienne : trois bascules, dans l'ordre, et couronnables.
+func _check_ciel_phases(chapter: ChapterData) -> void:
+	_check(BossDB.exists("ciel") and chapter.boss == "ciel",
+		"le chapitre couronne « ciel » et le catalogue le connaît", chapter.boss)
+	# C'est cette égalité que [ChapterRunner] vérifie sur le plateau : le boss se
+	# reconnaît au nom affiché de sa cible d'objectif, pas à son identifiant.
+	_check(BossDB.boss_name("ciel") == str(chapter.objective.get("target", "")),
+		"le nom du catalogue est celui que vise l'objectif", BossDB.boss_name("ciel"))
+	_check(not BossDB.title("ciel").is_empty(), "elle porte un titre affichable")
+
+	var phases: Array = BossPhases.phases_of("ciel")
+	_check(BossPhases.is_boss("ciel") and phases.size() == 3,
+		"trois phases retenues (%d)" % phases.size())
+	if phases.size() != 3:
+		return
+
+	var thresholds: Array = []
+	for phase: Dictionary in phases:
+		thresholds.append(float(phase["threshold"]))
+	_check(thresholds[0] > thresholds[1] and thresholds[1] > thresholds[2],
+		"les seuils descendent %s" % str(thresholds))
+
+	for i: int in phases.size():
+		var phase: Dictionary = phases[i]
+		_check(int(phase["index"]) == i, "phase %d numérotée par son rang" % i)
+		_check(not str(phase["label"]).is_empty() and not str(phase["message"]).is_empty(),
+			"phase %d : elle a un nom et une réplique (« %s »)" % [i, str(phase["message"])])
+		_check(not (phase["gains"] as Dictionary).is_empty(),
+			"phase %d : elle change un rapport de force %s" % [i, str(phase["gains"])])
+		_check(float(phase["heal"]) <= BossPhases.MAX_HEAL,
+			"phase %d : le soin reste borné (%.2f)" % [i, float(phase["heal"])])
+		for skill: String in phase["skills"]:
+			_check(SKILLS.exists(skill), "phase %d : « %s » est au catalogue" % [i, skill])
+
+	# Seule la dernière rend des PV : une Gardienne qui se soigne dès la première
+	# entaille rendrait tout ce qui précède gratuit.
+	_check(is_zero_approx(float(phases[0]["heal"])) and float(phases[2]["heal"]) > 0.0,
+		"le Puits ne la soigne qu'à l'agonie")
+
+	# Non-régression : couronner Ciel ne doit rien avoir coûté à Garrick.
+	_check(BossPhases.phase_count("garrick") == 2 and BossDB.boss_name("garrick") == "Garrick",
+		"Garrick garde ses deux phases")
+
+
+## Ce que la carte doit porter pour que le chapitre soit jouable.
+func _check_ciel_on_the_map(chapter: ChapterData) -> void:
+	var map: Dictionary = CMAP.read(chapter)
+	var grid: Vector2i = map.get("grid_size", Vector2i.ZERO)
+	_check(bool(map["ok"]) and grid == Vector2i(30, 40),
+		"la carte se lit, grille %s" % str(grid), str(map.get("reason", "")))
+	if not bool(map["ok"]):
+		return
+
+	_check(map["slots"].size() >= chapter.deploy_slots,
+		"assez de cases ouvertes pour les %d places (%d)" % [
+			chapter.deploy_slots, map["slots"].size()])
+	# Un plateau coupé en deux, et les deux camps ne se rencontrent jamais.
+	_check(CMAP.walkable_zones(map, 2.0) == 1,
+		"on circule d'un bout à l'autre du sanctuaire",
+		"%d zones" % CMAP.walkable_zones(map, 2.0))
+
+	var opponents: Dictionary = _opponent_sheets_of(chapter.scene_path, grid)
+	_check(opponents.size() >= 10,
+		"le camp adverse est peuplé : %d unités" % opponents.size())
+
+	var boss_cells: Array = []
+	for cell: Vector2i in opponents:
+		var sheet: Resource = opponents[cell]
+		var where: String = "(%d, %d)" % [cell.x, cell.y]
+		_check(MAP_DATA.is_walkable(CMAP.terrain_at(map, cell)),
+			"adversaire %s sur une case praticable (%s)" % [
+				where, MAP_DATA.type_label(CMAP.terrain_at(map, cell))])
+		_check(not (cell in map.get("slots", [])),
+			"adversaire %s hors de la zone de déploiement" % where)
+		if str(sheet.get("override_name")) == str(chapter.objective.get("target", "")):
+			boss_cells.append(cell)
+
+	# Sans ce pion-là, [ChapterRunner._crown_boss] ne couronnerait personne et
+	# l'objectif ne pourrait plus jamais être rempli.
+	_check(boss_cells.size() == 1,
+		"une seule unité porte le nom du boss, en %s" % str(boss_cells), str(boss_cells))
+	if boss_cells.size() != 1:
+		return
+
+	var ciel: Resource = opponents[boss_cells[0]]
+	_check(int(ciel.get("hp")) >= 60 and int(ciel.get("hp")) <= 80,
+		"Ciel a des PV de boss (%d)" % int(ciel.get("hp")))
+	_check(not str(ciel.get("race")).is_empty() and RaceDB.exists(str(ciel.get("race"))),
+		"son peuple est au catalogue (%s)" % str(ciel.get("race")))
+	_check(ResourceLoader.exists(str(ciel.get("sprite"))),
+		"sa planche existe (%s)" % str(ciel.get("sprite")))
+
+
+## Les adversaires posés dans une scène de niveau, case → fiche d'unité.
+##
+## Le pendant de [method _pawn_cells_of] pour le camp d'en face, et il rend la
+## fiche plutôt qu'un drapeau : c'est elle qui porte le nom que l'objectif vise.
+## Chaque pion du camp déclare sa fiche sur son « Expertise », et ce nœud-là est
+## écrit dans la scène du niveau — inutile de descendre dans `pawn.tscn`.
+func _opponent_sheets_of(scene_path: String, grid_size: Vector2i) -> Dictionary:
+	var out: Dictionary = {}
+	var packed: PackedScene = load(scene_path)
+	if not packed:
+		return out
+
+	var state: SceneState = packed.get_state()
+	var locals: Dictionary = {}
+	for i: int in state.get_node_count():
+		var value: Variant = _node_transform(state, i)
+		locals[str(state.get_node_path(i))] = value if value is Transform3D else Transform3D()
+
+	for i: int in state.get_node_count():
+		var path: String = str(state.get_node_path(i))
+		if not path.contains("TacticsOpponent/") or not path.ends_with("/Expertise"):
+			continue
+		var sheet: Variant = _node_property_of(state, i, "starting_stats")
+		if not (sheet is Resource):
+			continue
+		var origin: Vector3 = _composed_transform(
+			path.trim_suffix("/Expertise"), locals).origin
+		out[Vector2i(
+			int(round(origin.x + float(grid_size.x) / 2.0 - 0.5)),
+			int(round(origin.z + float(grid_size.y) / 2.0 - 0.5)))] = sheet
+	return out
+
+
+## Valeur d'une propriété posée à l'édition sur un nœud (null si absente).
+func _node_property_of(state: SceneState, index: int, wanted: String) -> Variant:
+	for j: int in state.get_node_property_count(index):
+		if str(state.get_node_property_name(index, j)) == wanted:
+			return state.get_node_property_value(index, j)
+	return null
 #endregion
