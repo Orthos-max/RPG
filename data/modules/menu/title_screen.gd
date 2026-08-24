@@ -1,8 +1,9 @@
 extends Control
 ## Écran-titre de Ciel Emblem — construit en code (pas de dépendance .tscn).
 ##
-## Nouvelle partie / Continuer / Mode CielAI / Options / Extras / Quitter.
-## L'écran ne connaît pas la suite : il émet des signaux que [Main] orchestre.
+## Navigation simplifiée : Jouer / Paramètres / Création / Quitter, chacun
+## menant à un sous-écran. L'écran ne connaît pas la suite : il émet des
+## signaux que [Main] orchestre.
 
 signal new_game_requested(difficulty: int, permadeath: bool)
 signal continue_requested()
@@ -47,6 +48,8 @@ const WIDE_RATIO: float = 1.1
 var _title: Label
 var _subtitle: Label
 var _grids: Array[GridContainer] = []
+## La colonne de navigation, remplie par [method _show_main] et ses sœurs.
+var _column: VBoxContainer
 
 
 func _ready() -> void:
@@ -120,7 +123,7 @@ func _build() -> void:
 	column.add_child(_title)
 
 	_subtitle = Label.new()
-	_subtitle.text = "Tactical RPG — le camp adverse est joué par une IA externe"
+	_subtitle.text = "Tactical RPG au tour par tour"
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_subtitle.add_theme_color_override("font_color", C_ACCENT)
@@ -128,79 +131,111 @@ func _build() -> void:
 
 	column.add_child(_spacer(16))
 
-	# --- Partir au combat ---
-	var play := _make_grid(column)
+	# --- Navigation simplifiée : Jouer / Paramètres / Création ---
+	_column = column
+	_show_main()
 
-	var new_btn := _make_button("⚔️  Nouvelle partie", true)
-	new_btn.pressed.connect(func() -> void:
-		new_game_requested.emit(_difficulty, _permadeath))
-	play.add_child(new_btn)
 
-	var continue_btn := _make_button("💾  Continuer")
-	continue_btn.disabled = not _has_save()
-	continue_btn.pressed.connect(func() -> void: continue_requested.emit())
-	play.add_child(continue_btn)
-
-	var load_btn := _make_button("📂  Charger une partie")
-	load_btn.disabled = not _has_any_save()
-	load_btn.pressed.connect(func() -> void: load_requested.emit())
-	play.add_child(load_btn)
-
-	var ciel_btn := _make_button("🤖  Escarmouche CielAI")
-	ciel_btn.pressed.connect(func() -> void: ciel_mode_requested.emit())
-	play.add_child(ciel_btn)
-
-	var host_btn := _make_button("🌐  Créer une partie en ligne")
-	host_btn.pressed.connect(func() -> void: host_requested.emit())
-	play.add_child(host_btn)
-
-	var join_btn := _make_button("🔑  Rejoindre avec un code")
-	join_btn.pressed.connect(func() -> void: join_requested.emit())
-	play.add_child(join_btn)
-
-	column.add_child(_spacer(14))
-
-	# --- Réglages de la prochaine campagne ---
-	var options := _make_grid(column)
-
-	_difficulty_button = _make_button(_difficulty_label())
-	_difficulty_button.pressed.connect(_cycle_difficulty)
-	options.add_child(_difficulty_button)
-
-	_permadeath_button = _make_button(_permadeath_label())
-	_permadeath_button.pressed.connect(_toggle_permadeath)
-	options.add_child(_permadeath_button)
-
-	column.add_child(_spacer(14))
-
-	# --- Extras ---
-	var extras := _make_grid(column)
-
-	var editor_btn := _make_button("🗺️  Éditeur de cartes")
-	editor_btn.pressed.connect(func() -> void: editor_requested.emit())
-	extras.add_child(editor_btn)
-
-	var chars_btn := _make_button("🧑  Éditeur de personnages")
-	chars_btn.pressed.connect(func() -> void: character_editor_requested.emit())
-	extras.add_child(chars_btn)
-
-	var options_btn := _make_button("🔊  Options audio")
-	options_btn.pressed.connect(_open_options)
-	extras.add_child(options_btn)
-
+#region Navigation
+## L'écran d'accueil : les trois portes du jeu.
+func _show_main() -> void:
+	_clear_column()
+	_column.add_child(_spacer(4))
+	var play_btn := _make_button("🎮  Jouer", true)
+	play_btn.pressed.connect(_show_play)
+	_column.add_child(play_btn)
+	var settings_btn := _make_button("⚙️  Paramètres")
+	settings_btn.pressed.connect(_show_settings)
+	_column.add_child(settings_btn)
+	var creation_btn := _make_button("🛠️  Création")
+	creation_btn.pressed.connect(_show_creation)
+	_column.add_child(creation_btn)
+	_column.add_child(_spacer(14))
 	var quit_btn := _make_button("🚪  Quitter")
 	quit_btn.pressed.connect(func() -> void: quit_requested.emit())
-	extras.add_child(quit_btn)
-
-	column.add_child(_spacer(12))
-
+	_column.add_child(quit_btn)
+	_column.add_child(_spacer(12))
 	_status = Label.new()
 	_status.text = _save_summary()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override("font_size", 12)
 	_status.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
-	column.add_child(_status)
+	_column.add_child(_status)
+	_apply_layout()
+
+
+## Sous-écran « Jouer » : campagne, escarmouche et parties en ligne.
+func _show_play() -> void:
+	_clear_column()
+	var new_btn := _make_button("⚔️  Nouvelle partie", true)
+	new_btn.pressed.connect(func() -> void:
+		new_game_requested.emit(_difficulty, _permadeath))
+	_column.add_child(new_btn)
+	var continue_btn := _make_button("💾  Continuer")
+	continue_btn.disabled = not _has_save()
+	continue_btn.pressed.connect(func() -> void: continue_requested.emit())
+	_column.add_child(continue_btn)
+	var load_btn := _make_button("📂  Charger une partie")
+	load_btn.disabled = not _has_any_save()
+	load_btn.pressed.connect(func() -> void: load_requested.emit())
+	_column.add_child(load_btn)
+	var ciel_btn := _make_button("🤖  Escarmouche CielAI")
+	ciel_btn.pressed.connect(func() -> void: ciel_mode_requested.emit())
+	_column.add_child(ciel_btn)
+	var host_btn := _make_button("🌐  Créer une partie en ligne")
+	host_btn.pressed.connect(func() -> void: host_requested.emit())
+	_column.add_child(host_btn)
+	var join_btn := _make_button("🔑  Rejoindre avec un code")
+	join_btn.pressed.connect(func() -> void: join_requested.emit())
+	_column.add_child(join_btn)
+	_column.add_child(_spacer(10))
+	_column.add_child(_back_button())
+
+
+## Sous-écran « Paramètres » : difficulté, mort permanente, audio.
+func _show_settings() -> void:
+	_clear_column()
+	_difficulty_button = _make_button(_difficulty_label())
+	_difficulty_button.pressed.connect(_cycle_difficulty)
+	_column.add_child(_difficulty_button)
+	_permadeath_button = _make_button(_permadeath_label())
+	_permadeath_button.pressed.connect(_toggle_permadeath)
+	_column.add_child(_permadeath_button)
+	var audio_btn := _make_button("🔊  Options audio")
+	audio_btn.pressed.connect(_open_options)
+	_column.add_child(audio_btn)
+	_column.add_child(_spacer(10))
+	_column.add_child(_back_button())
+
+
+## Sous-écran « Création » : les éditeurs de cartes et de personnages.
+func _show_creation() -> void:
+	_clear_column()
+	var editor_btn := _make_button("🗺️  Éditeur de cartes")
+	editor_btn.pressed.connect(func() -> void: editor_requested.emit())
+	_column.add_child(editor_btn)
+	var chars_btn := _make_button("🧑  Éditeur de personnages")
+	chars_btn.pressed.connect(func() -> void: character_editor_requested.emit())
+	_column.add_child(chars_btn)
+	_column.add_child(_spacer(10))
+	_column.add_child(_back_button())
+
+
+## Le bouton de retour vers l'écran d'accueil.
+func _back_button() -> Button:
+	var back := _make_button("←  Retour")
+	back.pressed.connect(_show_main)
+	return back
+
+
+## Vide la colonne de navigation et oublie les grilles du layout.
+func _clear_column() -> void:
+	for child: Node in _column.get_children():
+		_column.remove_child(child)
+		child.queue_free()
+	_grids.clear()
+#endregion
 
 
 ## Une grille de boutons, retenue pour que [method _apply_layout] la recolonne.
