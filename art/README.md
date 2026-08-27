@@ -41,7 +41,7 @@ blocs :
 - **les 25 couleurs du casting actuel**, triées par nombre de planches où elles
   apparaissent — les premières sont le noyau commun, celles qui font qu'un
   archer et un chevalier ont l'air de venir du même monde ;
-- **six accents de la charte** « Velmar : nuit et or », repris de
+- **six accents de la charte** « nuit et or », repris de
   `data/models/view/theme/palette.gd`. L'or reste un accent : dès qu'il remplit
   une surface, il cesse de désigner ce qui compte.
 

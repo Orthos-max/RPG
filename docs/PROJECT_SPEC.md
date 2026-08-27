@@ -732,7 +732,7 @@ jamais : voir §4, elle est abandonnée.)
 
 ---
 
-## 6bis. La charte graphique — « Velmar : nuit et or »
+## 6bis. La charte graphique — « nuit et or »
 
 > Posée le 2026-08-08. Direction choisie par Aurèle sur trois propositions ;
 > les deux autres (Célestria marbre et cyan, parchemin et bleu roi) sont
@@ -796,7 +796,7 @@ sur chaque type de widget : ces bugs-là sont muets, seule une mesure les attrap
   recouvrent. Les remplacer par les variations de la charte, écran par écran.
 - **Les emoji employés comme icônes** (💾 🗺️ 👤 🎯) rendent au style du système
   et jurent avec un médiéval-fantastique. Ils demandent des glyphes dessinés.
-- **Le décor du plateau** n'a pas été retouché : Velmar s'accorde déjà à son
+- **Le décor du plateau** n'a pas été retouché : la palette s'accorde déjà à son
   ciel. Une bascule vers une autre direction, elle, l'exigerait.
 
 ## 7. Journal d'implémentation
@@ -1796,7 +1796,7 @@ fichiers, 17 `StyleBoxFlat` faits main dans 8 écrans), et tout le reste — cha
 listes déroulantes, compteurs, cases à cocher, barres de défilement, **et la
 police** — était d'usine. Le décor 3D, lui, n'a jamais rien eu de Godot.
 
-**Direction retenue : « Velmar — nuit et or »**, choisie sur trois propositions.
+**Direction retenue : « nuit et or »**, choisie sur trois propositions.
 Elle formalise ce que les écrans faisaient déjà à tâtons et s'accorde au ciel du
 plateau sans y toucher.
 

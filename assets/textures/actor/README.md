@@ -148,7 +148,7 @@ dessous). En montant en résolution la tentation est de dériver vers 3 ou 4 tê
 Le dossier [`art/`](../../../art/) à la racine du dépôt contient de quoi
 travailler : `gabarit-reperes.png` (calque de repères à superposer),
 `palette-figurines.gpl` (lisible par Aseprite et GIMP, couleurs du casting +
-accents de la charte « Velmar : nuit et or ») et `planche-contact.png` (les huit
+accents de la charte « nuit et or ») et `planche-contact.png` (les huit
 figurines côte à côte en ×4, pour comparer proportions et teintes en dessinant).
 
 Un défaut connu à ne pas reproduire : `chr_pawn_skeleton_mage.png` a ses pieds

@@ -104,7 +104,7 @@ huit planches**, et 0 % d'alpha partiel.
 - **Source de lumière unique et constante** dans tout le pack. Deux personnages
   éclairés de côtés opposés ne se corrigent qu'en repeignant les ombres.
 - **Palette quantifiable** vers `palette-figurines.gpl` sans s'effondrer. Un pack
-  très désaturé ou très pastel s'accordera mal à « Velmar : nuit et or ».
+  très désaturé ou très pastel s'accordera mal à « nuit et or ».
 - **Silhouette lisible à 53 px.** C'est la taille de la figurine au dézoom
   maximum. Réduire une image d'exemple à cette taille et vérifier qu'on distingue
   encore la classe : si tout devient une tache, le détail du pack est décoratif.
@@ -229,7 +229,7 @@ qui n'est plus la cible. Ils restent utiles comme calibrage de prix.
 Réserves : **Beast Riders mais ni cavalerie classique ni monture volante** —
 c'est l'éliminatoire n°3 qui reste ouvert pour Sully et Cordelia. Pas de fichiers
 sources, pas de portraits (objectif de financement non atteint). Style « mignon
-et coloré », à confronter à « Velmar : nuit et or ».
+et coloré », à confronter à « nuit et or ».
 
 ### Candidats portraits en 128
 
